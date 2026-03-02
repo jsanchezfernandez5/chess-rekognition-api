@@ -1,2 +1,2 @@
 # chess-rekognition-api
-FastAPI - Chess Rekognition
+FastAPI - Chess Rekognition.
