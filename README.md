@@ -1,7 +1,9 @@
 # chess-rekognition-api
+
 FastAPI - Chess Rekognition.
 
-# Arquitectura del API
+## Arquitectura
+```text
 api/
 ├── main.py                  # Router principal + config Swagger
 ├── requirements.txt         # Dependencias
@@ -19,19 +21,34 @@ api/
 │
 ├── models/
 │   ├── __init__.py
-│   ├── usuarios.py          # Modelo ORM tabla usuarios
+│   └── usuarios.py          # Modelo ORM tabla usuarios
 │
 ├── schemas/
 │   ├── __init__.py
-│   ├── usuarios.py           # Pydantic schemas (validación + Swagger docs)
+│   └── usuarios.py          # Pydantic schemas (validación + Swagger docs)
 │
 ├── services/
 │   ├── __init__.py
 │   ├── auth.py              # Lógica de negocio: login, tokens, whoami
 │   ├── usuarios.py          # Lógica: registro + envío de correo
-│   ├── email.py
+│   └── email.py             # Servicio de envío de emails (Resend)
 │
 └── routers/
     ├── __init__.py
     ├── auth.py              # Endpoints: /login /refresh /whoami
-    ├── usuarios.py          # Endpoints: /register
+    └── usuarios.py          # Endpoints: /register
+```
+
+## Instalación
+```bash
+python -m venv venv
+venv\Scripts\activate        # Windows
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+## Documentación
+
+Una vez levantada la API, disponible en:
+- Swagger UI → http://127.0.0.1:8000/docs
+- ReDoc → http://127.0.0.1:8000/redoc
