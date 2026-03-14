@@ -65,8 +65,8 @@ async def custom_swagger_ui():
 @app.get(
     "/",
     tags=["Sistema"],
-    summary="Health check",
+    summary="Estado del sistema",
     description="Verifica que la API está en funcionamiento.",
 )
 def root():
-    return {"status": "ok", "message": "API funcionando correctamente"}
+    return {"status": "ok", "message": "¡Chess Rekognition API funciona correctamente!"}
