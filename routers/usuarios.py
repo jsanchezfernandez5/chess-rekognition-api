@@ -24,7 +24,7 @@ router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
     responses={
         201: {"description": "Usuario creado correctamente."},
         409: {"description": "El username o email ya están en uso."},
-        422: {"description": "Datos de entrada inválidos (validación Pydantic)."},
+        422: {"description": "Datos de entrada no válidos (validación Pydantic)."},
     },
 )
 # La función del endpoint llama al servicio de usuario para manejar la lógica de negocio.
