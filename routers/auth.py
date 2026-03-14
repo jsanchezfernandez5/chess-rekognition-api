@@ -7,7 +7,7 @@ from core.dependencies import get_current_user
 from db.database import get_db
 from models.usuarios import Usuario
 from schemas.usuarios import LoginRequest, RefreshRequest, TokenResponse, UsuarioResponse
-from services import auth_service
+from services import auth
 
 # Router específico para endpoints relacionados con autenticación, con prefijo "/auth" y etiqueta "Autenticación" para la documentación.
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/auth", tags=["Autenticación"])
 )
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     try:
-        return auth_service.login(body.username, body.password, db)
+        return auth.login(body.username, body.password, db)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -55,7 +55,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
 )
 def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
     try:
-        return auth_service.refresh(body.refresh_token, db)
+        return auth.refresh(body.refresh_token, db)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -75,4 +75,4 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
     },
 )
 def whoami(current_user: Usuario = Depends(get_current_user)):
-    return auth_service.whoami(current_user)
+    return auth.whoami(current_user)

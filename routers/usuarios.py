@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from db.database import get_db
 from schemas.usuarios import UsuarioCreate, UsuarioResponse
-from services import usuario_service
+from services import usuarios
 
 # Router específico para endpoints relacionados con usuarios, con prefijo "/usuarios" y etiqueta "Usuarios" para la documentación.
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
@@ -30,6 +30,6 @@ router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 # La función del endpoint llama al servicio de usuario para manejar la lógica de negocio.
 async def register(body: UsuarioCreate, db: Session = Depends(get_db)):
     try:
-        return await usuario_service.register(body, db)
+        return await usuarios.register(body, db)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
