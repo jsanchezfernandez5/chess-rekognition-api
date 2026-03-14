@@ -8,7 +8,10 @@ api/
 ├── main.py                  # Router principal + config Swagger
 ├── Procfile                 # Comando de arranque para Railway
 ├── requirements.txt         # Dependencias
-├── .env                     # Variables de entorno (JWT secret, DB, Resend)
+├── .env                     # Variables de entorno (JWT secret, DB, Resend). No se sube a GitHub y se configura en Railway en Variables
+│
+├── static/
+│   └── favicon.ico          # Favicon de la API
 │
 ├── core/
 │   ├── __init__.py
