@@ -6,6 +6,7 @@ FastAPI - Chess Rekognition.
 ```text
 api/
 ├── main.py                  # Router principal + config Swagger
+├── Procfile                 # Comando de arranque para Railway
 ├── requirements.txt         # Dependencias
 ├── .env                     # Variables de entorno (JWT secret, DB, Resend)
 │
