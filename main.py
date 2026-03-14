@@ -31,6 +31,7 @@ app = FastAPI(
         "email": "jsanchezfernandez5@uoc.edu",
     },
     license_info={"name": "TFG - Uso académico"},
+    docs_url=None,
 )
 
 # Montar carpeta estática
@@ -48,12 +49,13 @@ app.include_router(usuarios.router)
 def favicon():
     return FileResponse("static/favicon.ico")
 
+# Swagger manualmente configurado para usar nuestro favicon y título personalizado.
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui():
     return get_swagger_ui_html(
         openapi_url="/openapi.json",
         title="Chess Rekognition API",
-        swagger_favicon_url="/static/favicon.ico"  # 👈 clave
+        swagger_favicon_url="/static/favicon.ico"
     )
 
 # Endpoint raíz para health check. No requiere autenticación, útil para monitorización.
