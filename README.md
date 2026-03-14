@@ -50,6 +50,4 @@ uvicorn main:app --reload
 
 ## Documentación
 
-Una vez levantada la API, disponible en:
-- Swagger UI → http://127.0.0.1:8000/docs
-- ReDoc → http://127.0.0.1:8000/redoc
+Swagger UI: https://chess-rekognition-api-production.up.railway.app/docs
