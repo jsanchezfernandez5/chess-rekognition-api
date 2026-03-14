@@ -4,6 +4,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.middleware.cors import CORSMiddleware
 from routers import auth, usuarios
 
@@ -46,6 +47,14 @@ app.include_router(usuarios.router)
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     return FileResponse("static/favicon.ico")
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui():
+    return get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title="Chess Rekognition API",
+        swagger_favicon_url="/static/favicon.ico"  # 👈 clave
+    )
 
 # Endpoint raíz para health check. No requiere autenticación, útil para monitorización.
 @app.get(
