@@ -20,7 +20,7 @@ tags_metadata = [
 # Instancia de la API
 app = FastAPI(
     title="Chess Rekognition API",
-    description=("## API REST para gestión dy retransmisiones de partidas de ajedrez"),
+    description=("## API REST para gestión y retransmisiones de partidas de ajedrez"),
     version="1.0.0",
     openapi_tags=tags_metadata,
     contact={
