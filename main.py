@@ -30,7 +30,10 @@ app = FastAPI(
         "name": "José Joaquín Sánchez Fernández ",
         "email": "jsanchezfernandez5@uoc.edu",
     },
-    license_info={"name": "TFG - Uso académico"},
+    license_info={
+        "name": "Licencia: CC BY-SA 4.0", 
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/"
+    },
     docs_url=None,
 )
 
