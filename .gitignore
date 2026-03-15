@@ -1,5 +1,31 @@
+# Entorno
 .env
+.env.local
+.env.*.local
 
+# Entorno virtual
 venv/
+.venv/
+env/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+
+# Editores y Sistema
+.vscode/
+.idea/
+.DS_Store
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
