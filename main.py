@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, usuarios
+from routers import auth, usuarios, partidas
 
 # Metadatos para Swagger UI. Aparecen en la documentación generada automáticamente en /docs y /redoc.
 tags_metadata = [
@@ -17,6 +17,10 @@ tags_metadata = [
     {
         "name": "Usuarios",
         "description": "Registro de nuevas cuentas de usuario.",
+    },
+    {
+        "name": "Partidas",
+        "description": "Gestión del historial de partidas (CRUD).",
     }
 ]
 
@@ -27,7 +31,7 @@ app = FastAPI(
     version="1.0.0",
     openapi_tags=tags_metadata,
     contact={
-        "name": "José Joaquín Sánchez Fernández ",
+        "name": "José Joaquín Sánchez Fernández",
         "email": "jsanchezfernandez5@uoc.edu",
     },
     license_info={
@@ -43,9 +47,10 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # CORSMiddleware permite que el frontend (que corre en otro origen) pueda consumir esta API sin problemas de CORS.
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-# Registro de routers
+# Reigstro de Routers
 app.include_router(auth.router)
 app.include_router(usuarios.router)
+app.include_router(partidas.router)
 
 # Favicon
 @app.get("/favicon.ico", include_in_schema=False)
