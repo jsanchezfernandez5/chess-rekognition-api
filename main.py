@@ -1,6 +1,6 @@
-# main.py
-# Punto de entrada de la aplicación FastAPI.
-# Aquí se configura la app, se registran los routers y se definen los metadatos para Swagger UI.
+# main.py - Punto de entrada del servidor FastAPI
+# Este archivo centraliza la configuración de la API, rutas y documentación técnica.
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -8,26 +8,26 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.middleware.cors import CORSMiddleware
 from routers import auth, usuarios, partidas
 
-# Metadatos para Swagger UI. Aparecen en la documentación generada automáticamente en /docs y /redoc.
+# Configuración de etiquetas para que el Swagger se vea organizado por secciones
 tags_metadata = [
     {
         "name": "Autenticación",
-        "description": "Endpoints relacionados con autenticación de usuarios y gestión de tokens JWT.",
+        "description": "Gestión de sesiones, login y tokens JWT para la seguridad de la app.",
     },
     {
         "name": "Usuarios",
-        "description": "Registro de nuevas cuentas de usuario.",
+        "description": "Registro de nuevos perfiles en la plataforma.",
     },
     {
         "name": "Partidas",
-        "description": "Gestión del historial de partidas (CRUD).",
+        "description": "Operaciones CRUD para gestionar el historial de partidas guardadas.",
     }
 ]
 
-# Instancia de la API
+# Inicialización de la app con metadatos personalizados para el TFG
 app = FastAPI(
     title="Chess Rekognition API",
-    description=("## API REST para gestión y retransmisiones de partidas de ajedrez"),
+    description="### Sistema para el registro y retransmisión inteligente de partidas de ajedrez.",
     version="1.0.0",
     openapi_tags=tags_metadata,
     contact={
@@ -35,43 +35,47 @@ app = FastAPI(
         "email": "jsanchezfernandez5@uoc.edu",
     },
     license_info={
-        "name": "Licencia: CC BY-SA 4.0", 
+        "name": "CC BY-SA 4.0", 
         "url": "https://creativecommons.org/licenses/by-sa/4.0/"
     },
-    docs_url=None,
+    docs_url=None, # Desactivamos la URL por defecto para personalizarla abajo
 )
 
-# Montar carpeta estática
+# Servimos archivos estáticos (como el favicon o imágenes)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# CORSMiddleware permite que el frontend (que corre en otro origen) pueda consumir esta API sin problemas de CORS.
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+# Configuración de CORS: Vital para que el frontend en React pueda hablar con este backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # En producción se podría restringir a dominios específicos
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
-# Reigstro de Routers
+# Registro de las rutas del sistema
 app.include_router(auth.router)
 app.include_router(usuarios.router)
 app.include_router(partidas.router)
 
-# Favicon
+# Ruta específica para el favicon del navegador
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     return FileResponse("static/favicon.ico")
 
-# Swagger manualmente configurado para usar nuestro favicon y título personalizado.
+# Personalización de la interfaz de Swagger para que use nuestro logo y título
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui():
     return get_swagger_ui_html(
         openapi_url="/openapi.json",
-        title="Chess Rekognition API",
+        title="Documentación - Chess Rekognition API",
         swagger_favicon_url="/static/favicon.ico"
     )
 
-# Endpoint raíz para health check. No requiere autenticación, útil para monitorización.
-@app.get(
-    "/",
-    tags=["Sistema"],
-    summary="Estado del sistema",
-    description="Verifica que la API está en funcionamiento.",
-)
+# Endpoint de comprobación rápida para ver si el servidor responde
+@app.get("/", tags=["Sistema"], summary="Estado de la API")
 def root():
-    return {"status": "ok", "message": "¡Chess Rekognition API funciona correctamente!"}
+    return {
+        "status": "online", 
+        "message": "Servidor Chess Rekognition operando correctamente."
+    }

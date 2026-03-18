@@ -1,5 +1,6 @@
-# routers/auth.py
-# Endpoints relacionados con la autenticación de usuarios y gestión de tokens JWT.
+# routers/auth.py - Gestión de acceso y seguridad
+# Aquí centralizamos el login, la renovación de tokens y la identificación del usuario.
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -7,30 +8,22 @@ from core.dependencies import get_current_user
 from db.database import get_db
 from models.usuarios import Usuario
 from schemas.usuarios import LoginRequest, RefreshRequest, TokenResponse, UsuarioResponse
-from services import auth
+from services import auth as auth_service
 
-# Router específico para endpoints relacionados con autenticación, con prefijo "/auth" y etiqueta "Autenticación" para la documentación.
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
-# Endpoint de login que autentica al usuario y devuelve los tokens JWT.
 @router.post(
     "/login",
     response_model=TokenResponse,
-    summary="Iniciar sesión",
-    description=(
-        "Autentica al usuario con **username** y **password**. "
-        "Devuelve un `access_token` (válido 30 min) y un `refresh_token` (válido 7 días). "
-        "Incluye el `access_token` en el header `Authorization: Bearer <token>` "
-        "para acceder a los endpoints protegidos."
-    ),
-    responses={
-        200: {"description": "Login exitoso. Se devuelven los tokens JWT."},
-        401: {"description": "Credenciales incorrectas."},
-    },
+    summary="Iniciar sesión en el sistema",
 )
-def login(body: LoginRequest, db: Session = Depends(get_db)):
+def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+    """
+    Recibe las credenciales (usuario/contraseña) y genera los tokens JWT 
+    si todo es correcto. Devuelve un access_token y un refresh_token.
+    """
     try:
-        return auth.login(body.username, body.password, db)
+        return auth_service.login(login_data.username, login_data.password, db)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -38,24 +31,18 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-# Endpoint para renovar el access token usando el refresh token. No requiere autenticación con access token.
 @router.post(
     "/refresh",
     response_model=TokenResponse,
-    summary="Renovar access token",
-    description=(
-        "Usa el `refresh_token` para obtener un nuevo `access_token` sin necesidad "
-        "de que el usuario vuelva a introducir sus credenciales. "
-        "El `refresh_token` no cambia."
-    ),
-    responses={
-        200: {"description": "Nuevo access token generado."},
-        401: {"description": "Refresh token no válido o expirado."},
-    },
+    summary="Renovar el token de acceso",
 )
-def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
+def refresh(token_in: RefreshRequest, db: Session = Depends(get_db)):
+    """
+    Permite obtener un nuevo access_token usando el refresh_token, 
+    evitando que el usuario tenga que loguearse de nuevo constantemente.
+    """
     try:
-        return auth.refresh(body.refresh_token, db)
+        return auth_service.refresh(token_in.refresh_token, db)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -63,16 +50,14 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-# Endpoint protegido que devuelve los datos del usuario autenticado. Requiere un access token válido.
 @router.get(
     "/whoami",
     response_model=UsuarioResponse,
-    summary="¿Quién soy?",
-    description=("Devuelve los datos del usuario propietario del `access_token` enviado. "),
-    responses={
-        200: {"description": "Datos del usuario autenticado."},
-        401: {"description": "Token no proporcionado, no válido o expirado."},
-    },
+    summary="Datos del usuario actual",
 )
-def whoami(current_user: Usuario = Depends(get_current_user)):
-    return auth.whoami(current_user)
+def whoami(usuario_actual: Usuario = Depends(get_current_user)):
+    """
+    Endpoint de utilidad para que el frontend sepa quién está logueado 
+    y pueda mostrar su nombre en el perfil o dashboard.
+    """
+    return auth_service.whoami(usuario_actual)

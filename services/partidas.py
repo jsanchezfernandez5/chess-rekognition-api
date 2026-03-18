@@ -1,14 +1,17 @@
-# services/partidas.py
+# services/partidas.py - Lógica de negocio para las partidas
+# Aquí gestionamos las operaciones directas con la base de datos para las partidas.
+
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from models.partidas import Partida
 from schemas.partidas import PartidaCreate, PartidaUpdate
 
-def create(data: PartidaCreate, username: str, db: Session) -> Partida:
+def create(partida_in: PartidaCreate, username: str, db: Session) -> Partida:
     """
-    Crea una nueva partida asociada a un usuario.
+    Crea un nuevo registro de partida en la base de datos vinculado al usuario.
     """
-    db_partida = Partida(**data.model_dump(), username=username)
+    # Convertimos el esquema de entrada en un modelo de base de datos
+    db_partida = Partida(**partida_in.model_dump(), username=username)
     db.add(db_partida)
     db.commit()
     db.refresh(db_partida)
@@ -16,8 +19,8 @@ def create(data: PartidaCreate, username: str, db: Session) -> Partida:
 
 def list_by_user(username: str, db: Session, tipo: Optional[str] = None) -> List[Partida]:
     """
-    Lista las partidas de un usuario con filtrado opcional por tipo.
-    Orden cronológico descendente por fecha de registro.
+    Obtiene todas las partidas de un usuario. Permite filtrar por tipo (PI o PR).
+    Las devuelve ordenadas por fecha de creación (de más nueva a más antigua).
     """
     query = db.query(Partida).filter(Partida.username == username)
     if tipo:
@@ -26,22 +29,23 @@ def list_by_user(username: str, db: Session, tipo: Optional[str] = None) -> List
 
 def get_one(id_partida: int, username: str, db: Session) -> Optional[Partida]:
     """
-    Obtiene una partida específica verificando que pertenezca al usuario.
+    Busca una partida concreta asegurando que pertenece al usuario que la solicita.
     """
     return db.query(Partida).filter(
         Partida.id_partida == id_partida, 
         Partida.username == username
     ).first()
 
-def update(id_partida: int, username: str, data: PartidaUpdate, db: Session) -> Optional[Partida]:
+def update(id_partida: int, username: str, partida_in: PartidaUpdate, db: Session) -> Optional[Partida]:
     """
-    Actualiza datos de una partida de forma parcial.
+    Modifica campos específicos de una partida (actualización parcial).
     """
     db_partida = get_one(id_partida, username, db)
     if not db_partida:
         return None
     
-    update_data = data.model_dump(exclude_unset=True)
+    # Solo actualizamos los campos que el usuario ha enviado realmente
+    update_data = partida_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_partida, key, value)
     
@@ -51,7 +55,7 @@ def update(id_partida: int, username: str, data: PartidaUpdate, db: Session) -> 
 
 def delete(id_partida: int, username: str, db: Session) -> bool:
     """
-    Elimina una partida perteneciente al usuario indicando el éxito de la operación.
+    Borra una partida de la base de datos si existe y es propiedad del usuario.
     """
     db_partida = get_one(id_partida, username, db)
     if not db_partida:

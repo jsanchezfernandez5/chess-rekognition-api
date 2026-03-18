@@ -1,4 +1,6 @@
-# routers/partidas.py
+# routers/partidas.py - Endpoints para gestionar las partidas
+# Aquí definimos las rutas para que el usuario pueda guardar, ver, editar o borrar sus partidas.
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -11,89 +13,86 @@ from services import partidas as partidas_service
 
 router = APIRouter(prefix="/partidas", tags=["Partidas"])
 
-# POST: Crear nueva partida asociada al usuario autenticado.
 @router.post(
     "/",
     status_code=status.HTTP_201_CREATED,
     response_model=PartidaResponse,
-    summary="Añadir una partida",
-    description="Crea una nueva partida en el historial del usuario autenticado.",
+    summary="Guardar una nueva partida",
 )
 def create_partida(
-    schema: PartidaCreate, 
+    partida_in: PartidaCreate, 
     db: Session = Depends(get_db), 
-    current_user: Usuario = Depends(get_current_user)
+    usuario_actual: Usuario = Depends(get_current_user)
 ):
-    # La lógica de creación se delega al servicio y se inyecta el username del token.
-    return partidas_service.create(schema, current_user.username, db)
+    # Delegamos la creación al servicio pasándole el autor (usuario logueado)
+    return partidas_service.create(partida_in, usuario_actual.username, db)
 
-# GET: Listar partidas del usuario autenticado, con filtrado opcional por tipo.
 @router.get(
     "/",
     response_model=List[PartidaResponse],
-    summary="Listado de partidas",
-    description="Devuelve el historial del usuario autenticado de forma cronológica descendente.",
+    summary="Listar mis partidas",
 )
 def list_partidas(
-    tipo: Optional[str] = Query(None, pattern="^(PI|PR)$", description="Filtrar por 'PI' o 'PR'."),
+    tipo: Optional[str] = Query(None, pattern="^(PI|PR)$", description="Filtro opcional: PI (Manual) o PR (Retransmisión)"),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    usuario_actual: Usuario = Depends(get_current_user)
 ):
-    return partidas_service.list_by_user(current_user.username, db, tipo)
+    # Recuperamos el historial del usuario, pudiendo filtrar por el tipo de entrada
+    return partidas_service.list_by_user(usuario_actual.username, db, tipo)
 
-# GET: Obtener detalles de una partida por su ID único.
 @router.get(
     "/{id_partida}",
     response_model=PartidaResponse,
-    summary="Detalles de una partida",
+    summary="Ver detalles de una partida",
 )
 def get_partida(
     id_partida: int,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    usuario_actual: Usuario = Depends(get_current_user)
 ):
-    partida = partidas_service.get_one(id_partida, current_user.username, db)
+    # Buscamos la partida. Si no existe o no es nuestra, lanzamos un 404.
+    partida = partidas_service.get_one(id_partida, usuario_actual.username, db)
     if not partida:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, 
-            detail="Partida no encontrada o no pertenece al usuario."
+            detail="No hemos encontrado la partida solicitada."
         )
     return partida
 
-# PATCH: Actualizar de forma parcial los datos de una partida.
 @router.patch(
     "/{id_partida}",
     response_model=PartidaResponse,
-    summary="Editar una partida",
+    summary="Actualizar datos de una partida",
 )
 def update_partida(
     id_partida: int,
-    schema: PartidaUpdate,
+    partida_in: PartidaUpdate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    usuario_actual: Usuario = Depends(get_current_user)
 ):
-    db_partida = partidas_service.update(id_partida, current_user.username, schema, db)
+    # Actualizamos solo los campos que nos envía el usuario
+    db_partida = partidas_service.update(id_partida, usuario_actual.username, partida_in, db)
     if not db_partida:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, 
-            detail="Partida no encontrada o sin permisos de edición."
+            detail="No se ha podido actualizar la partida (no existe o no tienes permiso)."
         )
     return db_partida
 
-# DELETE: Eliminar permanentemente una partida.
 @router.delete(
     "/{id_partida}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Borrar una partida",
+    summary="Eliminar una partida",
 )
 def delete_partida(
     id_partida: int,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    usuario_actual: Usuario = Depends(get_current_user)
 ):
-    if not partidas_service.delete(id_partida, current_user.username, db):
+    # Borrado definitivo de la partida del usuario
+    if not partidas_service.delete(id_partida, usuario_actual.username, db):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, 
-            detail="Partida no encontrada o sin permisos para eliminarla."
+            detail="Error al intentar borrar: partida no encontrada."
         )
     return None
