@@ -25,6 +25,55 @@ class StockfishService:
             except Exception as e:
                 print(f"Aviso: No se pudieron aplicar permisos al motor: {e}")
 
+    def check_status(self) -> dict:
+        """
+        Verifica que el binario existe, tiene permisos y responde a comandos básicos UCI.
+        """
+        if not os.path.exists(self.stockfish_path):
+            return {"status": "error", "message": f"Binario no encontrado en {self.stockfish_path}"}
+        
+        try:
+            process = subprocess.Popen(
+                [self.stockfish_path],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1
+            )
+            
+            process.stdin.write("uci\n")
+            process.stdin.flush()
+            
+            version_line = ""
+            uciok = False
+            
+            # Leemos las primeras líneas para ver si responde uciok
+            for _ in range(20):
+                line = process.stdout.readline().strip()
+                if not line: break
+                if "Stockfish" in line: version_line = line
+                if line == "uciok":
+                    uciok = True
+                    break
+            
+            process.stdin.write("quit\n")
+            process.stdin.flush()
+            process.terminate()
+            
+            if uciok:
+                return {
+                    "status": "ok",
+                    "engine": version_line or "Stockfish",
+                    "path": self.stockfish_path,
+                    "platform": platform.system()
+                }
+            else:
+                return {"status": "error", "message": "El motor no respondió uciok"}
+                
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     def get_best_move(self, fen: str, elo: Optional[int] = None, depth: int = 15) -> str:
         """
         Llama al binario de Stockfish para obtener la mejor jugada para una posición FEN.

@@ -8,14 +8,40 @@ from services.engine import engine_service
 router = APIRouter(prefix="/engine", tags=["Motor"])
 
 class EngineRequest(BaseModel):
-    fen: str = Field(..., description="Posición en formato FEN (Forsyth-Edwards Notation)")
-    elo: Optional[int] = Field(None, ge=1320, le=3190, description="Nivel de ELO (1320 - 3190) para ajustar la fuerza del motor")
-    depth: int = Field(15, ge=1, le=30, description="Profundidad de búsqueda (1 - 30)")
+    fen: str = Field(
+        ..., 
+        description="Posición en formato FEN (Forsyth-Edwards Notation)",
+        examples=["rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"]
+    )
+    elo: Optional[int] = Field(
+        None, 
+        ge=1320, 
+        le=3190, 
+        description="Nivel de ELO (1320-3190)",
+        examples=[1800]
+    )
+    depth: int = Field(
+        15, 
+        ge=1, 
+        le=30, 
+        description="Profundidad de búsqueda (1-30)",
+        examples=[15]
+    )
 
 class EngineResponse(BaseModel):
     ok: bool
     best_move: str
     message: Optional[str] = None
+
+@router.get(
+    "/status",
+    summary="Verificar salud y versión del motor",
+)
+def get_engine_status():
+    """
+    Confirma que el binario existe y responde correctamente a los comandos UCI.
+    """
+    return engine_service.check_status()
 
 @router.post(
     "/move",
