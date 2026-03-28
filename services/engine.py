@@ -29,10 +29,18 @@ class StockfishService:
         """
         Verifica que el binario existe, tiene permisos y responde a comandos básicos UCI.
         """
+        traces = []
+        def log(msg):
+            print(f"[Engine] {msg}")
+            traces.append(msg)
+
+        log(f"Verificando motor en: {self.stockfish_path}")
         if not os.path.exists(self.stockfish_path):
-            return {"status": "error", "message": f"Binario no encontrado en {self.stockfish_path}"}
+            log("Error: Binario no encontrado físicamente.")
+            return {"status": "error", "message": "Binario no encontrado", "traces": traces}
         
         try:
+            log("Intentando iniciar proceso...")
             process = subprocess.Popen(
                 [self.stockfish_path],
                 stdin=subprocess.PIPE,
@@ -42,6 +50,7 @@ class StockfishService:
                 bufsize=1
             )
             
+            log(f"Proceso iniciado (PID: {process.pid}). Enviando 'uci'...")
             process.stdin.write("uci\n")
             process.stdin.flush()
             
@@ -49,9 +58,15 @@ class StockfishService:
             uciok = False
             
             # Leemos las primeras líneas para ver si responde uciok
-            for _ in range(20):
+            for i in range(20):
                 line = process.stdout.readline().strip()
-                if not line: break
+                if not line: 
+                    # Si no hay salida en stdout, revisamos stderr
+                    err = process.stderr.readline().strip()
+                    if err: log(f"STDERR: {err}")
+                    continue
+                
+                log(f"Recibido: {line}")
                 if "Stockfish" in line: version_line = line
                 if line == "uciok":
                     uciok = True
@@ -62,23 +77,37 @@ class StockfishService:
             process.terminate()
             
             if uciok:
+                log(f"Motor listo: {version_line}")
                 return {
                     "status": "ok",
                     "engine": version_line or "Stockfish",
                     "path": self.stockfish_path,
-                    "platform": platform.system()
+                    "platform": platform.system(),
+                    "traces": traces
                 }
             else:
-                return {"status": "error", "message": "El motor no respondió uciok"}
+                stderr_remaining = process.stderr.read().strip()
+                if stderr_remaining: log(f"STDERR FINAL: {stderr_remaining}")
+                log("El motor no respondió uciok tras varios intentos.")
+                return {"status": "error", "message": "Fallo UCI", "traces": traces}
                 
         except Exception as e:
-            return {"status": "error", "message": str(e)}
+            log(f"Excepción crítica: {str(e)}")
+            return {"status": "error", "message": str(e), "traces": traces}
 
-    def get_best_move(self, fen: str, elo: Optional[int] = None, depth: int = 15) -> str:
+    def get_best_move(self, fen: str, elo: Optional[int] = None, depth: int = 15) -> tuple:
         """
         Llama al binario de Stockfish para obtener la mejor jugada para una posición FEN.
+        Retorna (best_move, traces)
         """
+        traces = []
+        def log(msg):
+            print(f"[Engine] {msg}")
+            traces.append(msg)
+
+        log(f"Solicitando jugada (ELO: {elo}, Depth: {depth}) para FEN: {fen}")
         if not os.path.exists(self.stockfish_path):
+            log(f"Error: Binario no encontrado en {self.stockfish_path}")
             raise FileNotFoundError(f"El binario de Stockfish no se encuentra en: {self.stockfish_path}")
 
         # Configuración del proceso Popen
@@ -93,20 +122,24 @@ class StockfishService:
 
         try:
             def send_command(cmd):
+                log(f"Enviando: {cmd}")
                 process.stdin.write(cmd + "\n")
                 process.stdin.flush()
 
             # Inicialización UCI
             send_command("uci")
             send_command("setoption name Threads value 1")
-            send_command("setoption name Move Overhead value 30")
+            
+            # ... lectura inicial ...
+            for _ in range(10):
+                line = process.stdout.readline().strip()
+                if line: log(f"Motor: {line}")
+                if line == "uciok": break
 
             # Configuración de nivel (ELO)
             if elo is not None:
-                # Normalización del ELO según la lógica del legacy (1320-3190 -> Skill 0-20)
                 skill = int(round((elo - 1320) / ((3190 - 1320) / 20)))
                 skill = max(0, min(skill, 20))
-                
                 send_command("setoption name UCI_LimitStrength value true")
                 send_command("setoption name UCI_Elo value " + str(elo))
                 send_command("setoption name Skill Level value " + str(skill))
@@ -124,23 +157,24 @@ class StockfishService:
             while True:
                 line = process.stdout.readline()
                 if not line:
+                    err = process.stderr.read().strip()
+                    if err: log(f"STDERR: {err}")
                     break
+                
                 line = line.strip()
+                if line: log(f"Motor: {line}")
                 if line.startswith("bestmove"):
                     parts = line.split(" ")
                     if len(parts) >= 2:
                         best_move = parts[1]
                     break
 
-            return best_move
+            return best_move, traces
 
         finally:
             if process.poll() is None:
-                send_command("quit")
+                process.stdin.write("quit\n")
+                process.stdin.flush()
                 process.terminate()
-                try:
-                    process.wait(timeout=1)
-                except subprocess.TimeoutExpired:
-                    process.kill()
 
 engine_service = StockfishService()

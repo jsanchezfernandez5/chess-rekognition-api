@@ -32,6 +32,7 @@ class EngineResponse(BaseModel):
     ok: bool
     best_move: str
     message: Optional[str] = None
+    traces: Optional[list] = None
 
 @router.get(
     "/status",
@@ -53,7 +54,7 @@ def get_move(request: EngineRequest):
     Solicita al motor Stockfish que analice la posición y devuelva la mejor continuación.
     """
     try:
-        best_move = engine_service.get_best_move(
+        best_move, traces = engine_service.get_best_move(
             fen=request.fen,
             elo=request.elo,
             depth=request.depth
@@ -65,7 +66,7 @@ def get_move(request: EngineRequest):
                 detail="No se pudo obtener la mejor jugada del motor."
             )
             
-        return EngineResponse(ok=True, best_move=best_move)
+        return EngineResponse(ok=True, best_move=best_move, traces=traces)
         
     except FileNotFoundError as e:
         raise HTTPException(
