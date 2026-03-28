@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, usuarios, partidas
+from routers import auth, usuarios, partidas, engine
 
 # Configuración de etiquetas para que el Swagger se vea organizado por secciones
 tags_metadata = [
@@ -21,6 +21,10 @@ tags_metadata = [
     {
         "name": "Partidas",
         "description": "Operaciones CRUD para gestionar el historial de partidas guardadas.",
+    },
+    {
+        "name": "Motor",
+        "description": "Integración con Stockfish para análisis y juego contra el ordenador.",
     }
 ]
 
@@ -57,6 +61,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(usuarios.router)
 app.include_router(partidas.router)
+app.include_router(engine.router)
 
 # Ruta específica para el favicon del navegador
 @app.get("/favicon.ico", include_in_schema=False)
