@@ -1,46 +1,34 @@
-# services/engine.py
-# Servicio para interactuar con el motor Stockfish
-import subprocess
 import os
+import subprocess
 import pathlib
 import platform
 from typing import Optional
 
 class StockfishService:
     def __init__(self):
-        # Obtenemos la ruta raíz del proyecto API
+        # Determinamos la ruta del binario según el SO
         current_dir = pathlib.Path(__file__).parent.parent
         self.stockfish_path = os.path.join(current_dir, "engine", "stockfish-linux-17.1")
         
-        # Si estamos en Windows, intentamos usar el .exe si existe
         if platform.system() == "Windows":
-            exe_path = self.stockfish_path + ".exe"
-            if os.path.exists(exe_path):
-                self.stockfish_path = exe_path
-        else:
-            # Permisos 755
+            self.stockfish_path = os.path.join(current_dir, "engine", "stockfish-windows-17.1.exe")
+        
+        # Aseguramos permisos de ejecución en Linux
+        if platform.system() != "Windows" and os.path.exists(self.stockfish_path):
             try:
-                if os.path.exists(self.stockfish_path):
-                    os.chmod(self.stockfish_path, int('755', 8))
+                # 755 = rwxr-xr-x
+                os.chmod(self.stockfish_path, int('755', 8))
             except Exception as e:
                 print(f"Aviso: No se pudieron aplicar permisos al motor: {e}")
 
     def check_status(self) -> dict:
         """
-        Verifica que el binario existe, tiene permisos y responde a comandos básicos UCI.
+        Verifica de forma rápida que el binario existe y responde a comandos UCI.
         """
-        traces = []
-        def log(msg):
-            print(f"[Engine] {msg}")
-            traces.append(msg)
-
-        log(f"Verificando motor en: {self.stockfish_path}")
         if not os.path.exists(self.stockfish_path):
-            log("Error: Binario no encontrado físicamente.")
-            return {"status": "error", "message": "Binario no encontrado", "traces": traces}
+            return {"status": "error", "message": "Binario no encontrado"}
         
         try:
-            log("Intentando iniciar proceso...")
             process = subprocess.Popen(
                 [self.stockfish_path],
                 stdin=subprocess.PIPE,
@@ -50,25 +38,16 @@ class StockfishService:
                 bufsize=1
             )
             
-            log(f"Proceso iniciado (PID: {process.pid}). Enviando 'uci'...")
             process.stdin.write("uci\n")
             process.stdin.flush()
             
-            version_line = ""
             uciok = False
-            
-            # Leemos las primeras líneas para ver si responde uciok
-            for i in range(20):
+            version = "Stockfish"
+            for _ in range(20):
                 line = process.stdout.readline().strip()
-                if not line: 
-                    # Si no hay salida en stdout, revisamos stderr
-                    err = process.stderr.readline().strip()
-                    if err: log(f"STDERR: {err}")
-                    continue
-                
-                log(f"Recibido: {line}")
-                if "Stockfish" in line: version_line = line
-                if line == "uciok":
+                if not line: break
+                if "Stockfish" in line: version = line
+                if line == "uciok": 
                     uciok = True
                     break
             
@@ -77,40 +56,21 @@ class StockfishService:
             process.terminate()
             
             if uciok:
-                log(f"Motor listo: {version_line}")
-                return {
-                    "status": "ok",
-                    "engine": version_line or "Stockfish",
-                    "path": self.stockfish_path,
-                    "platform": platform.system(),
-                    "traces": traces
-                }
+                return {"status": "ok", "engine": version}
             else:
-                stderr_remaining = process.stderr.read().strip()
-                if stderr_remaining: log(f"STDERR FINAL: {stderr_remaining}")
-                log("El motor no respondió uciok tras varios intentos.")
-                return {"status": "error", "message": "Fallo UCI", "traces": traces}
+                return {"status": "error", "message": "Fallo de respuesta UCI"}
                 
         except Exception as e:
-            log(f"Excepción crítica: {str(e)}")
-            return {"status": "error", "message": str(e), "traces": traces}
+            return {"status": "error", "message": str(e)}
 
     def get_best_move(self, fen: str, elo: Optional[int] = None, depth: int = 15) -> tuple:
         """
-        Llama al binario de Stockfish para obtener la mejor jugada para una posición FEN.
-        Retorna (best_move, traces)
+        Llama al binario de Stockfish para obtener la mejor jugada y datos de análisis.
+        Retorna (best_move, info_dict)
         """
-        traces = []
-        def log(msg):
-            print(f"[Engine] {msg}")
-            traces.append(msg)
-
-        log(f"Solicitando jugada (ELO: {elo}, Depth: {depth}) para FEN: {fen}")
         if not os.path.exists(self.stockfish_path):
-            log(f"Error: Binario no encontrado en {self.stockfish_path}")
-            raise FileNotFoundError(f"El binario de Stockfish no se encuentra en: {self.stockfish_path}")
+            raise FileNotFoundError(f"El binario de Stockfish no se encuentra en {self.stockfish_path}")
 
-        # Configuración del proceso Popen
         process = subprocess.Popen(
             [self.stockfish_path],
             stdin=subprocess.PIPE,
@@ -122,54 +82,65 @@ class StockfishService:
 
         try:
             def send_command(cmd):
-                log(f"Enviando: {cmd}")
                 process.stdin.write(cmd + "\n")
                 process.stdin.flush()
 
-            # Inicialización UCI
             send_command("uci")
-            send_command("setoption name Threads value 1")
-            
-            # ... lectura inicial ...
-            for _ in range(10):
+            for _ in range(30):
                 line = process.stdout.readline().strip()
-                if line: log(f"Motor: {line}")
+                if not line: break
                 if line == "uciok": break
 
-            # Configuración de nivel (ELO)
+            send_command("setoption name Threads value 1")
             if elo is not None:
                 skill = int(round((elo - 1320) / ((3190 - 1320) / 20)))
                 skill = max(0, min(skill, 20))
                 send_command("setoption name UCI_LimitStrength value true")
                 send_command("setoption name UCI_Elo value " + str(elo))
                 send_command("setoption name Skill Level value " + str(skill))
-            else:
-                send_command("setoption name UCI_LimitStrength value false")
-                send_command("setoption name Skill Level value 20")
-
-            # Preparar posición y buscar
+            
             send_command("ucinewgame")
             send_command(f"position fen {fen}")
             send_command(f"go depth {depth}")
 
-            # Lectura de la salida hasta encontrar bestmove
             best_move = None
+            info = {
+                "score": None,
+                "depth": 0,
+                "nodes": 0,
+                "pv": ""
+            }
+
             while True:
                 line = process.stdout.readline()
-                if not line:
-                    err = process.stderr.read().strip()
-                    if err: log(f"STDERR: {err}")
-                    break
-                
+                if not line: break
                 line = line.strip()
-                if line: log(f"Motor: {line}")
+                if not line: continue
+                
+                # Parseo de info
+                if line.startswith("info "):
+                    parts = line.split(" ")
+                    if "depth" in parts:
+                        idx = parts.index("depth")
+                        info["depth"] = int(parts[idx+1])
+                    if "nodes" in parts:
+                        idx = parts.index("nodes")
+                        info["nodes"] = int(parts[idx+1])
+                    if "score" in parts:
+                        idx = parts.index("score")
+                        score_type = parts[idx+1] # cp o mate
+                        score_val = parts[idx+2]
+                        info["score"] = {"type": score_type, "value": int(score_val)}
+                    if "pv" in parts:
+                        idx = parts.index("pv")
+                        info["pv"] = " ".join(parts[idx+1:])
+
                 if line.startswith("bestmove"):
                     parts = line.split(" ")
-                    if len(parts) >= 2:
-                        best_move = parts[1]
+                    best_move = parts[1]
                     break
 
-            return best_move, traces
+            return best_move, info
 
         finally:
             if process.poll() is None:
