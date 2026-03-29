@@ -7,8 +7,7 @@ BOARD_SIZE = 400
 CELL_SIZE = BOARD_SIZE // 8
 COLS = "abcdefgh"
 
-STD_THRESH = 55
-EDGE_THRESH = 1200
+INNER_CROP_PCT = 0.65  # Usar solo el 65% central de la casilla
 
 
 def _encode_image(img: np.ndarray) -> str:
@@ -93,11 +92,50 @@ def _rectificar(frame: np.ndarray, exterior: np.ndarray) -> np.ndarray:
     return warped
 
 
-def _analizar_casillas(warped: np.ndarray) -> list:
+def _calibrar_umbrales(warped: np.ndarray) -> tuple:
+    """
+    Calcula umbrales dinámicamente a partir del tablero rectificado.
+    Funciona con cualquier iluminación sin necesidad de ajuste manual.
+    """
+    gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+    stds = []
+
+    for row in range(8):
+        for col in range(8):
+            x, y = col * CELL_SIZE, row * CELL_SIZE
+            cell = gray[y:y+CELL_SIZE, x:x+CELL_SIZE]
+            # Recorte central para evitar ruido de bordes de casilla
+            h, w = cell.shape
+            ch, cw = int(h * INNER_CROP_PCT), int(w * INNER_CROP_PCT)
+            yo, xo = (h - ch) // 2, (w - cw) // 2
+            stds.append(float(np.std(cell[yo:yo+ch, xo:xo+cw])))
+
+    stds_arr = np.array(stds)
+    p25  = float(np.percentile(stds_arr, 25))
+    p75  = float(np.percentile(stds_arr, 75))
+    spread = p75 - p25
+
+    if spread < 10:
+        # Tablero uniforme (vacío o muy poca variación)
+        # Umbral conservador: mediana + margen fijo
+        std_thresh = float(np.median(stds_arr)) + max(spread * 1.5, 15)
+    else:
+        # Hay variación significativa: umbral entre grupo bajo y grupo alto
+        std_thresh = p25 + spread * 0.8
+
+    # Rango razonable: nunca menor de 45 ni mayor de 120
+    std_thresh = float(np.clip(std_thresh, 45, 120))
+    edge_thresh = std_thresh * 18
+
+    return std_thresh, edge_thresh
+
+
+def _analizar_casillas(warped: np.ndarray) -> tuple:
     """
     Analiza las 64 casillas del tablero rectificado.
-    Usa desviación estándar y densidad de bordes para detectar ocupación.
+    Autocalibra los umbrales según la iluminación actual.
     """
+    std_thresh, edge_thresh = _calibrar_umbrales(warped)
     gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(gray, 50, 150)
     squares = []
@@ -108,9 +146,15 @@ def _analizar_casillas(warped: np.ndarray) -> list:
             cell_gray = gray[y:y+CELL_SIZE, x:x+CELL_SIZE]
             cell_edges = edges[y:y+CELL_SIZE, x:x+CELL_SIZE]
 
-            std = float(np.std(cell_gray))
-            edge_count = int(np.sum(cell_edges > 0))
-            occupied = std > STD_THRESH or edge_count > EDGE_THRESH
+            h, w = cell_gray.shape
+            ch, cw = int(h * INNER_CROP_PCT), int(w * INNER_CROP_PCT)
+            y_off, x_off = (h - ch) // 2, (w - cw) // 2
+            inner_gray = cell_gray[y_off:y_off+ch, x_off:x_off+cw]
+            inner_edges = cell_edges[y_off:y_off+ch, x_off:x_off+cw]
+
+            std = float(np.std(inner_gray))
+            edge_count = int(np.sum(inner_edges > 0))
+            occupied = std > std_thresh or edge_count > edge_thresh
 
             squares.append({
                 "id": f"{COLS[col]}{8 - row}",
@@ -122,7 +166,7 @@ def _analizar_casillas(warped: np.ndarray) -> list:
                 "is_light": (row + col) % 2 == 0
             })
 
-    return squares
+    return squares, std_thresh, edge_thresh
 
 
 def _generar_vista_real(warped: np.ndarray, squares: list) -> np.ndarray:
@@ -212,6 +256,32 @@ def _generar_debug(frame: np.ndarray, corners: np.ndarray,
     return debug
 
 
+def _generar_collage(debug: np.ndarray, real: np.ndarray, diag: np.ndarray) -> np.ndarray:
+    """
+    Crea una imagen única combinando los 3 estados principales para exportación fácil.
+    Layout: [ Debug (Original Detectada) ] [ Real + 2D ]
+    """
+    # Escalar todo a tamaños consistentes
+    h_main = 450
+    w_main = int(debug.shape[1] * (h_main / debug.shape[0]))
+    debug_res = cv2.resize(debug, (w_main, h_main))
+
+    # Tira lateral con las dos vistas de 400x400 (reescaladas a 225x225 cada una)
+    real_res = cv2.resize(real, (225, 225))
+    diag_res = cv2.resize(diag, (225, 225))
+    side_strip = np.vstack([real_res, diag_res])
+    
+    # Combinar
+    collage = np.hstack([debug_res, side_strip])
+
+    # Añadir un pie de foto oscuro
+    footer = np.zeros((30, collage.shape[1], 3), dtype=np.uint8)
+    cv2.putText(footer, "CHESS REKOGNITION LAB - REPORTE DE DIAGNOSTICO", (10, 20),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
+    
+    return np.vstack([collage, footer])
+
+
 class VisionService:
 
     @staticmethod
@@ -247,13 +317,14 @@ class VisionService:
             warped = _rectificar(frame, exterior)
 
             # 5. Analizar casillas
-            squares = _analizar_casillas(warped)
+            squares, std_thresh_auto, edge_thresh_auto = _analizar_casillas(warped)
             occupied_count = sum(1 for s in squares if s["occupied"])
 
             # 6. Generar imágenes
             vista_real  = _generar_vista_real(warped, squares)
             vista_2d    = _generar_vista_2d(squares)
             debug_image = _generar_debug(frame, corners, exterior)
+            collage     = _generar_collage(debug_image, vista_real, vista_2d)
 
             return {
                 "success": True,
@@ -261,12 +332,14 @@ class VisionService:
                 "rectified_real": _encode_image(vista_real),
                 "rectified_2d":   _encode_image(vista_2d),
                 "debug_image":    _encode_image(debug_image),
+                "export_image":   _encode_image(collage),
                 "squares":        squares,
                 "occupied_count": occupied_count,
                 "num_squares":    len(squares),
                 "config": {
-                    "std_thresh":  STD_THRESH,
-                    "edge_thresh": EDGE_THRESH
+                    "std_thresh":  round(std_thresh_auto, 1),
+                    "edge_thresh": round(edge_thresh_auto, 1),
+                    "crop_pct":    INNER_CROP_PCT
                 }
             }
 

@@ -164,6 +164,12 @@
             border: none;
         }
 
+        .btn.accent {
+            background: var(--blue);
+            color: white;
+            border: none;
+        }
+
         .btn:disabled {
             opacity: 0.3;
         }
@@ -310,7 +316,8 @@
                 <video id="webcam" autoplay playsinline></video>
                 <div class="controls">
                     <button id="snap" class="btn primary">Capturar</button>
-                    <button id="autoToggle" class="btn">Auto: OFF</button>
+                    <button id="reportBtn" class="btn accent" disabled>Reporte</button>
+                    <button id="autoToggle" class="btn" style="grid-column: span 2;">Auto: OFF</button>
                 </div>
             </div>
 
@@ -374,6 +381,7 @@
                     Muestra los 15 valores de desviación estándar (STD) más altos.
                     Umbrales actuales: <span id="threshInfo" style="font-weight: bold; color: var(--text);">STD > ... |
                         Bordes > ...</span>
+                    <div id="cropInfo" style="font-size: 8px; color: var(--muted); margin-top: 4px;">Utilizando recorte central para mayor precisión.</div>
                 </div>
                 <div style="max-height: 250px; overflow-y: auto; margin-top: 15px;">
                     <table class="diag-table">
@@ -406,6 +414,7 @@
         const video = document.getElementById('webcam');
         const canvas = document.getElementById('hiddenCanvas');
         const snapBtn = document.getElementById('snap');
+        const reportBtn = document.getElementById('reportBtn');
         const autoBtn = document.getElementById('autoToggle');
         const rectRealImg = document.getElementById('rectRealImg');
         const rect2DImg = document.getElementById('rect2DImg');
@@ -414,10 +423,12 @@
         const squaresVal = document.getElementById('squaresCount');
         const latencyVal = document.getElementById('latencyVal');
         const threshInfo = document.getElementById('threshInfo');
+        const cropInfo = document.getElementById('cropInfo');
         const diagBody = document.getElementById('diagBody');
         const logs = document.getElementById('logs');
 
         let isAuto = false, isProcessing = false;
+        let lastReportB64 = null;
 
         async function initCamera() {
             try {
@@ -464,6 +475,12 @@
                         // Actualizar info de umbrales desde el config del backend
                         if (data.config) {
                             threshInfo.innerText = `STD > ${data.config.std_thresh} | Bordes > ${data.config.edge_thresh}`;
+                            cropInfo.innerText = `Utilizando recorte central (${Math.round(data.config.crop_pct * 100)}%) de cada casilla.`;
+                        }
+
+                        if (data.export_image) {
+                            lastReportB64 = data.export_image;
+                            reportBtn.disabled = false;
                         }
 
                         apiStatus.innerText = data.status || "OK";
@@ -500,6 +517,15 @@
 
         snapBtn.onclick = () => { isAuto = false; autoBtn.innerText = "Auto: OFF"; processFrame(); };
         autoBtn.onclick = () => { isAuto = !isAuto; autoBtn.innerText = `Auto: ${isAuto ? 'ON' : 'OFF'}`; if (isAuto) processFrame(); };
+
+        reportBtn.onclick = () => {
+            if (!lastReportB64) return;
+            const a = document.createElement('a');
+            a.href = lastReportB64;
+            a.download = `reporte_ajedrez_${new Date().getTime()}.jpg`;
+            a.click();
+            log("Reporte descargado");
+        };
 
         initCamera();
     </script>
