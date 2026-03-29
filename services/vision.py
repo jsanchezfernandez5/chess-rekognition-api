@@ -127,11 +127,32 @@ class VisionService:
             return None
 
         pts = np.array(points)
-        # Extraer los límites extremos como esquinas
+        # Extraer los límites extremos
         x_min, y_min = np.min(pts, axis=0)
         x_max, y_max = np.max(pts, axis=0)
+        
+        width = x_max - x_min
+        height = y_max - y_min
+        
+        # --- FILTROS DE SEGURIDAD ---
+        
+        # 1. Filtro de Tamaño Mínimo (no detectar motas de polvo)
+        image_area = image.shape[0] * image.shape[1]
+        board_area = width * height
+        if board_area < (image_area * 0.05): # Al menos 5% de la imagen
+            return None
+            
+        # 2. Filtro de Aspecto (debe ser casi un cuadrado)
+        aspect_ratio = max(width, height) / min(width, height)
+        if aspect_ratio > 1.5: # Si un lado es 1.5 veces más largo que el otro, no es un tablero
+            return None
+            
+        # 3. Filtro de Densidad (los puntos deben estar distribuidos)
+        # Si todos los puntos están en una línea fina, no es una rejilla
+        if width < 50 or height < 50:
+            return None
 
-        # Devolvemos las 4 esquinas calculadas
+        # Si pasa los filtros, devolvemos las 4 esquinas calculadas
         return np.array([
             [x_min, y_min],
             [x_max, y_min],
