@@ -142,6 +142,7 @@
             background: rgba(255,255,255,0.05); border-radius: 20px; font-size: 10px;
         }
         .status-pill.ok { color: var(--green); background: rgba(34,197,94,0.1); }
+        .status-pill.warning { color: var(--amber); background: rgba(245,158,11,0.1); }
         .status-pill.error { color: var(--red); background: rgba(239,68,68,0.1); }
 
         #diagBody tr td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03); }
@@ -214,7 +215,7 @@
                 <div class="stats-grid">
                     <div class="stat-box">
                         <div id="squaresCount" class="stat-val">0</div>
-                        <div class="stat-lbl">Casillas OK</div>
+                        <div class="stat-lbl">Piezas / Ocupadas</div>
                     </div>
                     <div class="stat-box">
                         <div id="latencyVal" class="stat-val">0</div>
@@ -238,7 +239,7 @@
                 <div class="card-title">Variables de Diagnóstico</div>
                 <div class="hint">
                     Muestra los 15 valores de desviación estándar (STD) más altos. 
-                    Ayuda a identificar por qué una casilla se marca como "Ocupada".
+                    Umbrales actuales: <span id="threshInfo" style="font-weight: bold; color: var(--text);">STD > ... | Bordes > ...</span>
                 </div>
                 <div style="max-height: 250px; overflow-y: auto; margin-top: 15px;">
                     <table class="diag-table">
@@ -277,6 +278,7 @@
         const apiStatus = document.getElementById('apiStatus');
         const squaresVal = document.getElementById('squaresCount');
         const latencyVal = document.getElementById('latencyVal');
+        const threshInfo = document.getElementById('threshInfo');
         const diagBody = document.getElementById('diagBody');
         const logs = document.getElementById('logs');
 
@@ -322,9 +324,20 @@
                         rectRealImg.src = data.rectified_real;
                         rect2DImg.src = data.rectified_2d;
                         debugImg.src = data.debug_image;
-                        squaresVal.innerText = data.num_squares;
+                        squaresVal.innerText = `${data.occupied_count} / ${data.num_squares}`;
+                        
+                        // Actualizar info de umbrales desde el config del backend
+                        if (data.config) {
+                            threshInfo.innerText = `STD > ${data.config.std_thresh} | Bordes > ${data.config.edge_thresh}`;
+                        }
+
                         apiStatus.innerText = data.status || "OK";
-                        apiStatus.className = "status-pill " + (data.status && data.status.includes("MEMORIA") ? "error" : "ok");
+                        if (data.status && data.status.includes("MEMORIA")) {
+                            apiStatus.className = "status-pill warning";
+                        } else {
+                            apiStatus.className = "status-pill ok";
+                        }
+                        
                         updateDiag(data.squares);
                     } else {
                         apiStatus.innerText = data.error;
