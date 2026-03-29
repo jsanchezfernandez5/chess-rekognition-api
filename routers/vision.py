@@ -1,6 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File
 from services.vision import VisionService
-import io
+import cv2
 
 router = APIRouter(
     prefix="/vision",
@@ -29,5 +29,9 @@ async def recognize_board(file: UploadFile = File(...)):
 
 @router.get("/status", summary="Estado del motor de visión")
 def vision_status():
-    """Simple check for the vision module."""
-    return {"status": "ok", "module": "OpenCV", "ready": True}
+    """Devuelve la versión de OpenCV para verificar que el módulo está cargado."""
+    return {
+        "estado": "operativo",
+        "modulo": "OpenCV",
+        "version": cv2.__version__
+    }
