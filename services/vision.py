@@ -1,14 +1,21 @@
 import cv2
 import numpy as np
 import base64
-from typing import Optional, List
 
 class VisionService:
-    # Constantes PRO
+    # --- PERSISTENCIA Y OPTIMIZACIÓN (MEMORIA PRO) ---
+    _LAST_VALID_M = None
+    _LAST_SRC_PTS = None
+    _LAST_ROTATION_CODE = None # Guarda el código de rotación (90, 180, 270)
+    _MEMORY_COUNT = 0          # Contador de frames desde la última detección activa
+    _MAX_MEMORY_FRAMES = 30    # TTL: 1 segundo a 30fps (Previene deriva si mueves la cámara)
+    _SMOOTHING_ALPHA = 0.25    # Factor de suavizado EMA
+
+    # Constantes PRO para análisis de casillas
     BOARD_SIZE = 400
     CELL_SIZE = BOARD_SIZE // 8
-    OCCUPIED_THRESHOLD = 35.0
-    EDGE_THRESHOLD = 12.0
+    OCCUPIED_THRESHOLD = 45.0
+    EDGE_THRESHOLD = 15.0
 
     @staticmethod
     def decode_image(image_bytes: bytes) -> np.ndarray:
@@ -21,29 +28,16 @@ class VisionService:
         return base64.b64encode(buffer).decode('utf-8')
 
     @staticmethod
-    def order_points(pts: np.ndarray) -> np.ndarray:
-        rect = np.zeros((4, 2), dtype="float32")
-        pts = pts.reshape(4, 2)
-        s = pts.sum(axis=1)
-        rect[0] = pts[np.argmin(s)] # Top-Left
-        rect[2] = pts[np.argmax(s)] # Bottom-Right
-        diff = np.diff(pts, axis=1)
-        rect[1] = pts[np.argmin(diff)] # Top-Right
-        rect[3] = pts[np.argmax(diff)] # Bottom-Left
-        return rect
+    def _fix_orientation_pro(board_img: np.ndarray, use_cache: bool = False) -> (np.ndarray, int):
+        """
+        Cálculo inteligente de la orientación h1-blanca.
+        Si use_cache=True y ya conocemos el giro, saltamos el proceso de escaneo (Ahorro CPU).
+        """
+        if use_cache and VisionService._LAST_ROTATION_CODE is not None:
+            # Si el código es 0 (None en CV2), no rotamos, sino aplicamos el giro guardado.
+            if VisionService._LAST_ROTATION_CODE == -1: return board_img
+            return cv2.rotate(board_img, VisionService._LAST_ROTATION_CODE)
 
-    @staticmethod
-    def _is_valid_geometry(pts: np.ndarray) -> bool:
-        """Verifica que las esquinas formen algo parecido a un cuadrado."""
-        rect = VisionService.order_points(pts)
-        w = np.linalg.norm(rect[0] - rect[1])
-        h = np.linalg.norm(rect[1] - rect[2])
-        ratio = w / (h + 1e-6)
-        return 0.7 < ratio < 1.3 and w > 100
-
-    @staticmethod
-    def _fix_orientation_pro(board_img: np.ndarray) -> np.ndarray:
-        """Usa una puntuación de patrón global para asegurar la orientación h1-blanca."""
         gray = cv2.cvtColor(board_img, cv2.COLOR_BGR2GRAY)
         
         def get_pattern_score(img_gray):
@@ -52,93 +46,95 @@ class VisionService:
                 for c in range(8):
                     crop = img_gray[r*50:(r+1)*50, c*50:(c+1)*50]
                     brightness = cv2.mean(crop)[0]
-                    # En ajedrez estándar, (r+c) par es casilla clara
-                    if (r + c) % 2 == 0:
-                        score += brightness
-                    else:
-                        score -= brightness
+                    if (r + c) % 2 == 0: score += brightness
+                    else: score -= brightness
             return score
 
         best_img = board_img
+        best_code = -1 # -1 Representa "sin rotación necesaria"
         max_score = -1e9
         
-        # Probar las 4 rotaciones posibles
-        for _ in range(4):
-            current_score = get_pattern_score(gray)
+        # Códigos de rotación de OpenCV: 0=90CW, 1=180, 2=270CW
+        rotation_codes = [None, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]
+        
+        temp_img = board_img.copy()
+        temp_gray = gray.copy()
+
+        for i, code in enumerate(rotation_codes):
+            if code is not None:
+                temp_img = cv2.rotate(board_img, code)
+                temp_gray = cv2.rotate(gray, code)
+            
+            current_score = get_pattern_score(temp_gray)
             if current_score > max_score:
                 max_score = current_score
-                best_img = board_img.copy()
+                best_img = temp_img.copy()
+                best_code = code if code is not None else -1
             
-            board_img = cv2.rotate(board_img, cv2.ROTATE_90_CLOCKWISE)
-            gray = cv2.rotate(gray, cv2.ROTATE_90_CLOCKWISE)
-            
+        # Guardamos en caché el código ganador para el modo memoria
+        VisionService._LAST_ROTATION_CODE = best_code
         return best_img
-
-    @staticmethod
-    def _draw_diagnostic_2d(squares: list) -> np.ndarray:
-        """Reutilizamos tu tablero de diagnóstico que es muy útil."""
-        board_2d = np.zeros((400, 400, 3), dtype=np.uint8)
-        for sq in squares:
-            x1, y1 = sq["col"] * 50, sq["row"] * 50
-            x2, y2 = x1 + 50, y1 + 50
-            is_light = (sq["row"] + sq["col"]) % 2 == 0
-            bg_color = (210, 225, 235) if is_light else (110, 140, 160)
-            cv2.rectangle(board_2d, (x1, y1), (x2, y2), bg_color, -1)
-            
-            # Marcador visual de ocupación
-            color = (60, 60, 220) if sq["occupied"] else (60, 220, 60)
-            cv2.rectangle(board_2d, (x1+8, y1+8), (x2-8, y2-8), color, 2)
-            cv2.putText(board_2d, sq["id"], (x1+3, y2-5), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.35, (50, 50, 50), 1)
-        return board_2d
 
     @staticmethod
     def detect_and_rectify(image_bytes: bytes) -> dict:
         img = VisionService.decode_image(image_bytes)
         if img is None: return {"success": False, "error": "Imagen inválida"}
 
-        # Preprocesado
+        status_msg = "ACTIVO"
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         clahe_img = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
         
-        # 1. DETECCIÓN
+        # 1. INTENTO DE DETECCIÓN ACTIVA (7x7 internos)
         flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE + cv2.CALIB_CB_FAST_CHECK
         found, corners = cv2.findChessboardCorners(clahe_img, (7, 7), flags)
 
-        if not found:
-            return {"success": False, "error": "Tablero no detectado"}
+        if found:
+            VisionService._MEMORY_COUNT = 0 # Reset del TTL
+            corners_refined = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), 
+                (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.001))
+            
+            src_pts = corners_refined.reshape(-1, 2)
+            dst_pts = np.array([[c*50, r*50] for r in range(1,8) for c in range(1,8)], dtype="float32")
+            
+            M_new, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+            
+            if VisionService._LAST_VALID_M is not None:
+                alpha = VisionService._SMOOTHING_ALPHA
+                M = alpha * M_new + (1 - alpha) * VisionService._LAST_VALID_M
+            else:
+                M = M_new
+            
+            VisionService._LAST_VALID_M = M
+            VisionService._LAST_SRC_PTS = src_pts
+            needs_reorientation = True # Detección fresca, chequeamos giro completo
+            status_msg = "DETECCIÓN OK"
+            
+        else:
+            # 2. FALLBACK A MEMORIA CON TTL (Time-To-Live)
+            VisionService._MEMORY_COUNT += 1
+            if VisionService._LAST_VALID_M is not None and VisionService._MEMORY_COUNT < VisionService._MAX_MEMORY_FRAMES:
+                M = VisionService._LAST_VALID_M
+                src_pts = VisionService._LAST_SRC_PTS
+                needs_reorientation = False # REUTILIZAMOS GIRO (Cache) - Gran ahorro CPU
+                status_msg = f"MODO MEMORIA ({VisionService._MAX_MEMORY_FRAMES - VisionService._MEMORY_COUNT})"
+            else:
+                # Si caduca el TTL o no hay memoria, limpiamos todo
+                VisionService._LAST_VALID_M = None
+                VisionService._LAST_ROTATION_CODE = None
+                return {"success": False, "error": "Tablero perdido o movido (Re-calibra)"}
 
-        corners_refined = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), 
-            (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.001))
-
-        # 2. HOMOGRAFÍA ROBUSTA (Usando los 49 puntos)
-        # Generar puntos destino teóricos en una imagen de 400x400
-        # Los 49 puntos internos del tablero (7x7) están en las intersecciones (1,1) a (7,7)
-        # siendo cada casilla de 50x50.
-        dst_pts = []
-        for row in range(1, 8):
-            for col in range(1, 8):
-                dst_pts.append([col * 50, row * 50])
-        dst_pts = np.array(dst_pts, dtype="float32")
-        src_pts = corners_refined.reshape(-1, 2)
-
-        # Usamos findHomography con RANSAC para filtrar posibles errores en esquinas
-        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+        # 3. RECTIFICACIÓN Y ORIENTACIÓN OPTIMIZADA
         rectified = cv2.warpPerspective(img, M, (400, 400))
-        
-        # Orientación automática h1-blanca
-        rectified = VisionService._fix_orientation_pro(rectified)
+        # Si estamos en modo memoria, usamos el ángulo cacheado (use_cache=True)
+        rectified = VisionService._fix_orientation_pro(rectified, use_cache=(not needs_reorientation))
 
-        # 3. ANÁLISIS DE CASILLAS
+        # 4. ANÁLISIS DE CASILLAS
         squares = []
         col_letters = "abcdefgh"
         for row in range(8):
             for col in range(8):
                 x1, y1 = col * 50, row * 50
                 x2, y2 = x1 + 50, y1 + 50
-                
-                # Tomar el centro de la casilla para evitar el borde de la rejilla
-                # Con el homography de 49 puntos, este centro es muchisimo más preciso
                 margin = 12 
                 crop = rectified[y1+margin:y2-margin, x1+margin:x2-margin]
                 
@@ -146,8 +142,7 @@ class VisionService:
                 edges = cv2.Canny(crop, 30, 100)
                 edge_density = float(edges.mean())
                 
-                # Umbrales algo más altos para evitar ruido en tableros con textura
-                occupied = (std > 45.0 or edge_density > 15.0)
+                occupied = (std > VisionService.OCCUPIED_THRESHOLD or edge_density > VisionService.EDGE_THRESHOLD)
                 
                 square_id = f"{col_letters[col]}{8-row}"
                 squares.append({
@@ -155,37 +150,32 @@ class VisionService:
                     "occupied": bool(occupied), "std": round(std, 2), "edges": round(edge_density, 2)
                 })
 
-        # 4. SALIDA VISUAL
-        rectified_viz = rectified.copy()
-        for sq in squares:
-            x1, y1 = sq["col"] * 50, sq["row"] * 50
-            x2, y2 = x1 + 50, y1 + 50
-            color = (0, 0, 255) if sq["occupied"] else (0, 255, 0)
-            cv2.rectangle(rectified_viz, (x1+1, y1+1), (x2-1, y2-1), color, 1)
-
+        # 5. SALIDA VISUAL SEGMENTADA
+        rectified_plain = rectified.copy()
         board_2d = VisionService._draw_diagnostic_2d(squares)
-        combined = np.hstack([rectified_viz, board_2d])
-
-        # Debug limpio en frame original (Dibujamos el contorno estimado)
         debug = img.copy()
-        # Transformamos las esquinas exteriores teóricas de vuelta a la imagen original
+        
+        # Dibujar UI de diagnóstico sobre el frame original
         outer_corners = np.array([[0,0],[400,0],[400,400],[0,400]], dtype="float32").reshape(-1,1,2)
         M_inv = np.linalg.inv(M)
         outer_pts = cv2.perspectiveTransform(outer_corners, M_inv)
-        cv2.polylines(debug, [np.int32(outer_pts)], True, (0, 255, 0), 3, cv2.LINE_AA)
-        # Dibujar puntos detectados discretos (no la maraña de colores)
+        
+        line_color = (0, 255, 0) if found else (0, 165, 255)
+        cv2.polylines(debug, [np.int32(outer_pts)], True, line_color, 2, cv2.LINE_AA)
         for pt in src_pts:
-            cv2.circle(debug, (int(pt[0]), int(pt[1])), 4, (0, 0, 255), -1)
+            cv2.circle(debug, (int(pt[0]), int(pt[1])), 3, (0, 0, 255), -1)
 
         return {
             "success": True,
-            "rectified_image": f"data:image/jpeg;base64,{VisionService.encode_image(combined)}",
+            "rectified_real": f"data:image/jpeg;base64,{VisionService.encode_image(rectified_plain)}",
+            "rectified_2d": f"data:image/jpeg;base64,{VisionService.encode_image(board_2d)}",
             "debug_image": f"data:image/jpeg;base64,{VisionService.encode_image(debug)}",
             "num_squares": 64,
             "occupied_count": sum(1 for s in squares if s["occupied"]),
             "squares": squares,
+            "status": status_msg,
             "config": {
-                "std_thresh": 45.0,
-                "edge_thresh": 15.0
+                "std_thresh": VisionService.OCCUPIED_THRESHOLD,
+                "edge_thresh": VisionService.EDGE_THRESHOLD
             }
         }
