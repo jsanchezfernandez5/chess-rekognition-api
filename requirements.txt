@@ -46,4 +46,4 @@ aiofiles==24.1.0
 
 # Procesamiento de imagen y utilidades
 numpy==2.2.3
-opencv-contrib-python==4.11.0.86
+opencv-contrib-python>=4.8.0
