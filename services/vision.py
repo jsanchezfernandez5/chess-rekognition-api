@@ -4,277 +4,175 @@ import base64
 from typing import Optional, List
 
 class VisionService:
-    """
-    SERVICIO DE VISIÓN - DETECCIÓN ROBUSTA DE TABLERO (VISIÓN CLÁSICA)
-    
-    Implementa un pipeline avanzado para:
-    1. Normalización de iluminación (CLAHE)
-    2. Detección de bordes adaptativa (Auto-Canny)
-    3. Detección de líneas (Transformada de Hough)
-    4. Inferencia de rejilla e intersecciones
-    5. Rectificación de perspectiva cential
-    6. División en 64 casillas
-    """
+    # Constantes PRO
+    BOARD_SIZE = 400
+    CELL_SIZE = BOARD_SIZE // 8
+    OCCUPIED_THRESHOLD = 35.0
+    EDGE_THRESHOLD = 12.0
 
-    # =========================
-    # UTILIDADES BÁSICAS
-    # =========================
     @staticmethod
     def decode_image(image_bytes: bytes) -> np.ndarray:
-        """Convierte bytes de imagen en matriz OpenCV (BGR)."""
         nparr = np.frombuffer(image_bytes, np.uint8)
         return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     @staticmethod
     def encode_image(image: np.ndarray, format: str = '.jpg') -> str:
-        """Convierte matriz OpenCV en cadena Base64."""
-        _, buffer = cv2.imencode(format, image)
+        _, buffer = cv2.imencode(format, image, [cv2.IMWRITE_JPEG_QUALITY, 85])
         return base64.b64encode(buffer).decode('utf-8')
 
-    # =========================
-    # PREPROCESADO
-    # =========================
     @staticmethod
-    def preprocess(image: np.ndarray) -> np.ndarray:
-        """Aplica escala de grises, CLAHE y desenfoque gausiano."""
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        # CLAHE para normalizar contrastes locales
-        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
-        gray = clahe.apply(gray)
-        # Reducción de ruido
-        gray = cv2.GaussianBlur(gray, (5, 5), 0)
-        return gray
-
-    @staticmethod
-    def auto_canny(image: np.ndarray, sigma=0.33):
-        """Detección de bordes Canny con umbrales calculados automáticamente."""
-        v = np.median(image)
-        lower = int(max(0, (1.0 - sigma) * v))
-        upper = int(min(255, (1.0 + sigma) * v))
-        return cv2.Canny(image, lower, upper)
-
-    # =========================
-    # DETECCIÓN DE LÍNEAS
-    # =========================
-    @staticmethod
-    def detect_lines(edges: np.ndarray):
-        """Usa HoughLinesP para encontrar segmentos de línea rectos."""
-        return cv2.HoughLinesP(
-            edges,
-            rho=1,
-            theta=np.pi / 180,
-            threshold=100,
-            minLineLength=100,
-            maxLineGap=20
-        )
-
-    @staticmethod
-    def split_lines(lines):
-        """Separa las líneas detectadas en horizontales y verticales según su ángulo."""
-        horizontals, verticals = [], []
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            angle = abs(np.arctan2(y2 - y1, x2 - x1))
-            # Cerca de 0 radianes -> Horizontal
-            if angle < np.pi / 6:
-                horizontals.append(line[0])
-            # Cerca de PI/2 radianes -> Vertical
-            elif angle > np.pi / 3:
-                verticals.append(line[0])
-        return horizontals, verticals
-
-    # =========================
-    # INTERSECCIONES
-    # =========================
-    @staticmethod
-    def line_intersection(l1, l2):
-        """Calcula el punto de intersección entre dos segmentos de línea."""
-        x1, y1, x2, y2 = l1
-        x3, y3, x4, y4 = l2
-        denom = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4)
-        if denom == 0:
-            return None
-        px = ((x1*y2 - y1*x2)*(x3-x4) - (x1-x2)*(x3*y4 - y3*x4)) / denom
-        py = ((x1*y2 - y1*x2)*(y3-y4) - (y1-y2)*(x3*y4 - y3*x4)) / denom
-        return [int(px), int(py)]
-
-    # =========================
-    # DETECCIÓN DEL TABLERO
-    # =========================
-    @staticmethod
-    def find_board_corners(image: np.ndarray) -> Optional[np.ndarray]:
-        """Algoritmo principal basado en líneas para encontrar las esquinas del tablero."""
-        gray = VisionService.preprocess(image)
-        edges = VisionService.auto_canny(gray)
-        lines = VisionService.detect_lines(edges)
-        
-        if lines is None:
-            return None
-
-        h_lines, v_lines = VisionService.split_lines(lines)
-        if len(h_lines) < 2 or len(v_lines) < 2:
-            return None
-
-        # Encontrar todas las intersecciones posibles
-        points = []
-        for h in h_lines:
-            for v in v_lines:
-                pt = VisionService.line_intersection(h, v)
-                if pt is not None:
-                    points.append(pt)
-
-        if len(points) < 20: # Un tablero 8x8 genera muchas intersecciones
-            return None
-
-        pts = np.array(points)
-        # Extraer los límites extremos
-        x_min, y_min = np.min(pts, axis=0)
-        x_max, y_max = np.max(pts, axis=0)
-        
-        width = x_max - x_min
-        height = y_max - y_min
-        
-        # --- FILTROS DE SEGURIDAD ---
-        
-        # 1. Filtro de Tamaño Mínimo (no detectar motas de polvo)
-        image_area = image.shape[0] * image.shape[1]
-        board_area = width * height
-        if board_area < (image_area * 0.05): # Al menos 5% de la imagen
-            return None
-            
-        # 2. Filtro de Aspecto (debe ser casi un cuadrado)
-        aspect_ratio = max(width, height) / min(width, height)
-        if aspect_ratio > 1.5: # Si un lado es 1.5 veces más largo que el otro, no es un tablero
-            return None
-            
-        # 3. Filtro de Densidad (los puntos deben estar distribuidos)
-        # Si todos los puntos están en una línea fina, no es una rejilla
-        if width < 50 or height < 50:
-            return None
-
-        # Si pasa los filtros, devolvemos las 4 esquinas calculadas
-        return np.array([
-            [x_min, y_min],
-            [x_max, y_min],
-            [x_max, y_max],
-            [x_min, y_max]
-        ], dtype="float32")
-
-    # =========================
-    # FALLBACK
-    # =========================
-    @staticmethod
-    def fallback_chessboard(gray):
-        """Plan B: Usa la función nativa de OpenCV si el método de líneas falla."""
-        found, corners = cv2.findChessboardCorners(gray, (7, 7))
-        if not found:
-            return None
-        corners = corners.reshape(-1, 2)
-        x_min, y_min = np.min(corners, axis=0)
-        x_max, y_max = np.max(corners, axis=0)
-        return np.array([
-            [x_min, y_min],
-            [x_max, y_min],
-            [x_max, y_max],
-            [x_min, y_max]
-        ], dtype="float32")
-
-    # =========================
-    # HOMOGRAFÍA
-    # =========================
-    @staticmethod
-    def order_points(pts):
-        """Ordena 4 puntos en: Top-Left, Top-Right, Bottom-Right, Bottom-Left."""
+    def order_points(pts: np.ndarray) -> np.ndarray:
         rect = np.zeros((4, 2), dtype="float32")
         pts = pts.reshape(4, 2)
         s = pts.sum(axis=1)
-        rect[0] = pts[np.argmin(s)]
-        rect[2] = pts[np.argmax(s)]
+        rect[0] = pts[np.argmin(s)] # Top-Left
+        rect[2] = pts[np.argmax(s)] # Bottom-Right
         diff = np.diff(pts, axis=1)
-        rect[1] = pts[np.argmin(diff)]
-        rect[3] = pts[np.argmax(diff)]
+        rect[1] = pts[np.argmin(diff)] # Top-Right
+        rect[3] = pts[np.argmax(diff)] # Bottom-Left
         return rect
 
     @staticmethod
-    def rectify(image, pts, size=800):
-        """Corrige la perspectiva de la imagen para dejar el tablero cuadrado."""
+    def _is_valid_geometry(pts: np.ndarray) -> bool:
+        """Verifica que las esquinas formen algo parecido a un cuadrado."""
         rect = VisionService.order_points(pts)
-        dst = np.array([
-            [0, 0],
-            [size - 1, 0],
-            [size - 1, size - 1],
-            [0, size - 1]
-        ], dtype="float32")
-        M = cv2.getPerspectiveTransform(rect, dst)
-        return cv2.warpPerspective(image, M, (size, size))
+        w = np.linalg.norm(rect[0] - rect[1])
+        h = np.linalg.norm(rect[1] - rect[2])
+        ratio = w / (h + 1e-6)
+        return 0.7 < ratio < 1.3 and w > 100
 
-    # =========================
-    # DIVISIÓN 8x8
-    # =========================
     @staticmethod
-    def split_into_squares(image: np.ndarray) -> List[np.ndarray]:
-        """Divide el tablero rectificado de 800x800 en 64 imágenes de casillas individuales."""
-        h, w = image.shape[:2]
-        squares = []
-        step_x = w // 8
-        step_y = h // 8
-        for i in range(8):
-            for j in range(8):
-                square = image[
-                    i * step_y:(i + 1) * step_y,
-                    j * step_x:(j + 1) * step_x
-                ]
-                squares.append(square)
-        return squares
+    def _fix_orientation_pro(board_img: np.ndarray) -> np.ndarray:
+        """Usa una puntuación de patrón global para asegurar la orientación h1-blanca."""
+        gray = cv2.cvtColor(board_img, cv2.COLOR_BGR2GRAY)
+        
+        def get_pattern_score(img_gray):
+            score = 0
+            for r in range(8):
+                for c in range(8):
+                    crop = img_gray[r*50:(r+1)*50, c*50:(c+1)*50]
+                    brightness = cv2.mean(crop)[0]
+                    # En ajedrez estándar, (r+c) par es casilla clara
+                    if (r + c) % 2 == 0:
+                        score += brightness
+                    else:
+                        score -= brightness
+            return score
 
-    # =========================
-    # PIPELINE FINAL
-    # =========================
+        best_img = board_img
+        max_score = -1e9
+        
+        # Probar las 4 rotaciones posibles
+        for _ in range(4):
+            current_score = get_pattern_score(gray)
+            if current_score > max_score:
+                max_score = current_score
+                best_img = board_img.copy()
+            
+            board_img = cv2.rotate(board_img, cv2.ROTATE_90_CLOCKWISE)
+            gray = cv2.rotate(gray, cv2.ROTATE_90_CLOCKWISE)
+            
+        return best_img
+
+    @staticmethod
+    def _draw_diagnostic_2d(squares: list) -> np.ndarray:
+        """Reutilizamos tu tablero de diagnóstico que es muy útil."""
+        board_2d = np.zeros((400, 400, 3), dtype=np.uint8)
+        for sq in squares:
+            x1, y1 = sq["col"] * 50, sq["row"] * 50
+            x2, y2 = x1 + 50, y1 + 50
+            is_light = (sq["row"] + sq["col"]) % 2 == 0
+            bg_color = (210, 225, 235) if is_light else (110, 140, 160)
+            cv2.rectangle(board_2d, (x1, y1), (x2, y2), bg_color, -1)
+            
+            # Marcador visual de ocupación
+            color = (60, 60, 220) if sq["occupied"] else (60, 220, 60)
+            cv2.rectangle(board_2d, (x1+8, y1+8), (x2-8, y2-8), color, 2)
+            cv2.putText(board_2d, sq["id"], (x1+3, y2-5), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.35, (50, 50, 50), 1)
+        return board_2d
+
     @staticmethod
     def detect_and_rectify(image_bytes: bytes) -> dict:
-        """Punto de entrada principal para la API."""
         img = VisionService.decode_image(image_bytes)
-        if img is None:
-            return {"success": False, "error": "Imagen inválida."}
+        if img is None: return {"success": False, "error": "Imagen inválida"}
 
-        # Redimensionado para optimizar rendimiento si la imagen es enorme
-        max_dim = 1000
-        h, w = img.shape[:2]
-        if max(h, w) > max_dim:
-            scale = max_dim / max(h, w)
-            img = cv2.resize(img, None, fx=scale, fy=scale)
+        # Preprocesado optimizado
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8)).apply(gray)
+        
+        # 1. DETECCIÓN EXHAUSTIVA
+        flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE + cv2.CALIB_CB_FAST_CHECK
+        found, corners = cv2.findChessboardCorners(clahe, (7, 7), flags)
 
-        # Intento 1: Detección por líneas (Hough)
-        corners = VisionService.find_board_corners(img)
+        if not found:
+            return {"success": False, "error": "Tablero no detectado"}
 
-        # Intento 2: Fallback si el primero falla
-        if corners is None:
-            gray = VisionService.preprocess(img)
-            corners = VisionService.fallback_chessboard(gray)
+        corners_refined = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), 
+            (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.001))
 
-        if corners is None:
-            return {"success": False, "error": "No se detectó el tablero de ajedrez."}
+        # 2. HOMOGRAFÍA CON FILTRO GEOMÉTRICO
+        pts = corners_refined.reshape(-1, 2)
+        rect_int = VisionService.order_points(np.array([pts[0], pts[6], pts[42], pts[48]]))
+        
+        if not VisionService._is_valid_geometry(rect_int):
+            return {"success": False, "error": "Geometría de tablero no fiable"}
 
-        # Rectificación y corte
-        rectified = VisionService.rectify(img, corners)
-        squares = VisionService.split_into_squares(rectified)
+        offset = (rect_int[1][0] - rect_int[0][0]) / 6
+        src_pts = np.array([
+            rect_int[0] - [offset, offset], rect_int[1] + [offset, -offset],
+            rect_int[2] + [offset, offset],  rect_int[3] + [-offset, offset]
+        ], dtype="float32")
 
-        # Dibujar rejilla 8x8 sobre la rectificada para confirmación visual
-        rectified_grid = rectified.copy()
-        h, w = rectified_grid.shape[:2]
-        for i in range(1, 8):
-            # Líneas horizontales
-            cv2.line(rectified_grid, (0, i * h // 8), (w, i * h // 8), (0, 255, 0), 1)
-            # Líneas verticales
-            cv2.line(rectified_grid, (i * w // 8, 0), (i * w // 8, h), (0, 255, 0), 1)
+        M = cv2.getPerspectiveTransform(src_pts, np.array([[0,0],[400,0],[400,400],[0,400]], dtype="float32"))
+        rectified = cv2.warpPerspective(img, M, (400, 400))
+        
+        # Aplicar orientación PRO basada en patrón de ajedrez
+        rectified = VisionService._fix_orientation_pro(rectified)
 
-        # Generar imagen de depuración con el polígono dibujado
+        # 3. ANÁLISIS DUAL DE CASILLAS (STD + CANNY)
+        squares = []
+        col_letters = "abcdefgh"
+        for row in range(8):
+            for col in range(8):
+                x1, y1 = col * 50, row * 50
+                x2, y2 = x1 + 50, y1 + 50
+                crop = rectified[y1:y2, x1:x2]
+                
+                std = float(crop.std())
+                edges = cv2.Canny(crop, 50, 150)
+                edge_density = float(edges.mean())
+                
+                # Ocupada si supera el umbral de texturas O el de bordes
+                occupied = (std > VisionService.OCCUPIED_THRESHOLD or 
+                           edge_density > VisionService.EDGE_THRESHOLD)
+                
+                square_id = f"{col_letters[col]}{8-row}"
+                squares.append({
+                    "id": square_id, "row": row, "col": col, 
+                    "occupied": occupied, "std": std, "edges": edge_density
+                })
+
+        # 4. SALIDA VISUAL REFORZADA
+        rectified_viz = rectified.copy()
+        for sq in squares:
+            x1, y1 = sq["col"] * 50, sq["row"] * 50
+            x2, y2 = x1 + 50, y1 + 50
+            color = (0, 0, 255) if sq["occupied"] else (0, 255, 0)
+            cv2.rectangle(rectified_viz, (x1+2, y1+2), (x2-2, y2-2), color, 1)
+
+        board_2d = VisionService._draw_diagnostic_2d(squares)
+        combined = np.hstack([rectified_viz, board_2d])
+
+        # Debug en frame original
         debug = img.copy()
-        cv2.polylines(debug, [corners.astype(int)], True, (0, 255, 0), 2)
+        cv2.drawChessboardCorners(debug, (7, 7), corners_refined, found)
 
         return {
             "success": True,
-            "rectified_image": f"data:image/jpeg;base64,{VisionService.encode_image(rectified_grid)}",
+            "rectified_image": f"data:image/jpeg;base64,{VisionService.encode_image(combined)}",
             "debug_image": f"data:image/jpeg;base64,{VisionService.encode_image(debug)}",
-            "num_squares": len(squares)
+            "num_squares": 64,
+            "occupied_count": sum(1 for s in squares if s["occupied"]),
+            "squares": squares # Datos técnicos para el frontend si se necesitan
         }
