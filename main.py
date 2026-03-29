@@ -73,15 +73,10 @@ app.include_router(vision.router)
 def favicon():
     return FileResponse("static/favicon.ico")
 
-# Ruta específica para el opencv.html
+# Ruta unificada para pruebas de visión
 @app.get("/opencv", include_in_schema=False)
 def opencv():
-    return FileResponse("static/opencv-test.html")
-
-# Ruta para pruebas dedicadas de OpenCV con Python
-@app.get("/openpy", include_in_schema=False)
-def opencv_pytest():
-    return FileResponse("static/opencv-pytest.html")
+    return FileResponse("static/opencv.html")
 
 # Personalización de la interfaz de Swagger para que use nuestro logo y título
 @app.get("/docs", include_in_schema=False)

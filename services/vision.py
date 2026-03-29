@@ -137,20 +137,25 @@ class VisionService:
             for col in range(8):
                 x1, y1 = col * 50, row * 50
                 x2, y2 = x1 + 50, y1 + 50
-                crop = rectified[y1:y2, x1:x2]
+                
+                # Tomar un "centro" de la casilla (evitamos bordes)
+                # Casilla de 50x50, tomamos el centro de 30x30
+                margin = 10
+                crop = rectified[y1+margin:y2-margin, x1+margin:x2-margin]
                 
                 std = float(crop.std())
                 edges = cv2.Canny(crop, 50, 150)
                 edge_density = float(edges.mean())
                 
                 # Ocupada si supera el umbral de texturas O el de bordes
+                # Umbral algo más liberal para el centro
                 occupied = (std > VisionService.OCCUPIED_THRESHOLD or 
                            edge_density > VisionService.EDGE_THRESHOLD)
                 
                 square_id = f"{col_letters[col]}{8-row}"
                 squares.append({
                     "id": square_id, "row": row, "col": col, 
-                    "occupied": occupied, "std": std, "edges": edge_density
+                    "occupied": bool(occupied), "std": round(std, 2), "edges": round(edge_density, 2)
                 })
 
         # 4. SALIDA VISUAL REFORZADA
@@ -158,10 +163,12 @@ class VisionService:
         for sq in squares:
             x1, y1 = sq["col"] * 50, sq["row"] * 50
             x2, y2 = x1 + 50, y1 + 50
+            # Verde = Vacío, Rojo = Ocupado (con pieza)
             color = (0, 0, 255) if sq["occupied"] else (0, 255, 0)
             cv2.rectangle(rectified_viz, (x1+2, y1+2), (x2-2, y2-2), color, 1)
 
         board_2d = VisionService._draw_diagnostic_2d(squares)
+        # Combinar para que el usuario entienda qué es cada cosa
         combined = np.hstack([rectified_viz, board_2d])
 
         # Debug en frame original
@@ -174,5 +181,9 @@ class VisionService:
             "debug_image": f"data:image/jpeg;base64,{VisionService.encode_image(debug)}",
             "num_squares": 64,
             "occupied_count": sum(1 for s in squares if s["occupied"]),
-            "squares": squares # Datos técnicos para el frontend si se necesitan
+            "squares": squares, # Datos técnicos para el frontend
+            "config": {
+                "std_thresh": VisionService.OCCUPIED_THRESHOLD,
+                "edge_thresh": VisionService.EDGE_THRESHOLD
+            }
         }

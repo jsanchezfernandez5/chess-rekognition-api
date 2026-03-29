@@ -4,22 +4,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Chess Rekognition · API Lab</title>
+    <title>Chess Rekognition · PRO Lab</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
 
         :root {
-            --bg: #0f0f11;
-            --surface: #1a1a1f;
+            --bg: #0b0b0d;
+            --surface: #141417;
+            --surface-accent: #1c1c21;
             --border: #2a2a32;
             --text: #f0f0f5;
             --muted: #8a8a98;
             --green: #22c55e;
             --red: #ef4444;
             --amber: #f59e0b;
+            --blue: #3b82f6;
             --mono: 'Space Mono', monospace;
             --display: 'Syne', sans-serif;
-            --radius: 18px;
+            --radius: 20px;
             --radius-sm: 12px;
         }
 
@@ -35,51 +37,52 @@
             font-family: var(--mono);
             font-size: 13px;
             min-height: 100vh;
-            max-width: 440px;
+            max-width: 480px;
             margin: 0 auto;
-            padding-bottom: 40px;
+            padding-bottom: 60px;
         }
 
         header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 18px 20px;
+            padding: 20px;
             background: var(--surface);
             border-bottom: 1px solid var(--border);
             position: sticky;
             top: 0;
-            z-index: 50;
+            z-index: 100;
+            backdrop-filter: blur(10px);
         }
 
         .logo {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             font-family: var(--display);
             font-weight: 800;
-            font-size: 18px;
+            font-size: 20px;
             letter-spacing: -0.5px;
         }
 
         .logo-icon {
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             background: var(--text);
-            border-radius: 8px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: var(--bg);
-            font-size: 16px;
+            font-size: 18px;
         }
 
         .lab-badge {
-            font-size: 9px;
+            font-size: 10px;
             background: var(--green);
             color: #000;
-            padding: 2px 8px;
-            border-radius: 4px;
+            padding: 4px 10px;
+            border-radius: 6px;
             font-weight: 700;
             text-transform: uppercase;
         }
@@ -92,20 +95,21 @@
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: var(--radius);
-            padding: 16px;
-            margin-bottom: 16px;
-            overflow: hidden;
+            padding: 18px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
 
         .card-title {
-            font-size: 10px;
+            font-size: 11px;
             letter-spacing: 1.5px;
             text-transform: uppercase;
             color: var(--muted);
-            margin-bottom: 14px;
+            margin-bottom: 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            font-weight: 700;
         }
 
         video, img {
@@ -120,21 +124,21 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 5px 12px;
+            padding: 6px 14px;
             background: rgba(255, 255, 255, 0.05);
             border-radius: 20px;
-            font-size: 10px;
+            font-size: 11px;
             color: var(--muted);
-            transition: all 0.3s;
+            font-weight: 700;
         }
 
-        .status-pill.ok { color: var(--green); background: rgba(34, 197, 94, 0.1); }
-        .status-pill.error { color: var(--red); background: rgba(239, 68, 68, 0.1); }
+        .status-pill.ok { color: var(--green); background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.2); }
+        .status-pill.error { color: var(--red); background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.2); }
 
-        .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-        .dot.blink { animation: blink 1s infinite; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+        .dot.blink { animation: blink 1.5s infinite; }
 
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
         .controls {
             display: grid;
@@ -151,8 +155,8 @@
             text-transform: uppercase;
             padding: 14px;
             border-radius: var(--radius-sm);
-            border: 1px solid var(--border);
-            background: var(--surface);
+            border: 1.5px solid var(--border);
+            background: var(--surface-accent);
             color: var(--text);
             cursor: pointer;
             transition: all 0.2s;
@@ -162,61 +166,116 @@
             gap: 8px;
         }
 
-        .btn:hover { background: #25252b; border-color: var(--muted); }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--muted); background: #25252b; }
+        .btn:active:not(:disabled) { transform: translateY(0); }
         .btn.primary { background: var(--text); color: var(--bg); border: none; }
-        .btn.primary:hover { opacity: 0.9; }
+        .btn.primary:hover:not(:disabled) { background: #fff; }
         .btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
         .stats-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 10px;
+            gap: 12px;
+            margin-top: 14px;
         }
 
         .stat-box {
-            background: rgba(0,0,0,0.2);
-            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            padding: 14px;
             border-radius: var(--radius-sm);
             text-align: center;
+            border: 1px solid rgba(255,255,255,0.03);
         }
 
         .stat-val {
             font-family: var(--display);
-            font-size: 24px;
+            font-size: 28px;
             font-weight: 800;
             color: var(--green);
             line-height: 1;
         }
 
         .stat-lbl {
-            font-size: 9px;
+            font-size: 10px;
             color: var(--muted);
             text-transform: uppercase;
-            margin-top: 4px;
+            margin-top: 6px;
             letter-spacing: 1px;
         }
 
-        .loader {
-            display: none;
-            width: 20px;
-            height: 20px;
-            border: 2px solid var(--muted);
-            border-top-color: var(--text);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+        .legend {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            font-size: 10px;
         }
 
-        @keyframes spin { to { transform: rotate(360deg); } }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+
+        #diagnosticPanel {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+            border-top: 1px solid var(--border);
+            padding-top: 15px;
+        }
+
+        .diag-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+        }
+
+        .diag-table th {
+            text-align: left;
+            color: var(--muted);
+            padding: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .diag-table td {
+            padding: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .diag-table tr.occupied {
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        .diag-table tr.occupied td:first-child {
+            color: var(--red);
+            font-weight: 700;
+        }
 
         #logs {
             font-size: 10px;
             color: var(--muted);
-            max-height: 150px;
+            max-height: 120px;
             overflow-y: auto;
-            border-top: 1px solid var(--border);
-            padding-top: 10px;
+            background: rgba(0,0,0,0.4);
+            padding: 10px;
+            border-radius: 8px;
             margin-top: 10px;
+        }
+
+        .info-hint {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 3px solid var(--blue);
+            padding: 10px;
+            margin-top: 12px;
+            font-size: 11px;
+            color: #b0c4ff;
+            line-height: 1.5;
+        }
+
+        .split-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -227,7 +286,7 @@
             <div class="logo-icon">♔</div>
             Chess Rekognition
         </div>
-        <div class="lab-badge">Python API</div>
+        <div class="lab-badge">PRO v2.0</div>
     </header>
 
     <div class="container">
@@ -240,35 +299,73 @@
             <video id="webcam" autoplay playsinline></video>
             <div class="controls">
                 <button id="snap" class="btn primary">Capturar</button>
-                <button id="autoToggle" class="btn">Modo Auto: OFF</button>
+                <button id="autoToggle" class="btn">Auto: OFF</button>
             </div>
         </div>
 
         <!-- RESULTADOS -->
         <div class="card">
             <div class="card-title">
-                Tablero Rectificado (API)
-                <div id="apiStatus" class="status-pill">Esperando...</div>
+                Análisis de Tablero (API)
+                <div id="apiStatus" class="status-pill">Inactivo</div>
             </div>
-            <img id="resultImage" style="background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAAXNSR0IArs4c6QAAACpJREFUGFdjZEADTAwMDIwMDAz/GRgYmBgYGP6DMTIwMDAyMDAwMDQAAC7DBAXe536NAAAAAElFTkSuQmCC');">
             
+            <div class="split-header">
+                <span class="stat-lbl">Visión Rectificada + Mapa 2D</span>
+                <span id="occupiedInfo" style="font-size: 10px; color: var(--amber);"></span>
+            </div>
+
+            <img id="resultImage" style="background: #111;">
+            
+            <div class="legend">
+                <div class="legend-item"><div class="dot" style="background:var(--green)"></div> Vacía</div>
+                <div class="legend-item"><div class="dot" style="background:var(--red)"></div> Ocupada</div>
+                <div class="legend-item" style="color:var(--muted); margin-left:auto;">* Datos basados en Textura (STD) y Bordes</div>
+            </div>
+
             <div class="stats-grid">
                 <div class="stat-box">
                     <div id="squaresCount" class="stat-val">0</div>
-                    <div class="stat-lbl">Casillas</div>
+                    <div class="stat-lbl">Casillas OK</div>
                 </div>
                 <div class="stat-box">
                     <div id="latencyVal" class="stat-val">0</div>
                     <div class="stat-lbl">ms Latencia</div>
                 </div>
             </div>
+
+            <div class="info-hint">
+                <b>Pro Tip:</b> La imagen muestra a la izquierda la vista aérea real y a la derecha el diagrama de diagnóstico. Si ves demasiadas celdas rojas en un tablero vacío, ajusta la iluminación.
+            </div>
         </div>
 
-        <!-- DEBUG -->
+        <!-- DATOS TÉCNICOS -->
         <div class="card">
-            <div class="card-title">Visión : Depuración Bordes</div>
-            <img id="debugImage">
+            <div class="card-title">Variables de Reconocimiento</div>
+            
+            <div id="diagnosticPanel">
+                <table class="diag-table">
+                    <thead>
+                        <tr>
+                            <th>Casilla</th>
+                            <th>Ocupada</th>
+                            <th>Desv. (STD)</th>
+                            <th>Bordes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="diagBody">
+                        <!-- Se llena vía JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card-title" style="margin-top:20px;">Logs del Sistema</div>
             <div id="logs"></div>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">Depuración de Bordes (Input)</div>
+            <img id="debugImage">
         </div>
     </div>
 
@@ -285,6 +382,8 @@
         const apiStatus = document.getElementById('apiStatus');
         const squaresVal = document.getElementById('squaresCount');
         const latencyVal = document.getElementById('latencyVal');
+        const diagBody = document.getElementById('diagBody');
+        const occupiedInfo = document.getElementById('occupiedInfo');
         const logs = document.getElementById('logs');
 
         let isAuto = false;
@@ -344,13 +443,18 @@
                         squaresVal.innerText = data.num_squares;
                         squaresVal.style.color = data.num_squares === 64 ? 'var(--green)' : 'var(--amber)';
                         
+                        occupiedInfo.innerText = `${data.occupied_count} piezas detectadas`;
+                        
                         apiStatus.innerHTML = '<div class="dot"></div> DETECTADO';
                         apiStatus.className = "status-pill ok";
+
+                        updateDiagnosticTable(data.squares, data.config);
                     } else {
                         apiStatus.innerText = data.error || "No detectado";
                         apiStatus.className = "status-pill error";
                         squaresVal.innerText = "0";
                         squaresVal.style.color = "var(--red)";
+                        occupiedInfo.innerText = "";
                     }
                 } catch (err) {
                     log("Error API: " + err, true);
@@ -360,18 +464,42 @@
                     isProcessing = false;
                     if (isAuto) setTimeout(processFrame, 100);
                 }
-            }, 'image/jpeg', 0.7);
+            }, 'image/jpeg', 0.8);
+        }
+
+        function updateDiagnosticTable(squares, config) {
+            // Solo mostramos las 16 con mayores valores para no saturar, o un resumen
+            // Filtrar las que tienen algo de interés
+            const interesting = squares
+                .filter(s => s.occupied || s.std > config.std_thresh * 0.5)
+                .sort((a,b) => b.std - a.std)
+                .slice(0, 20);
+
+            diagBody.innerHTML = interesting.map(s => `
+                <tr class="${s.occupied ? 'occupied' : ''}">
+                    <td>${s.id}</td>
+                    <td>${s.occupied ? 'SI' : 'NO'}</td>
+                    <td>${s.std} ${s.std > config.std_thresh ? '⚠️' : ''}</td>
+                    <td>${s.edges} ${s.edges > config.edge_thresh ? '⚠️' : ''}</td>
+                </tr>
+            `).join('');
+            
+            if (interesting.length === 0) {
+                diagBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No hay actividad relevante</td></tr>';
+            }
         }
 
         snapBtn.onclick = () => {
             isAuto = false;
-            autoBtn.innerText = "Modo Auto: OFF";
+            autoBtn.innerText = "Auto: OFF";
+            autoBtn.style.color = "var(--text)";
             processFrame();
         };
 
         autoBtn.onclick = () => {
             isAuto = !isAuto;
-            autoBtn.innerText = `Modo Auto: ${isAuto ? 'ON' : 'OFF'}`;
+            autoBtn.innerText = `Auto: ${isAuto ? 'ON' : 'OFF'}`;
+            autoBtn.style.color = isAuto ? 'var(--green)' : 'var(--text)';
             autoBtn.style.borderColor = isAuto ? 'var(--green)' : 'var(--border)';
             if (isAuto) processFrame();
         };
@@ -379,5 +507,4 @@
         initCamera();
     </script>
 </body>
-
 </html>
