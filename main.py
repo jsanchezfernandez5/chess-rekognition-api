@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, usuarios, partidas, engine
+from routers import auth, usuarios, partidas, engine, vision
 
 # Configuración de etiquetas para que el Swagger se vea organizado por secciones
 tags_metadata = [
@@ -25,6 +25,10 @@ tags_metadata = [
     {
         "name": "Motor",
         "description": "Integración con Stockfish para análisis y juego contra el ordenador.",
+    },
+    {
+        "name": "Visión",
+        "description": "Procesamiento de imagen mediante OpenCV para el reconocimiento del tablero.",
     }
 ]
 
@@ -62,11 +66,22 @@ app.include_router(auth.router)
 app.include_router(usuarios.router)
 app.include_router(partidas.router)
 app.include_router(engine.router)
+app.include_router(vision.router)
 
 # Ruta específica para el favicon del navegador
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     return FileResponse("static/favicon.ico")
+
+# Ruta específica para el opencv.html
+@app.get("/opencv", include_in_schema=False)
+def opencv():
+    return FileResponse("static/opencv-test.html")
+
+# Ruta para pruebas dedicadas de OpenCV con Python
+@app.get("/openpy", include_in_schema=False)
+def opencv_pytest():
+    return FileResponse("static/opencv-pytest.html")
 
 # Personalización de la interfaz de Swagger para que use nuestro logo y título
 @app.get("/docs", include_in_schema=False)

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenCV PyTest - Reconocimiento de Tablero</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --success: #27ae60;
+            --dark: #2c3e50;
+            --light: #f8f9fa;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--dark);
+            color: var(--light);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            text-align: center;
+        }
+        header {
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 10px;
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        video, img {
+            width: 100%;
+            border-radius: 8px;
+            background: #000;
+            min-height: 300px;
+            object-fit: cover;
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        button:hover { filter: brightness(1.1); transform: translateY(-2px); }
+        button:active { transform: translateY(0); }
+        button:disabled { background: #666; cursor: not-allowed; }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+        .status-ok { background: rgba(39, 174, 96, 0.2); color: var(--success); }
+        .status-error { background: rgba(192, 57, 43, 0.2); color: #e74c3c; }
+
+        .loader {
+            display: none;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Chess Vision PyTest</h1>
+            <p>Detección de Tablero y Rectificación de Perspectiva con Python + OpenCV</p>
+        </header>
+
+        <div class="main-grid">
+            <div class="card">
+                <h3>Cámara en Vivo</h3>
+                <video id="webcam" autoplay playsinline></video>
+                <div class="controls">
+                    <button id="snap" class="btn-success">Capturar y Procesar</button>
+                    <button id="autoToggle" class="btn-primary">Modo Auto: OFF</button>
+                </div>
+                <canvas id="canvas" style="display:none;"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>Resultado: Tablero Rectificado</h3>
+                <div id="status" class="status-badge">Esperando captura...</div>
+                <div id="loader" class="loader"></div>
+                <img id="resultImage" alt="Resultado rectificado">
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <div class="card">
+                <h3>Detección (Debug)</h3>
+                <img id="debugImage" alt="Imagen con bordes detectados">
+            </div>
+            <div class="card">
+                <h3>Historial / Logs</h3>
+                <div id="logs" style="text-align: left; height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.8em; padding: 10px; background: #1a1a1a; border-radius: 8px;">
+                    <div>[INFO] Sistema iniciado.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const snap = document.getElementById('snap');
+        const resultImage = document.getElementById('resultImage');
+        const debugImage = document.getElementById('debugImage');
+        const statusDiv = document.getElementById('status');
+        const loader = document.getElementById('loader');
+        const logsDiv = document.getElementById('logs');
+        const autoToggle = document.getElementById('autoToggle');
+
+        let isAutoMode = false;
+        let isProcessing = false;
+
+        // Iniciar cámara
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 1280, height: 720, facingMode: 'environment' } 
+                });
+                video.srcObject = stream;
+                log('Cámara iniciada correctamente.');
+            } catch (err) {
+                log('Error al acceder a la cámara: ' + err, 'error');
+                statusDiv.innerText = 'Error de cámara';
+                statusDiv.className = 'status-badge status-error';
+            }
+        }
+
+        function log(msg, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const color = type === 'error' ? '#e74c3c' : (type === 'success' ? '#27ae60' : '#f8f9fa');
+            logsDiv.innerHTML += `<div style="color: ${color}">[${time}] ${msg}</div>`;
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        async function processFrame() {
+            if (isProcessing) return;
+            isProcessing = true;
+            
+            loader.style.display = 'block';
+            statusDiv.innerText = 'Procesando en servidor...';
+            statusDiv.className = 'status-badge';
+
+            // Dibujar frame actual en el canvas oculto
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convertir a Blob
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('file', blob, 'capture.jpg');
+
+                try {
+                    const response = await fetch('/vision/recognize-board', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        resultImage.src = data.rectified_image;
+                        debugImage.src = data.debug_image;
+                        statusDiv.innerText = 'Tablero Detectado';
+                        statusDiv.className = 'status-badge status-ok';
+                        log('Tablero rectificado con éxito.', 'success');
+                    } else {
+                        statusDiv.innerText = data.error || 'No detectado';
+                        statusDiv.className = 'status-badge status-error';
+                        log('Fallo en detección: ' + (data.error || 'desconocido'), 'error');
+                    }
+                } catch (err) {
+                    log('Error de red: ' + err, 'error');
+                    statusDiv.innerText = 'Error de conexión';
+                    statusDiv.className = 'status-badge status-error';
+                } finally {
+                    isProcessing = false;
+                    loader.style.display = 'none';
+                    if (isAutoMode) setTimeout(processFrame, 500);
+                }
+            }, 'image/jpeg', 0.8);
+        }
+
+        snap.addEventListener('click', () => {
+            isAutoMode = false;
+            autoToggle.innerText = 'Modo Auto: OFF';
+            processFrame();
+        });
+
+        autoToggle.addEventListener('click', () => {
+            isAutoMode = !isAutoMode;
+            autoToggle.innerText = `Modo Auto: ${isAutoMode ? 'ON' : 'OFF'}`;
+            if (isAutoMode) processFrame();
+        });
+
+        initCamera();
+    </script>
+</body>
+</html>
