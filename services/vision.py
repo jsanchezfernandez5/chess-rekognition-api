@@ -1,181 +1,267 @@
 import cv2
 import numpy as np
 import base64
+import traceback
+
+BOARD_SIZE = 400
+CELL_SIZE = BOARD_SIZE // 8
+COLS = "abcdefgh"
+
+STD_THRESH = 35
+EDGE_THRESH = 800
+
+
+def _encode_image(img: np.ndarray) -> str:
+    """Convierte un array numpy a base64 para enviar al frontend."""
+    _, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return "data:image/jpeg;base64," + base64.b64encode(buffer).decode("utf-8")
+
+
+def _detectar_tablero(frame: np.ndarray):
+    """
+    Detecta el tablero usando findChessboardCornersSB.
+    Devuelve (found, corners) donde corners son las 49 esquinas internas.
+    """
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # Intento principal — más robusto
+    found, corners = cv2.findChessboardCornersSB(
+        gray, (7, 7),
+        cv2.CALIB_CB_NORMALIZE_IMAGE | cv2.CALIB_CB_EXHAUSTIVE
+    )
+
+    if not found:
+        # Fallback clásico
+        found, corners = cv2.findChessboardCorners(
+            gray, (7, 7),
+            cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE
+        )
+
+    if not found:
+        return False, None
+
+    # Refinar a subpíxel
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+    corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
+
+    return True, corners
+
+
+def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
+    """
+    A partir de las 49 esquinas internas (7x7) calcula
+    las 4 esquinas exteriores del tablero completo.
+    """
+    tl = corners[0][0]
+    tr = corners[6][0]
+    bl = corners[42][0]
+    br = corners[48][0]
+
+    cell_w = (tr - tl) / 6
+    cell_h = (bl - tl) / 6
+
+    board_tl = tl - cell_w - cell_h
+    board_tr = tr + cell_w - cell_h
+    board_bl = bl - cell_w + cell_h
+    board_br = br + cell_w + cell_h
+
+    return np.array([board_tl, board_tr, board_br, board_bl], dtype=np.float32)
+
+
+def _rectificar(frame: np.ndarray, exterior: np.ndarray) -> np.ndarray:
+    """Aplica la homografía para obtener vista cenital 400x400."""
+    dst = np.array([
+        [0, 0],
+        [BOARD_SIZE, 0],
+        [BOARD_SIZE, BOARD_SIZE],
+        [0, BOARD_SIZE]
+    ], dtype=np.float32)
+
+    M = cv2.getPerspectiveTransform(exterior, dst)
+    warped = cv2.warpPerspective(frame, M, (BOARD_SIZE, BOARD_SIZE))
+    return warped
+
+
+def _analizar_casillas(warped: np.ndarray) -> list:
+    """
+    Analiza las 64 casillas del tablero rectificado.
+    Usa desviación estándar y densidad de bordes para detectar ocupación.
+    """
+    gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 150)
+    squares = []
+
+    for row in range(8):
+        for col in range(8):
+            x, y = col * CELL_SIZE, row * CELL_SIZE
+            cell_gray = gray[y:y+CELL_SIZE, x:x+CELL_SIZE]
+            cell_edges = edges[y:y+CELL_SIZE, x:x+CELL_SIZE]
+
+            std = float(np.std(cell_gray))
+            edge_count = int(np.sum(cell_edges > 0))
+            occupied = std > STD_THRESH or edge_count > EDGE_THRESH
+
+            squares.append({
+                "id": f"{COLS[col]}{8 - row}",
+                "row": row,
+                "col": col,
+                "occupied": occupied,
+                "std": round(std, 2),
+                "edges": edge_count,
+                "is_light": (row + col) % 2 == 0
+            })
+
+    return squares
+
+
+def _generar_vista_real(warped: np.ndarray, squares: list) -> np.ndarray:
+    """
+    Vista cenital real con overlay verde/rojo sobre las casillas.
+    """
+    output = warped.copy()
+
+    for sq in squares:
+        x, y = sq["col"] * CELL_SIZE, sq["row"] * CELL_SIZE
+        color = (0, 80, 0) if not sq["occupied"] else (0, 0, 180)
+        alpha = 0.18
+        overlay = output.copy()
+        cv2.rectangle(overlay, (x+2, y+2),
+                      (x+CELL_SIZE-2, y+CELL_SIZE-2), color, -1)
+        cv2.addWeighted(overlay, alpha, output, 1 - alpha, 0, output)
+
+        border_color = (0, 200, 80) if not sq["occupied"] else (60, 60, 220)
+        cv2.rectangle(output, (x+2, y+2),
+                      (x+CELL_SIZE-2, y+CELL_SIZE-2), border_color, 1)
+
+    # Cuadrícula
+    for i in range(9):
+        cv2.line(output, (i*CELL_SIZE, 0),
+                 (i*CELL_SIZE, BOARD_SIZE), (80, 80, 80), 1)
+        cv2.line(output, (0, i*CELL_SIZE),
+                 (BOARD_SIZE, i*CELL_SIZE), (80, 80, 80), 1)
+
+    return output
+
+
+def _generar_vista_2d(squares: list) -> np.ndarray:
+    """
+    Vista diagnóstico 2D: tablero sintético con colores
+    de casilla clásicos y marcadores de ocupación.
+    """
+    output = np.zeros((BOARD_SIZE, BOARD_SIZE, 3), dtype=np.uint8)
+
+    COLOR_LIGHT = (210, 200, 180)
+    COLOR_DARK  = (100, 70,  50)
+    COLOR_OCC   = (60,  60,  220)
+    COLOR_FREE  = (40,  180, 80)
+
+    for sq in squares:
+        x, y = sq["col"] * CELL_SIZE, sq["row"] * CELL_SIZE
+        base = COLOR_LIGHT if sq["is_light"] else COLOR_DARK
+        cv2.rectangle(output, (x, y),
+                      (x+CELL_SIZE, y+CELL_SIZE), base, -1)
+
+        if sq["occupied"]:
+            cv2.rectangle(output, (x+4, y+4),
+                          (x+CELL_SIZE-4, y+CELL_SIZE-4), COLOR_OCC, -1)
+            cv2.putText(output, sq["id"], (x+6, y+CELL_SIZE-8),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.28, (255, 255, 255), 1)
+        else:
+            cv2.circle(output,
+                       (x + CELL_SIZE//2, y + CELL_SIZE//2),
+                       4, COLOR_FREE, -1)
+
+    # Cuadrícula fina
+    for i in range(9):
+        cv2.line(output, (i*CELL_SIZE, 0),
+                 (i*CELL_SIZE, BOARD_SIZE), (50, 50, 50), 1)
+        cv2.line(output, (0, i*CELL_SIZE),
+                 (BOARD_SIZE, i*CELL_SIZE), (50, 50, 50), 1)
+
+    return output
+
+
+def _generar_debug(frame: np.ndarray, corners: np.ndarray,
+                   exterior: np.ndarray) -> np.ndarray:
+    """
+    Imagen de debug: frame original con los 49 puntos internos
+    en rojo y el perímetro del tablero en verde.
+    """
+    debug = frame.copy()
+
+    # Perímetro verde del tablero
+    pts = exterior.reshape((-1, 1, 2)).astype(np.int32)
+    cv2.polylines(debug, [pts], True, (0, 220, 80), 3)
+
+    # 49 esquinas internas en rojo
+    for pt in corners:
+        cx, cy = int(pt[0][0]), int(pt[0][1])
+        cv2.circle(debug, (cx, cy), 4, (0, 0, 220), -1)
+
+    return debug
+
 
 class VisionService:
-    # --- PERSISTENCIA Y OPTIMIZACIÓN (MEMORIA PRO) ---
-    _LAST_VALID_M = None
-    _LAST_SRC_PTS = None
-    _LAST_ROTATION_CODE = None # Guarda el código de rotación (90, 180, 270)
-    _MEMORY_COUNT = 0          # Contador de frames desde la última detección activa
-    _MAX_MEMORY_FRAMES = 30    # TTL: 1 segundo a 30fps (Previene deriva si mueves la cámara)
-    _SMOOTHING_ALPHA = 0.25    # Factor de suavizado EMA
-
-    # Constantes PRO para análisis de casillas
-    BOARD_SIZE = 400
-    CELL_SIZE = BOARD_SIZE // 8
-    OCCUPIED_THRESHOLD = 45.0
-    EDGE_THRESHOLD = 15.0
-
-    @staticmethod
-    def decode_image(image_bytes: bytes) -> np.ndarray:
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-    @staticmethod
-    def encode_image(image: np.ndarray, format: str = '.jpg') -> str:
-        _, buffer = cv2.imencode(format, image, [cv2.IMWRITE_JPEG_QUALITY, 85])
-        return base64.b64encode(buffer).decode('utf-8')
-
-    @staticmethod
-    def _fix_orientation_pro(board_img: np.ndarray, use_cache: bool = False) -> (np.ndarray, int):
-        """
-        Cálculo inteligente de la orientación h1-blanca.
-        Si use_cache=True y ya conocemos el giro, saltamos el proceso de escaneo (Ahorro CPU).
-        """
-        if use_cache and VisionService._LAST_ROTATION_CODE is not None:
-            # Si el código es 0 (None en CV2), no rotamos, sino aplicamos el giro guardado.
-            if VisionService._LAST_ROTATION_CODE == -1: return board_img
-            return cv2.rotate(board_img, VisionService._LAST_ROTATION_CODE)
-
-        gray = cv2.cvtColor(board_img, cv2.COLOR_BGR2GRAY)
-        
-        def get_pattern_score(img_gray):
-            score = 0
-            for r in range(8):
-                for c in range(8):
-                    crop = img_gray[r*50:(r+1)*50, c*50:(c+1)*50]
-                    brightness = cv2.mean(crop)[0]
-                    if (r + c) % 2 == 0: score += brightness
-                    else: score -= brightness
-            return score
-
-        best_img = board_img
-        best_code = -1 # -1 Representa "sin rotación necesaria"
-        max_score = -1e9
-        
-        # Códigos de rotación de OpenCV: 0=90CW, 1=180, 2=270CW
-        rotation_codes = [None, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]
-        
-        temp_img = board_img.copy()
-        temp_gray = gray.copy()
-
-        for i, code in enumerate(rotation_codes):
-            if code is not None:
-                temp_img = cv2.rotate(board_img, code)
-                temp_gray = cv2.rotate(gray, code)
-            
-            current_score = get_pattern_score(temp_gray)
-            if current_score > max_score:
-                max_score = current_score
-                best_img = temp_img.copy()
-                best_code = code if code is not None else -1
-            
-        # Guardamos en caché el código ganador para el modo memoria
-        VisionService._LAST_ROTATION_CODE = best_code
-        return best_img
 
     @staticmethod
     def detect_and_rectify(image_bytes: bytes) -> dict:
-        img = VisionService.decode_image(image_bytes)
-        if img is None: return {"success": False, "error": "Imagen inválida"}
+        """
+        Pipeline completo:
+        1. Decodificar imagen
+        2. Detectar tablero (findChessboardCornersSB)
+        3. Calcular esquinas exteriores
+        4. Rectificar (homografía)
+        5. Analizar 64 casillas
+        6. Generar las 3 imágenes de respuesta
+        """
+        try:
+            # 1. Decodificar
+            arr = np.frombuffer(image_bytes, np.uint8)
+            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if frame is None:
+                return {"success": False,
+                        "error": "No se pudo decodificar la imagen"}
 
-        status_msg = "ACTIVO"
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        clahe_img = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
-        
-        # 1. INTENTO DE DETECCIÓN ACTIVA (7x7 internos)
-        flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE + cv2.CALIB_CB_FAST_CHECK
-        found, corners = cv2.findChessboardCorners(clahe_img, (7, 7), flags)
+            # 2. Detectar tablero
+            found, corners = _detectar_tablero(frame)
+            if not found:
+                return {"success": False,
+                        "error": "Tablero no detectado. Asegúrate de que "
+                                 "el tablero esté bien encuadrado y con buena luz."}
 
-        if found:
-            VisionService._MEMORY_COUNT = 0 # Reset del TTL
-            corners_refined = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), 
-                (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.001))
-            
-            src_pts = corners_refined.reshape(-1, 2)
-            dst_pts = np.array([[c*50, r*50] for r in range(1,8) for c in range(1,8)], dtype="float32")
-            
-            M_new, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-            
-            if VisionService._LAST_VALID_M is not None:
-                alpha = VisionService._SMOOTHING_ALPHA
-                M = alpha * M_new + (1 - alpha) * VisionService._LAST_VALID_M
-            else:
-                M = M_new
-            
-            VisionService._LAST_VALID_M = M
-            VisionService._LAST_SRC_PTS = src_pts
-            needs_reorientation = True # Detección fresca, chequeamos giro completo
-            status_msg = "DETECCIÓN OK"
-            
-        else:
-            # 2. FALLBACK A MEMORIA CON TTL (Time-To-Live)
-            VisionService._MEMORY_COUNT += 1
-            if VisionService._LAST_VALID_M is not None and VisionService._MEMORY_COUNT < VisionService._MAX_MEMORY_FRAMES:
-                M = VisionService._LAST_VALID_M
-                src_pts = VisionService._LAST_SRC_PTS
-                needs_reorientation = False # REUTILIZAMOS GIRO (Cache) - Gran ahorro CPU
-                status_msg = f"MODO MEMORIA ({VisionService._MAX_MEMORY_FRAMES - VisionService._MEMORY_COUNT})"
-            else:
-                # Si caduca el TTL o no hay memoria, limpiamos todo
-                VisionService._LAST_VALID_M = None
-                VisionService._LAST_ROTATION_CODE = None
-                return {"success": False, "error": "Tablero perdido o movido (Re-calibra)"}
+            # 3. Esquinas exteriores
+            exterior = _calcular_esquinas_exteriores(corners)
 
-        # 3. RECTIFICACIÓN Y ORIENTACIÓN OPTIMIZADA
-        rectified = cv2.warpPerspective(img, M, (400, 400))
-        # Si estamos en modo memoria, usamos el ángulo cacheado (use_cache=True)
-        rectified = VisionService._fix_orientation_pro(rectified, use_cache=(not needs_reorientation))
+            # 4. Rectificar
+            warped = _rectificar(frame, exterior)
 
-        # 4. ANÁLISIS DE CASILLAS
-        squares = []
-        col_letters = "abcdefgh"
-        for row in range(8):
-            for col in range(8):
-                x1, y1 = col * 50, row * 50
-                x2, y2 = x1 + 50, y1 + 50
-                margin = 12 
-                crop = rectified[y1+margin:y2-margin, x1+margin:x2-margin]
-                
-                std = float(crop.std())
-                edges = cv2.Canny(crop, 30, 100)
-                edge_density = float(edges.mean())
-                
-                occupied = (std > VisionService.OCCUPIED_THRESHOLD or edge_density > VisionService.EDGE_THRESHOLD)
-                
-                square_id = f"{col_letters[col]}{8-row}"
-                squares.append({
-                    "id": square_id, "row": row, "col": col, 
-                    "occupied": bool(occupied), "std": round(std, 2), "edges": round(edge_density, 2)
-                })
+            # 5. Analizar casillas
+            squares = _analizar_casillas(warped)
+            occupied_count = sum(1 for s in squares if s["occupied"])
 
-        # 5. SALIDA VISUAL SEGMENTADA
-        rectified_plain = rectified.copy()
-        board_2d = VisionService._draw_diagnostic_2d(squares)
-        debug = img.copy()
-        
-        # Dibujar UI de diagnóstico sobre el frame original
-        outer_corners = np.array([[0,0],[400,0],[400,400],[0,400]], dtype="float32").reshape(-1,1,2)
-        M_inv = np.linalg.inv(M)
-        outer_pts = cv2.perspectiveTransform(outer_corners, M_inv)
-        
-        line_color = (0, 255, 0) if found else (0, 165, 255)
-        cv2.polylines(debug, [np.int32(outer_pts)], True, line_color, 2, cv2.LINE_AA)
-        for pt in src_pts:
-            cv2.circle(debug, (int(pt[0]), int(pt[1])), 3, (0, 0, 255), -1)
+            # 6. Generar imágenes
+            vista_real  = _generar_vista_real(warped, squares)
+            vista_2d    = _generar_vista_2d(squares)
+            debug_image = _generar_debug(frame, corners, exterior)
 
-        return {
-            "success": True,
-            "rectified_real": f"data:image/jpeg;base64,{VisionService.encode_image(rectified_plain)}",
-            "rectified_2d": f"data:image/jpeg;base64,{VisionService.encode_image(board_2d)}",
-            "debug_image": f"data:image/jpeg;base64,{VisionService.encode_image(debug)}",
-            "num_squares": 64,
-            "occupied_count": sum(1 for s in squares if s["occupied"]),
-            "squares": squares,
-            "status": status_msg,
-            "config": {
-                "std_thresh": VisionService.OCCUPIED_THRESHOLD,
-                "edge_thresh": VisionService.EDGE_THRESHOLD
+            return {
+                "success": True,
+                "status": "OK",
+                "rectified_real": _encode_image(vista_real),
+                "rectified_2d":   _encode_image(vista_2d),
+                "debug_image":    _encode_image(debug_image),
+                "squares":        squares,
+                "occupied_count": occupied_count,
+                "num_squares":    len(squares),
+                "config": {
+                    "std_thresh":  STD_THRESH,
+                    "edge_thresh": EDGE_THRESH
+                }
             }
-        }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "detail": traceback.format_exc()
+            }

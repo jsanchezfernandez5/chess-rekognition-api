@@ -1,6 +1,8 @@
 from fastapi import APIRouter, UploadFile, File
 from services.vision import VisionService
 import cv2
+import numpy as np
+import traceback
 
 router = APIRouter(
     prefix="/vision",
@@ -11,21 +13,33 @@ router = APIRouter(
 @router.post("/recognize-board", summary="Reconoce y rectifica un tablero de ajedrez")
 async def recognize_board(file: UploadFile = File(...)):
     """
-    Recibe una imagen (desde la cámara o archivo) y devuelve el tablero 
+    Recibe una imagen (desde la cámara o archivo) y devuelve el tablero
     rectificado en perspectiva cenital.
     """
-    # 1. Leer los bytes de la imagen subida
-    contents = await file.read()
-    
-    # 2. Procesar mediante el servicio de visión
-    result = VisionService.detect_and_rectify(contents)
-    
-    # 3. Validar resultado
-    if not result["success"]:
-        # Se puede devolver un 200 con success: false o un 422 si hay problemas de reconocimiento
+    try:
+        contents = await file.read()
+
+        # Verificar que la imagen llega correctamente antes de procesarla
+        arr = np.frombuffer(contents, np.uint8)
+        frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if frame is None:
+            return {
+                "success": False,
+                "error": "No se pudo decodificar la imagen recibida"
+            }
+
+        result = VisionService.detect_and_rectify(contents)
         return result
-        
-    return result
+
+    except Exception as e:
+        # Capturar cualquier excepción y devolverla como JSON
+        # para que el frontend pueda parsearla correctamente
+        return {
+            "success": False,
+            "error": str(e),
+            "detail": traceback.format_exc()
+        }
+
 
 @router.get("/status", summary="Estado del motor de visión")
 def vision_status():

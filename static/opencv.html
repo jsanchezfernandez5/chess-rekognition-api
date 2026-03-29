@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Chess Rekognition · Lab PRO</title>
+    <title>Chess Rekognition - Laboratorio PRO</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
 
@@ -62,9 +62,15 @@
         }
 
         .logo-icon {
-            width: 32px; height: 32px; background: var(--text); border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            color: var(--bg); font-size: 16px;
+            width: 32px;
+            height: 32px;
+            background: var(--text);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--bg);
+            font-size: 16px;
         }
 
         .main-layout {
@@ -80,10 +86,18 @@
                 grid-template-columns: 1fr 1fr;
                 height: calc(100vh - 63px);
             }
-            .sidebar { overflow-y: auto; }
-            .preview-section { 
-                position: sticky; top: 0; height: 100%; 
-                display: flex; flex-direction: column; justify-content: center;
+
+            .sidebar {
+                overflow-y: auto;
+            }
+
+            .preview-section {
+                position: sticky;
+                top: 0;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
                 background: #000;
             }
         }
@@ -101,66 +115,180 @@
         }
 
         .card-title {
-            font-size: 10px; text-transform: uppercase; color: var(--muted);
-            margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;
-            font-weight: 700; letter-spacing: 1px;
+            font-size: 10px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 700;
+            letter-spacing: 1px;
         }
 
         #webcam {
-            width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border);
-            background: #000; display: block;
+            width: 100%;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: #000;
+            display: block;
         }
 
         .controls {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
         }
 
         .btn {
-            font-family: var(--mono); font-size: 11px; font-weight: 700;
-            padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);
-            background: var(--surface-accent); color: var(--text); cursor: pointer;
-            text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 8px;
+            font-family: var(--mono);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--surface-accent);
+            color: var(--text);
+            cursor: pointer;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
-        .btn.primary { background: var(--text); color: var(--bg); border: none; }
-        .btn:disabled { opacity: 0.3; }
+        .btn.primary {
+            background: var(--text);
+            color: var(--bg);
+            border: none;
+        }
+
+        .btn:disabled {
+            opacity: 0.3;
+        }
 
         .result-img-container {
-            position: relative; width: 100%; border-radius: var(--radius-sm); overflow: hidden;
-            border: 1px solid var(--border); background: #111; aspect-ratio: 1/1;
+            position: relative;
+            width: 100%;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: #111;
+            aspect-ratio: 1/1;
         }
-        
-        .result-img-container img { width: 100%; height: 100%; object-fit: contain; }
 
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-        .stat-box { background: rgba(0,0,0,0.3); padding: 12px; border-radius: var(--radius-sm); text-align: center; }
-        .stat-val { font-family: var(--display); font-size: 24px; font-weight: 800; color: var(--green); }
-        .stat-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; margin-top: 4px; }
+        .result-img-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .stat-box {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            text-align: center;
+        }
+
+        .stat-val {
+            font-family: var(--display);
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--green);
+        }
+
+        .stat-lbl {
+            font-size: 9px;
+            color: var(--muted);
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
 
         .status-pill {
-            display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px;
-            background: rgba(255,255,255,0.05); border-radius: 20px; font-size: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            font-size: 10px;
         }
-        .status-pill.ok { color: var(--green); background: rgba(34,197,94,0.1); }
-        .status-pill.warning { color: var(--amber); background: rgba(245,158,11,0.1); }
-        .status-pill.error { color: var(--red); background: rgba(239,68,68,0.1); }
 
-        #diagBody tr td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03); }
-        .diag-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-        .occupied { background: rgba(239, 68, 68, 0.05); color: var(--red); }
+        .status-pill.ok {
+            color: var(--green);
+            background: rgba(34, 197, 94, 0.1);
+        }
 
-        .legend { display: flex; gap: 12px; font-size: 9px; margin-top: 10px; color: var(--muted); }
-        .legend-item { display: flex; align-items: center; gap: 4px; }
-        .dot { width: 6px; height: 6px; border-radius: 50%; }
+        .status-pill.warning {
+            color: var(--amber);
+            background: rgba(245, 158, 11, 0.1);
+        }
 
-        .hint { 
-            background: rgba(59, 130, 246, 0.05); border-left: 2px solid var(--blue); padding: 10px;
-            font-size: 10px; margin-top: 10px; line-height: 1.4; color: #a0b0ff;
+        .status-pill.error {
+            color: var(--red);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        #diagBody tr td {
+            padding: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .diag-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+        }
+
+        .occupied {
+            background: rgba(239, 68, 68, 0.05);
+            color: var(--red);
+        }
+
+        .legend {
+            display: flex;
+            gap: 12px;
+            font-size: 9px;
+            margin-top: 10px;
+            color: var(--muted);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .hint {
+            background: rgba(59, 130, 246, 0.05);
+            border-left: 2px solid var(--blue);
+            padding: 10px;
+            font-size: 10px;
+            margin-top: 10px;
+            line-height: 1.4;
+            color: #a0b0ff;
         }
 
         /* Mobile specific scroll behavior */
         @media (max-width: 600px) {
-            header { position: sticky; top: 0; }
+            header {
+                position: sticky;
+                top: 0;
+            }
         }
     </style>
 </head>
@@ -191,7 +319,7 @@
                     Análisis Visión segmentado
                     <div id="apiStatus" class="status-pill">Inactivo</div>
                 </div>
-                
+
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div>
                         <div class="stat-lbl" style="margin-bottom: 5px; text-align: center;">Vista Aérea (Real)</div>
@@ -208,8 +336,12 @@
                 </div>
 
                 <div class="legend">
-                    <div class="legend-item"><div class="dot" style="background:var(--green)"></div> Vacía</div>
-                    <div class="legend-item"><div class="dot" style="background:var(--red)"></div> Ocupada</div>
+                    <div class="legend-item">
+                        <div class="dot" style="background:var(--green)"></div> Vacía
+                    </div>
+                    <div class="legend-item">
+                        <div class="dot" style="background:var(--red)"></div> Ocupada
+                    </div>
                 </div>
 
                 <div class="stats-grid">
@@ -231,15 +363,17 @@
                 <div class="card-title">Tablero Detectado (Input Original)</div>
                 <img id="debugImage" style="width: 100%; border-radius: 8px; border: 1px solid var(--border);">
                 <div class="hint" style="border-left-color: var(--green); color: #afffaf;">
-                    <b>Feedback:</b> El **perímetro verde** muestra la zona del tablero proyectada. Los **puntos rojos** son los 49 cruces internos detectados.
+                    <b>Feedback:</b> El **perímetro verde** muestra la zona del tablero proyectada. Los **puntos rojos**
+                    son los 49 cruces internos detectados.
                 </div>
             </div>
 
             <div class="card">
                 <div class="card-title">Variables de Diagnóstico</div>
                 <div class="hint">
-                    Muestra los 15 valores de desviación estándar (STD) más altos. 
-                    Umbrales actuales: <span id="threshInfo" style="font-weight: bold; color: var(--text);">STD > ... | Bordes > ...</span>
+                    Muestra los 15 valores de desviación estándar (STD) más altos.
+                    Umbrales actuales: <span id="threshInfo" style="font-weight: bold; color: var(--text);">STD > ... |
+                        Bordes > ...</span>
                 </div>
                 <div style="max-height: 250px; overflow-y: auto; margin-top: 15px;">
                     <table class="diag-table">
@@ -258,7 +392,8 @@
 
             <div class="card">
                 <div class="card-title">Logs Sistema</div>
-                <div id="logs" style="font-size: 9px; color: var(--muted); max-height: 100px; overflow: auto; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 6px;">
+                <div id="logs"
+                    style="font-size: 9px; color: var(--muted); max-height: 100px; overflow: auto; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 6px;">
                     <div>Esperando cámara...</div>
                 </div>
             </div>
@@ -308,7 +443,7 @@
             if (isProcessing) return;
             isProcessing = true;
             const start = performance.now();
-            
+
             canvas.width = video.videoWidth; canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
             apiStatus.innerText = "Procesando...";
@@ -325,7 +460,7 @@
                         rect2DImg.src = data.rectified_2d;
                         debugImg.src = data.debug_image;
                         squaresVal.innerText = `${data.occupied_count} / ${data.num_squares}`;
-                        
+
                         // Actualizar info de umbrales desde el config del backend
                         if (data.config) {
                             threshInfo.innerText = `STD > ${data.config.std_thresh} | Bordes > ${data.config.edge_thresh}`;
@@ -337,7 +472,7 @@
                         } else {
                             apiStatus.className = "status-pill ok";
                         }
-                        
+
                         updateDiag(data.squares);
                     } else {
                         apiStatus.innerText = data.error;
@@ -352,7 +487,7 @@
         }
 
         function updateDiag(sqs) {
-            const list = sqs.sort((a,b) => b.std - a.std).slice(0, 15);
+            const list = sqs.sort((a, b) => b.std - a.std).slice(0, 15);
             diagBody.innerHTML = list.map(s => `
                 <tr class="${s.occupied ? 'occupied' : ''}">
                     <td>${s.id}</td>
@@ -369,4 +504,5 @@
         initCamera();
     </script>
 </body>
+
 </html>
