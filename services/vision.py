@@ -7,8 +7,8 @@ BOARD_SIZE = 400
 CELL_SIZE = BOARD_SIZE // 8
 COLS = "abcdefgh"
 
-STD_THRESH = 35
-EDGE_THRESH = 800
+STD_THRESH = 55
+EDGE_THRESH = 1200
 
 
 def _encode_image(img: np.ndarray) -> str:
@@ -49,23 +49,34 @@ def _detectar_tablero(frame: np.ndarray):
 
 def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
     """
-    A partir de las 49 esquinas internas (7x7) calcula
-    las 4 esquinas exteriores del tablero completo.
+    Calcula las 4 esquinas exteriores del tablero completo a partir
+    de las 49 esquinas internas (7x7).
+    Usa vectores locales por esquina para mayor precisión
+    cuando el tablero está en perspectiva.
     """
-    tl = corners[0][0]
-    tr = corners[6][0]
-    bl = corners[42][0]
-    br = corners[48][0]
+    tl = corners[0][0]   # fila 0, col 0
+    tr = corners[6][0]   # fila 0, col 6
+    bl = corners[42][0]  # fila 6, col 0
+    br = corners[48][0]  # fila 6, col 6
 
-    cell_w = (tr - tl) / 6
-    cell_h = (bl - tl) / 6
+    # Vector de una casilla en cada dirección local
+    # (las 7 esquinas cubren 6 intervalos → dividir entre 6)
+    step_h_top    = (tr - tl) / 6.0   # horizontal arriba
+    step_h_bottom = (br - bl) / 6.0   # horizontal abajo
+    step_v_left   = (bl - tl) / 6.0   # vertical izquierda
+    step_v_right  = (br - tr) / 6.0   # vertical derecha
 
-    board_tl = tl - cell_w - cell_h
-    board_tr = tr + cell_w - cell_h
-    board_bl = bl - cell_w + cell_h
-    board_br = br + cell_w + cell_h
+    # Extrapolar una casilla hacia afuera desde cada esquina
+    # usando los vectores locales de esa esquina concreta
+    board_tl = tl - step_h_top    - step_v_left
+    board_tr = tr + step_h_top    - step_v_right
+    board_bl = bl - step_h_bottom + step_v_left
+    board_br = br + step_h_bottom + step_v_right
 
-    return np.array([board_tl, board_tr, board_br, board_bl], dtype=np.float32)
+    return np.array(
+        [board_tl, board_tr, board_br, board_bl],
+        dtype=np.float32
+    )
 
 
 def _rectificar(frame: np.ndarray, exterior: np.ndarray) -> np.ndarray:
