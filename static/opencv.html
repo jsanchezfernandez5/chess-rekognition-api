@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Chess Rekognition · PRO Lab</title>
+    <title>Chess Rekognition · Lab PRO</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
 
@@ -37,22 +37,19 @@
             font-family: var(--mono);
             font-size: 13px;
             min-height: 100vh;
-            max-width: 480px;
-            margin: 0 auto;
-            padding-bottom: 60px;
+            display: flex;
+            flex-direction: column;
         }
 
         header {
+            padding: 15px 20px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 20px;
-            background: var(--surface);
-            border-bottom: 1px solid var(--border);
-            position: sticky;
-            top: 0;
+            flex-shrink: 0;
             z-index: 100;
-            backdrop-filter: blur(10px);
         }
 
         .logo {
@@ -61,33 +58,37 @@
             gap: 10px;
             font-family: var(--display);
             font-weight: 800;
-            font-size: 20px;
-            letter-spacing: -0.5px;
-        }
-
-        .logo-icon {
-            width: 36px;
-            height: 36px;
-            background: var(--text);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--bg);
             font-size: 18px;
         }
 
-        .lab-badge {
-            font-size: 10px;
-            background: var(--green);
-            color: #000;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-weight: 700;
-            text-transform: uppercase;
+        .logo-icon {
+            width: 32px; height: 32px; background: var(--text); border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--bg); font-size: 16px;
         }
 
-        .container {
+        .main-layout {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0;
+            overflow-y: auto;
+        }
+
+        @media (min-aspect-ratio: 1/1) {
+            .main-layout {
+                grid-template-columns: 1fr 1fr;
+                height: calc(100vh - 63px);
+            }
+            .sidebar { overflow-y: auto; }
+            .preview-section { 
+                position: sticky; top: 0; height: 100%; 
+                display: flex; flex-direction: column; justify-content: center;
+                background: #000;
+            }
+        }
+
+        .section {
             padding: 20px;
         }
 
@@ -95,187 +96,70 @@
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: var(--radius);
-            padding: 18px;
+            padding: 16px;
             margin-bottom: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
 
         .card-title {
-            font-size: 11px;
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
-            color: var(--muted);
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-weight: 700;
+            font-size: 10px; text-transform: uppercase; color: var(--muted);
+            margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;
+            font-weight: 700; letter-spacing: 1px;
         }
 
-        video, img {
-            width: 100%;
-            border-radius: var(--radius-sm);
-            background: #000;
-            display: block;
-            border: 1px solid var(--border);
+        #webcam {
+            width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border);
+            background: #000; display: block;
         }
-
-        .status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 14px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            font-size: 11px;
-            color: var(--muted);
-            font-weight: 700;
-        }
-
-        .status-pill.ok { color: var(--green); background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.2); }
-        .status-pill.error { color: var(--red); background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.2); }
-
-        .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-        .dot.blink { animation: blink 1.5s infinite; }
-
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
         .controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-top: 16px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;
         }
 
         .btn {
-            font-family: var(--mono);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            padding: 14px;
-            border-radius: var(--radius-sm);
-            border: 1.5px solid var(--border);
-            background: var(--surface-accent);
-            color: var(--text);
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
+            font-family: var(--mono); font-size: 11px; font-weight: 700;
+            padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+            background: var(--surface-accent); color: var(--text); cursor: pointer;
+            text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 8px;
         }
 
-        .btn:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--muted); background: #25252b; }
-        .btn:active:not(:disabled) { transform: translateY(0); }
         .btn.primary { background: var(--text); color: var(--bg); border: none; }
-        .btn.primary:hover:not(:disabled) { background: #fff; }
-        .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn:disabled { opacity: 0.3; }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-top: 14px;
+        .result-img-container {
+            position: relative; width: 100%; border-radius: var(--radius-sm); overflow: hidden;
+            border: 1px solid var(--border); background: #000; aspect-ratio: 2/1;
+        }
+        
+        #resultImage { width: 100%; height: 100%; object-fit: contain; }
+
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .stat-box { background: rgba(0,0,0,0.3); padding: 12px; border-radius: var(--radius-sm); text-align: center; }
+        .stat-val { font-family: var(--display); font-size: 24px; font-weight: 800; color: var(--green); }
+        .stat-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; margin-top: 4px; }
+
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px;
+            background: rgba(255,255,255,0.05); border-radius: 20px; font-size: 10px;
+        }
+        .status-pill.ok { color: var(--green); background: rgba(34,197,94,0.1); }
+        .status-pill.error { color: var(--red); background: rgba(239,68,68,0.1); }
+
+        #diagBody tr td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .diag-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        .occupied { background: rgba(239, 68, 68, 0.05); color: var(--red); }
+
+        .legend { display: flex; gap: 12px; font-size: 9px; margin-top: 10px; color: var(--muted); }
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+        .hint { 
+            background: rgba(59, 130, 246, 0.05); border-left: 2px solid var(--blue); padding: 10px;
+            font-size: 10px; margin-top: 10px; line-height: 1.4; color: #a0b0ff;
         }
 
-        .stat-box {
-            background: rgba(0,0,0,0.3);
-            padding: 14px;
-            border-radius: var(--radius-sm);
-            text-align: center;
-            border: 1px solid rgba(255,255,255,0.03);
-        }
-
-        .stat-val {
-            font-family: var(--display);
-            font-size: 28px;
-            font-weight: 800;
-            color: var(--green);
-            line-height: 1;
-        }
-
-        .stat-lbl {
-            font-size: 10px;
-            color: var(--muted);
-            text-transform: uppercase;
-            margin-top: 6px;
-            letter-spacing: 1px;
-        }
-
-        .legend {
-            display: flex;
-            gap: 15px;
-            margin-top: 15px;
-            padding: 10px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 10px;
-            font-size: 10px;
-        }
-
-        .legend-item { display: flex; align-items: center; gap: 5px; }
-
-        #diagnosticPanel {
-            max-height: 300px;
-            overflow-y: auto;
-            margin-top: 10px;
-            border-top: 1px solid var(--border);
-            padding-top: 15px;
-        }
-
-        .diag-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10px;
-        }
-
-        .diag-table th {
-            text-align: left;
-            color: var(--muted);
-            padding: 8px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .diag-table td {
-            padding: 8px;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-
-        .diag-table tr.occupied {
-            background: rgba(239, 68, 68, 0.05);
-        }
-
-        .diag-table tr.occupied td:first-child {
-            color: var(--red);
-            font-weight: 700;
-        }
-
-        #logs {
-            font-size: 10px;
-            color: var(--muted);
-            max-height: 120px;
-            overflow-y: auto;
-            background: rgba(0,0,0,0.4);
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 10px;
-        }
-
-        .info-hint {
-            background: rgba(59, 130, 246, 0.1);
-            border-left: 3px solid var(--blue);
-            padding: 10px;
-            margin-top: 12px;
-            font-size: 11px;
-            color: #b0c4ff;
-            line-height: 1.5;
-        }
-
-        .split-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-bottom: 10px;
+        /* Mobile specific scroll behavior */
+        @media (max-width: 600px) {
+            header { position: sticky; top: 0; }
         }
     </style>
 </head>
@@ -286,90 +170,84 @@
             <div class="logo-icon">♔</div>
             Chess Rekognition
         </div>
-        <div class="lab-badge">PRO v2.0</div>
+        <div id="camStatus" class="status-pill">OFF</div>
     </header>
 
-    <div class="container">
-        <!-- CÁMARA IMAGEN -->
-        <div class="card">
-            <div class="card-title">
-                Cámara en vivo
-                <div id="camStatus" class="status-pill"><div class="dot blink"></div> OFF</div>
-            </div>
-            <video id="webcam" autoplay playsinline></video>
-            <div class="controls">
-                <button id="snap" class="btn primary">Capturar</button>
-                <button id="autoToggle" class="btn">Auto: OFF</button>
-            </div>
-        </div>
-
-        <!-- RESULTADOS -->
-        <div class="card">
-            <div class="card-title">
-                Análisis de Tablero (API)
-                <div id="apiStatus" class="status-pill">Inactivo</div>
-            </div>
-            
-            <div class="split-header">
-                <span class="stat-lbl">Visión Rectificada + Mapa 2D</span>
-                <span id="occupiedInfo" style="font-size: 10px; color: var(--amber);"></span>
-            </div>
-
-            <img id="resultImage" style="background: #111;">
-            
-            <div class="legend">
-                <div class="legend-item"><div class="dot" style="background:var(--green)"></div> Vacía</div>
-                <div class="legend-item"><div class="dot" style="background:var(--red)"></div> Ocupada</div>
-                <div class="legend-item" style="color:var(--muted); margin-left:auto;">* Datos basados en Textura (STD) y Bordes</div>
-            </div>
-
-            <div class="stats-grid">
-                <div class="stat-box">
-                    <div id="squaresCount" class="stat-val">0</div>
-                    <div class="stat-lbl">Casillas OK</div>
-                </div>
-                <div class="stat-box">
-                    <div id="latencyVal" class="stat-val">0</div>
-                    <div class="stat-lbl">ms Latencia</div>
+    <main class="main-layout">
+        <!-- SECCIÓN IZQUIERDA: CÁMARA Y RESULTADO -->
+        <section class="section preview-section">
+            <div class="card" style="margin-bottom: 10px;">
+                <div class="card-title">Cámara en Vivo</div>
+                <video id="webcam" autoplay playsinline></video>
+                <div class="controls">
+                    <button id="snap" class="btn primary">Capturar</button>
+                    <button id="autoToggle" class="btn">Auto: OFF</button>
                 </div>
             </div>
 
-            <div class="info-hint">
-                <b>Pro Tip:</b> La imagen muestra a la izquierda la vista aérea real y a la derecha el diagrama de diagnóstico. Si ves demasiadas celdas rojas en un tablero vacío, ajusta la iluminación.
+            <div class="card">
+                <div class="card-title">
+                    Análisis Visión
+                    <div id="apiStatus" class="status-pill">Inactivo</div>
+                </div>
+                <div class="result-img-container">
+                    <img id="resultImage">
+                </div>
+                <div class="legend">
+                    <div class="legend-item"><div class="dot" style="background:var(--green)"></div> Vacía</div>
+                    <div class="legend-item"><div class="dot" style="background:var(--red)"></div> Probable Ocupación</div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div id="squaresCount" class="stat-val">0</div>
+                        <div class="stat-lbl">Casillas OK</div>
+                    </div>
+                    <div class="stat-box">
+                        <div id="latencyVal" class="stat-val">0</div>
+                        <div class="stat-lbl">Latencia ms</div>
+                    </div>
+                </div>
             </div>
-        </div>
+        </section>
 
-        <!-- DATOS TÉCNICOS -->
-        <div class="card">
-            <div class="card-title">Variables de Reconocimiento</div>
-            
-            <div id="diagnosticPanel">
-                <table class="diag-table">
-                    <thead>
-                        <tr>
-                            <th>Casilla</th>
-                            <th>Ocupada</th>
-                            <th>Desv. (STD)</th>
-                            <th>Bordes</th>
-                        </tr>
-                    </thead>
-                    <tbody id="diagBody">
-                        <!-- Se llena vía JS -->
-                    </tbody>
-                </table>
+        <!-- SECCIÓN DERECHA: DATOS Y DEBUG -->
+        <section class="section sidebar">
+            <div class="card">
+                <div class="card-title">Variables de Diagnóstico</div>
+                <div class="hint">
+                    <b>Nota:</b> Estos valores (STD y Bordes) ayudan a calibrar el sistema. 
+                    La detección final de piezas se realiza mediante TensorFlow.
+                </div>
+                <div style="max-height: 250px; overflow-y: auto; margin-top: 15px;">
+                    <table class="diag-table">
+                        <thead>
+                            <tr style="text-align: left; color: var(--muted);">
+                                <th>Casilla</th>
+                                <th>Estado</th>
+                                <th>STD</th>
+                                <th>Bordes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="diagBody"></tbody>
+                    </table>
+                </div>
             </div>
 
-            <div class="card-title" style="margin-top:20px;">Logs del Sistema</div>
-            <div id="logs"></div>
-        </div>
-        
-        <div class="card">
-            <div class="card-title">Depuración de Bordes (Input)</div>
-            <img id="debugImage">
-        </div>
-    </div>
+            <div class="card">
+                <div class="card-title">Input: Depuración de Bordes</div>
+                <img id="debugImage" style="border-radius: 8px;">
+                <div class="hint" style="border-left-color: var(--green); color: #afffaf;">
+                    <b>Feedback:</b> El recuadro verde muestra el área extrapolada del tablero. Los puntos rojos son los 49 cruces internos detectados.
+                </div>
+            </div>
 
-    <!-- CANVAS OCULTO PARA CAPTURA -->
+            <div class="card">
+                <div class="card-title">Logs Sistema</div>
+                <div id="logs" style="font-size: 9px; color: var(--muted); max-height: 100px; overflow: auto;"></div>
+            </div>
+        </section>
+    </main>
+
     <canvas id="hiddenCanvas" style="display:none;"></canvas>
 
     <script>
@@ -383,11 +261,9 @@
         const squaresVal = document.getElementById('squaresCount');
         const latencyVal = document.getElementById('latencyVal');
         const diagBody = document.getElementById('diagBody');
-        const occupiedInfo = document.getElementById('occupiedInfo');
         const logs = document.getElementById('logs');
 
-        let isAuto = false;
-        let isProcessing = false;
+        let isAuto = false, isProcessing = false;
 
         async function initCamera() {
             try {
@@ -395,114 +271,67 @@
                     video: { width: 1280, height: 720, facingMode: 'environment' }
                 });
                 video.srcObject = stream;
-                document.getElementById('camStatus').innerHTML = '<div class="dot" style="background:var(--green)"></div> LIVE';
-                log("Cámara iniciada correctamente");
+                document.getElementById('camStatus').innerHTML = 'LIVE';
+                document.getElementById('camStatus').className = 'status-pill ok';
             } catch (err) {
-                log("Error cámara: " + err, true);
-                document.getElementById('camStatus').innerHTML = '<div class="dot" style="background:var(--red)"></div> ERROR';
+                document.getElementById('camStatus').innerHTML = 'ERROR';
+                document.getElementById('camStatus').className = 'status-pill error';
             }
         }
 
-        function log(msg, isError = false) {
-            const time = new Date().toLocaleTimeString();
-            const color = isError ? 'var(--red)' : 'var(--muted)';
-            logs.innerHTML = `<div style="color:${color}">[${time}] ${msg}</div>` + logs.innerHTML;
+        function log(msg) {
+            logs.innerHTML = `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>` + logs.innerHTML;
         }
 
         async function processFrame() {
             if (isProcessing) return;
             isProcessing = true;
-
-            const startTime = performance.now();
+            const start = performance.now();
             
-            // Dibujar frame en canvas
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
-
-            apiStatus.innerText = "Procesando...";
-            apiStatus.className = "status-pill";
+            apiStatus.innerText = "Calculando...";
 
             canvas.toBlob(async (blob) => {
-                const formData = new FormData();
-                formData.append('file', blob, 'frame.jpg');
-
+                const fd = new FormData(); fd.append('file', blob);
                 try {
-                    const response = await fetch('/vision/recognize-board', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    const data = await response.json();
-                    const endTime = performance.now();
-                    latencyVal.innerText = Math.round(endTime - startTime);
+                    const res = await fetch('/vision/recognize-board', { method: 'POST', body: fd });
+                    const data = await res.json();
+                    latencyVal.innerText = Math.round(performance.now() - start);
 
                     if (data.success) {
                         resultImg.src = data.rectified_image;
                         debugImg.src = data.debug_image;
                         squaresVal.innerText = data.num_squares;
-                        squaresVal.style.color = data.num_squares === 64 ? 'var(--green)' : 'var(--amber)';
-                        
-                        occupiedInfo.innerText = `${data.occupied_count} piezas detectadas`;
-                        
-                        apiStatus.innerHTML = '<div class="dot"></div> DETECTADO';
+                        apiStatus.innerText = `Detección OK (${data.occupied_count})`;
                         apiStatus.className = "status-pill ok";
-
-                        updateDiagnosticTable(data.squares, data.config);
+                        updateDiag(data.squares, data.config);
                     } else {
-                        apiStatus.innerText = data.error || "No detectado";
+                        apiStatus.innerText = data.error;
                         apiStatus.className = "status-pill error";
-                        squaresVal.innerText = "0";
-                        squaresVal.style.color = "var(--red)";
-                        occupiedInfo.innerText = "";
                     }
-                } catch (err) {
-                    log("Error API: " + err, true);
-                    apiStatus.innerText = "Error Servidor";
-                    apiStatus.className = "status-pill error";
-                } finally {
+                } catch (e) { log("Error: " + e); }
+                finally {
                     isProcessing = false;
-                    if (isAuto) setTimeout(processFrame, 100);
+                    if (isAuto) setTimeout(processFrame, 150);
                 }
             }, 'image/jpeg', 0.8);
         }
 
-        function updateDiagnosticTable(squares, config) {
-            // Solo mostramos las 16 con mayores valores para no saturar, o un resumen
-            // Filtrar las que tienen algo de interés
-            const interesting = squares
-                .filter(s => s.occupied || s.std > config.std_thresh * 0.5)
-                .sort((a,b) => b.std - a.std)
-                .slice(0, 20);
-
-            diagBody.innerHTML = interesting.map(s => `
+        function updateDiag(sqs, cfg) {
+            const list = sqs.sort((a,b) => b.std - a.std).slice(0, 15);
+            diagBody.innerHTML = list.map(s => `
                 <tr class="${s.occupied ? 'occupied' : ''}">
                     <td>${s.id}</td>
-                    <td>${s.occupied ? 'SI' : 'NO'}</td>
-                    <td>${s.std} ${s.std > config.std_thresh ? '⚠️' : ''}</td>
-                    <td>${s.edges} ${s.edges > config.edge_thresh ? '⚠️' : ''}</td>
+                    <td>${s.occupied ? 'OCUPADA' : 'VACÍA'}</td>
+                    <td>${s.std}</td>
+                    <td>${s.edges}</td>
                 </tr>
             `).join('');
-            
-            if (interesting.length === 0) {
-                diagBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No hay actividad relevante</td></tr>';
-            }
         }
 
-        snapBtn.onclick = () => {
-            isAuto = false;
-            autoBtn.innerText = "Auto: OFF";
-            autoBtn.style.color = "var(--text)";
-            processFrame();
-        };
-
-        autoBtn.onclick = () => {
-            isAuto = !isAuto;
-            autoBtn.innerText = `Auto: ${isAuto ? 'ON' : 'OFF'}`;
-            autoBtn.style.color = isAuto ? 'var(--green)' : 'var(--text)';
-            autoBtn.style.borderColor = isAuto ? 'var(--green)' : 'var(--border)';
-            if (isAuto) processFrame();
-        };
+        snapBtn.onclick = () => { isAuto = false; autoBtn.innerText = "Auto: OFF"; processFrame(); };
+        autoBtn.onclick = () => { isAuto = !isAuto; autoBtn.innerText = `Auto: ${isAuto ? 'ON' : 'OFF'}`; if (isAuto) processFrame(); };
 
         initCamera();
     </script>

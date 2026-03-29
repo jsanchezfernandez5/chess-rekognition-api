@@ -97,13 +97,13 @@ class VisionService:
         img = VisionService.decode_image(image_bytes)
         if img is None: return {"success": False, "error": "Imagen inválida"}
 
-        # Preprocesado optimizado
+        # Preprocesado
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8)).apply(gray)
+        clahe_img = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
         
-        # 1. DETECCIÓN EXHAUSTIVA
+        # 1. DETECCIÓN
         flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE + cv2.CALIB_CB_FAST_CHECK
-        found, corners = cv2.findChessboardCorners(clahe, (7, 7), flags)
+        found, corners = cv2.findChessboardCorners(clahe_img, (7, 7), flags)
 
         if not found:
             return {"success": False, "error": "Tablero no detectado"}
@@ -111,26 +111,25 @@ class VisionService:
         corners_refined = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), 
             (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.001))
 
-        # 2. HOMOGRAFÍA CON FILTRO GEOMÉTRICO
-        pts = corners_refined.reshape(-1, 2)
-        rect_int = VisionService.order_points(np.array([pts[0], pts[6], pts[42], pts[48]]))
-        
-        if not VisionService._is_valid_geometry(rect_int):
-            return {"success": False, "error": "Geometría de tablero no fiable"}
+        # 2. HOMOGRAFÍA ROBUSTA (Usando los 49 puntos)
+        # Generar puntos destino teóricos en una imagen de 400x400
+        # Los 49 puntos internos del tablero (7x7) están en las intersecciones (1,1) a (7,7)
+        # siendo cada casilla de 50x50.
+        dst_pts = []
+        for row in range(1, 8):
+            for col in range(1, 8):
+                dst_pts.append([col * 50, row * 50])
+        dst_pts = np.array(dst_pts, dtype="float32")
+        src_pts = corners_refined.reshape(-1, 2)
 
-        offset = (rect_int[1][0] - rect_int[0][0]) / 6
-        src_pts = np.array([
-            rect_int[0] - [offset, offset], rect_int[1] + [offset, -offset],
-            rect_int[2] + [offset, offset],  rect_int[3] + [-offset, offset]
-        ], dtype="float32")
-
-        M = cv2.getPerspectiveTransform(src_pts, np.array([[0,0],[400,0],[400,400],[0,400]], dtype="float32"))
+        # Usamos findHomography con RANSAC para filtrar posibles errores en esquinas
+        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
         rectified = cv2.warpPerspective(img, M, (400, 400))
         
-        # Aplicar orientación PRO basada en patrón de ajedrez
+        # Orientación automática h1-blanca
         rectified = VisionService._fix_orientation_pro(rectified)
 
-        # 3. ANÁLISIS DUAL DE CASILLAS (STD + CANNY)
+        # 3. ANÁLISIS DE CASILLAS
         squares = []
         col_letters = "abcdefgh"
         for row in range(8):
@@ -138,19 +137,17 @@ class VisionService:
                 x1, y1 = col * 50, row * 50
                 x2, y2 = x1 + 50, y1 + 50
                 
-                # Tomar un "centro" de la casilla (evitamos bordes)
-                # Casilla de 50x50, tomamos el centro de 30x30
-                margin = 10
+                # Tomar el centro de la casilla para evitar el borde de la rejilla
+                # Con el homography de 49 puntos, este centro es muchisimo más preciso
+                margin = 12 
                 crop = rectified[y1+margin:y2-margin, x1+margin:x2-margin]
                 
                 std = float(crop.std())
-                edges = cv2.Canny(crop, 50, 150)
+                edges = cv2.Canny(crop, 30, 100)
                 edge_density = float(edges.mean())
                 
-                # Ocupada si supera el umbral de texturas O el de bordes
-                # Umbral algo más liberal para el centro
-                occupied = (std > VisionService.OCCUPIED_THRESHOLD or 
-                           edge_density > VisionService.EDGE_THRESHOLD)
+                # Umbrales algo más altos para evitar ruido en tableros con textura
+                occupied = (std > 45.0 or edge_density > 15.0)
                 
                 square_id = f"{col_letters[col]}{8-row}"
                 squares.append({
@@ -158,22 +155,27 @@ class VisionService:
                     "occupied": bool(occupied), "std": round(std, 2), "edges": round(edge_density, 2)
                 })
 
-        # 4. SALIDA VISUAL REFORZADA
+        # 4. SALIDA VISUAL
         rectified_viz = rectified.copy()
         for sq in squares:
             x1, y1 = sq["col"] * 50, sq["row"] * 50
             x2, y2 = x1 + 50, y1 + 50
-            # Verde = Vacío, Rojo = Ocupado (con pieza)
             color = (0, 0, 255) if sq["occupied"] else (0, 255, 0)
-            cv2.rectangle(rectified_viz, (x1+2, y1+2), (x2-2, y2-2), color, 1)
+            cv2.rectangle(rectified_viz, (x1+1, y1+1), (x2-1, y2-1), color, 1)
 
         board_2d = VisionService._draw_diagnostic_2d(squares)
-        # Combinar para que el usuario entienda qué es cada cosa
         combined = np.hstack([rectified_viz, board_2d])
 
-        # Debug en frame original
+        # Debug limpio en frame original (Dibujamos el contorno estimado)
         debug = img.copy()
-        cv2.drawChessboardCorners(debug, (7, 7), corners_refined, found)
+        # Transformamos las esquinas exteriores teóricas de vuelta a la imagen original
+        outer_corners = np.array([[0,0],[400,0],[400,400],[0,400]], dtype="float32").reshape(-1,1,2)
+        M_inv = np.linalg.inv(M)
+        outer_pts = cv2.perspectiveTransform(outer_corners, M_inv)
+        cv2.polylines(debug, [np.int32(outer_pts)], True, (0, 255, 0), 3, cv2.LINE_AA)
+        # Dibujar puntos detectados discretos (no la maraña de colores)
+        for pt in src_pts:
+            cv2.circle(debug, (int(pt[0]), int(pt[1])), 4, (0, 0, 255), -1)
 
         return {
             "success": True,
@@ -181,9 +183,9 @@ class VisionService:
             "debug_image": f"data:image/jpeg;base64,{VisionService.encode_image(debug)}",
             "num_squares": 64,
             "occupied_count": sum(1 for s in squares if s["occupied"]),
-            "squares": squares, # Datos técnicos para el frontend
+            "squares": squares,
             "config": {
-                "std_thresh": VisionService.OCCUPIED_THRESHOLD,
-                "edge_thresh": VisionService.EDGE_THRESHOLD
+                "std_thresh": 45.0,
+                "edge_thresh": 15.0
             }
         }
