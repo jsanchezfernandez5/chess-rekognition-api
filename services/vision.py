@@ -259,13 +259,22 @@ class VisionService:
         rectified = VisionService.rectify(img, corners)
         squares = VisionService.split_into_squares(rectified)
 
+        # Dibujar rejilla 8x8 sobre la rectificada para confirmación visual
+        rectified_grid = rectified.copy()
+        h, w = rectified_grid.shape[:2]
+        for i in range(1, 8):
+            # Líneas horizontales
+            cv2.line(rectified_grid, (0, i * h // 8), (w, i * h // 8), (0, 255, 0), 1)
+            # Líneas verticales
+            cv2.line(rectified_grid, (i * w // 8, 0), (i * w // 8, h), (0, 255, 0), 1)
+
         # Generar imagen de depuración con el polígono dibujado
         debug = img.copy()
         cv2.polylines(debug, [corners.astype(int)], True, (0, 255, 0), 2)
 
         return {
             "success": True,
-            "rectified_image": f"data:image/jpeg;base64,{VisionService.encode_image(rectified)}",
+            "rectified_image": f"data:image/jpeg;base64,{VisionService.encode_image(rectified_grid)}",
             "debug_image": f"data:image/jpeg;base64,{VisionService.encode_image(debug)}",
             "num_squares": len(squares)
         }
