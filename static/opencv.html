@@ -354,7 +354,7 @@
                 <div class="stats-grid">
                     <div class="stat-box">
                         <div id="squaresCount" class="stat-val">0</div>
-                        <div class="stat-lbl">Piezas / Ocupadas</div>
+                        <div class="stat-lbl">Casillas Ocupadas / Total</div>
                     </div>
                     <div class="stat-box">
                         <div id="latencyVal" class="stat-val">0</div>
@@ -379,9 +379,9 @@
                 <div class="card-title">Variables de Diagnóstico</div>
                 <div class="hint">
                     Muestra los 15 valores de desviación estándar (STD) más altos.
-                    Umbrales actuales: <span id="threshInfo" style="font-weight: bold; color: var(--text);">STD > ... |
+                    Umbrales calculados: <span id="threshInfo" style="font-weight: bold; color: var(--text);">STD > ... |
                         Bordes > ...</span>
-                    <div id="cropInfo" style="font-size: 8px; color: var(--muted); margin-top: 4px;">Utilizando recorte central para mayor precisión.</div>
+                    <div id="cropInfo" style="font-size: 8px; color: var(--muted); margin-top: 4px;">Análisis del 65% central de cada casilla (evita ruido de bordes).</div>
                 </div>
                 <div style="max-height: 250px; overflow-y: auto; margin-top: 15px;">
                     <table class="diag-table">
@@ -389,8 +389,8 @@
                             <tr style="text-align: left; color: var(--muted);">
                                 <th>Casilla</th>
                                 <th>Estado</th>
-                                <th>STD</th>
-                                <th>Bordes</th>
+                                <th>Ruido (STD)</th>
+                                <th>Detalle (Edge)</th>
                             </tr>
                         </thead>
                         <tbody id="diagBody"></tbody>

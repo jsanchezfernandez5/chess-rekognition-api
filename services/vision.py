@@ -67,10 +67,11 @@ def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
 
     # Extrapolar una casilla hacia afuera desde cada esquina
     # usando los vectores locales de esa esquina concreta
-    board_tl = tl - step_h_top    - step_v_left
-    board_tr = tr + step_h_top    - step_v_right
-    board_bl = bl - step_h_bottom + step_v_left
-    board_br = br + step_h_bottom + step_v_right
+    MARGIN = 1.12
+    board_tl = tl - step_h_top    * MARGIN - step_v_left   * MARGIN
+    board_tr = tr + step_h_top    * MARGIN - step_v_right  * MARGIN
+    board_bl = bl - step_h_bottom * MARGIN + step_v_left   * MARGIN
+    board_br = br + step_h_bottom * MARGIN + step_v_right  * MARGIN
 
     return np.array(
         [board_tl, board_tr, board_br, board_bl],
@@ -256,28 +257,40 @@ def _generar_debug(frame: np.ndarray, corners: np.ndarray,
     return debug
 
 
-def _generar_collage(debug: np.ndarray, real: np.ndarray, diag: np.ndarray) -> np.ndarray:
+def _generar_collage(debug: np.ndarray, real: np.ndarray, diag: np.ndarray, 
+                     occ: int, total: int, stdt: float, edget: float) -> np.ndarray:
     """
     Crea una imagen única combinando los 3 estados principales para exportación fácil.
-    Layout: [ Debug (Original Detectada) ] [ Real + 2D ]
+    Incluye metadatos técnicos para diagnóstico profundo.
     """
     # Escalar todo a tamaños consistentes
     h_main = 450
     w_main = int(debug.shape[1] * (h_main / debug.shape[0]))
     debug_res = cv2.resize(debug, (w_main, h_main))
 
-    # Tira lateral con las dos vistas de 400x400 (reescaladas a 225x225 cada una)
+    # Tira lateral con las dos vistas (225x225 cada una)
+    # Dejamos espacio para info técnica abajo
     real_res = cv2.resize(real, (225, 225))
     diag_res = cv2.resize(diag, (225, 225))
     side_strip = np.vstack([real_res, diag_res])
     
-    # Combinar
+    # Combinar principal
     collage = np.hstack([debug_res, side_strip])
 
-    # Añadir un pie de foto oscuro
-    footer = np.zeros((30, collage.shape[1], 3), dtype=np.uint8)
-    cv2.putText(footer, "CHESS REKOGNITION LAB - REPORTE DE DIAGNOSTICO", (10, 20),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
+    # Añadir un pie de foto oscuro con info técnica
+    footer_h = 45
+    footer = np.zeros((footer_h, collage.shape[1], 3), dtype=np.uint8)
+    
+    txt_main = f"CHESS REKOGNITION - REPORT | {occ}/{total} OCUPADAS"
+    txt_tech = f"AUTO-THRESH: STD > {round(stdt, 1)} | EDGE > {round(edget, 0)} | CROP: {int(INNER_CROP_PCT*100)}%"
+    
+    cv2.putText(footer, txt_main, (10, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+    cv2.putText(footer, txt_tech, (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (180, 180, 180), 1)
+    
+    # Añadir marca de tiempo
+    import datetime
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cv2.putText(footer, ts, (collage.shape[1]-150, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (100, 100, 100), 1)
     
     return np.vstack([collage, footer])
 
@@ -324,7 +337,11 @@ class VisionService:
             vista_real  = _generar_vista_real(warped, squares)
             vista_2d    = _generar_vista_2d(squares)
             debug_image = _generar_debug(frame, corners, exterior)
-            collage     = _generar_collage(debug_image, vista_real, vista_2d)
+            
+            collage = _generar_collage(
+                debug_image, vista_real, vista_2d, 
+                occupied_count, len(squares), std_thresh_auto, edge_thresh_auto
+            )
 
             return {
                 "success": True,
