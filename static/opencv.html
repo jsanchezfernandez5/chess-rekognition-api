@@ -1,534 +1,214 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Chess Rekognition - Laboratorio PRO</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Rekognition</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
-
-        :root {
-            --bg: #0b0b0d;
-            --surface: #141417;
-            --surface-accent: #1c1c21;
-            --border: #2a2a32;
-            --text: #f0f0f5;
-            --muted: #8a8a98;
-            --green: #22c55e;
-            --red: #ef4444;
-            --amber: #f59e0b;
-            --blue: #3b82f6;
-            --mono: 'Space Mono', monospace;
-            --display: 'Syne', sans-serif;
-            --radius: 20px;
-            --radius-sm: 12px;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: var(--mono);
-            font-size: 13px;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        header {
-            padding: 15px 20px;
-            background: var(--surface);
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-shrink: 0;
-            z-index: 100;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-family: var(--display);
-            font-weight: 800;
-            font-size: 18px;
-        }
-
-        .logo-icon {
-            width: 32px;
-            height: 32px;
-            background: var(--text);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--bg);
-            font-size: 16px;
-        }
-
-        .main-layout {
-            flex: 1;
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 0;
-            overflow-y: auto;
-        }
-
-        @media (min-aspect-ratio: 1/1) {
-            .main-layout {
-                grid-template-columns: 1fr 1fr;
-                height: calc(100vh - 63px);
-            }
-
-            .sidebar {
-                overflow-y: auto;
-            }
-
-            .preview-section {
-                position: sticky;
-                top: 0;
-                height: 100%;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                background: #000;
-            }
-        }
-
-        .section {
-            padding: 20px;
-        }
-
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 16px;
-            margin-bottom: 20px;
-        }
-
-        .card-title {
-            font-size: 10px;
-            text-transform: uppercase;
-            color: var(--muted);
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-weight: 700;
-            letter-spacing: 1px;
-        }
-
-        #webcam {
-            width: 100%;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border);
-            background: #000;
-            display: block;
-        }
-
-        .controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        .btn {
-            font-family: var(--mono);
-            font-size: 11px;
-            font-weight: 700;
-            padding: 12px;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border);
-            background: var(--surface-accent);
-            color: var(--text);
-            cursor: pointer;
-            text-transform: uppercase;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .btn.primary {
-            background: var(--text);
-            color: var(--bg);
-            border: none;
-        }
-
-        .btn.accent {
-            background: var(--blue);
-            color: white;
-            border: none;
-        }
-
-        .btn:disabled {
-            opacity: 0.3;
-        }
-
-        .result-img-container {
-            position: relative;
-            width: 100%;
-            border-radius: var(--radius-sm);
-            overflow: hidden;
-            border: 1px solid var(--border);
-            background: #111;
-            aspect-ratio: 1/1;
-        }
-
-        .result-img-container img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        .stat-box {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 12px;
-            border-radius: var(--radius-sm);
-            text-align: center;
-        }
-
-        .stat-val {
-            font-family: var(--display);
-            font-size: 24px;
-            font-weight: 800;
-            color: var(--green);
-        }
-
-        .stat-lbl {
-            font-size: 9px;
-            color: var(--muted);
-            text-transform: uppercase;
-            margin-top: 4px;
-        }
-
-        .status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 4px 10px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            font-size: 10px;
-        }
-
-        .status-pill.ok {
-            color: var(--green);
-            background: rgba(34, 197, 94, 0.1);
-        }
-
-        .status-pill.warning {
-            color: var(--amber);
-            background: rgba(245, 158, 11, 0.1);
-        }
-
-        .status-pill.error {
-            color: var(--red);
-            background: rgba(239, 68, 68, 0.1);
-        }
-
-        #diagBody tr td {
-            padding: 8px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-        }
-
-        .diag-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10px;
-        }
-
-        .occupied {
-            background: rgba(239, 68, 68, 0.05);
-            color: var(--red);
-        }
-
-        .legend {
-            display: flex;
-            gap: 12px;
-            font-size: 9px;
-            margin-top: 10px;
-            color: var(--muted);
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-        }
-
-        .hint {
-            background: rgba(59, 130, 246, 0.05);
-            border-left: 2px solid var(--blue);
-            padding: 10px;
-            font-size: 10px;
-            margin-top: 10px;
-            line-height: 1.4;
-            color: #a0b0ff;
-        }
-
-        /* Mobile specific scroll behavior */
-        @media (max-width: 600px) {
-            header {
-                position: sticky;
-                top: 0;
-            }
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
+        h1 { font-size: 20px; margin-bottom: 10px; }
+        video { width: 100%; max-width: 600px; border: 1px solid #ccc; display: block; }
+        button { margin: 5px; padding: 8px 16px; cursor: pointer; }
+        img { max-width: 280px; border: 1px solid #ccc; margin: 5px; }
+        #logs { background: #fff; border: 1px solid #ccc; padding: 8px; font-size: 11px; max-height: 80px; overflow-y: auto; margin-top: 10px; }
+        table { border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 5px 10px; }
+        .ocupada { background: #fdd; }
+        #estado { font-weight: bold; }
     </style>
 </head>
-
 <body>
-    <header>
-        <div class="logo">
-            <div class="logo-icon">♔</div>
-            Chess Rekognition
+
+    <h1>Chess Rekognition — Lab</h1>
+
+    <!-- Cámara -->
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <div>
+        <button id="btnCapturar">Capturar</button>
+        <button id="btnAuto">Auto: OFF</button>
+        <button id="btnReporte" disabled>Descargar Reporte</button>
+        <span id="estado">—</span>
+    </div>
+
+    <!-- Imágenes resultado -->
+    <div>
+        <div>
+            <p>Vista aérea (real)</p>
+            <img id="imgReal" alt="Sin imagen">
         </div>
-        <div id="camStatus" class="status-pill">OFF</div>
-    </header>
+        <div>
+            <p>Vista diagnóstico (2D)</p>
+            <img id="img2D" alt="Sin imagen">
+        </div>
+        <div>
+            <p>Tablero detectado</p>
+            <img id="imgDebug" alt="Sin imagen">
+        </div>
+    </div>
 
-    <main class="main-layout">
-        <!-- SECCIÓN IZQUIERDA: CÁMARA Y RESULTADO -->
-        <section class="section preview-section">
-            <div class="card" style="margin-bottom: 10px;">
-                <div class="card-title">Cámara en Vivo</div>
-                <video id="webcam" autoplay playsinline></video>
-                <div class="controls">
-                    <button id="snap" class="btn primary">Capturar</button>
-                    <button id="reportBtn" class="btn accent" disabled>Reporte</button>
-                    <button id="autoToggle" class="btn" style="grid-column: span 2;">Auto: OFF</button>
-                </div>
-            </div>
+    <!-- Stats básicos -->
+    <p>Casillas ocupadas: <strong id="ocupadas">—</strong> | Latencia: <strong id="latencia">—</strong> ms</p>
 
-            <div class="card">
-                <div class="card-title">
-                    Análisis Visión segmentado
-                    <div id="apiStatus" class="status-pill">Inactivo</div>
-                </div>
+    <!-- Tabla de diagnóstico -->
+    <table>
+        <thead>
+            <tr>
+                <th>Casilla</th>
+                <th>Estado</th>
+                <th>STD</th>
+                <th>Edges</th>
+            </tr>
+        </thead>
+        <tbody id="tablaDiag"></tbody>
+    </table>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div>
-                        <div class="stat-lbl" style="margin-bottom: 5px; text-align: center;">Vista Aérea (Real)</div>
-                        <div class="result-img-container">
-                            <img id="rectRealImg">
-                        </div>
-                    </div>
-                    <div>
-                        <div class="stat-lbl" style="margin-bottom: 5px; text-align: center;">V. Diagnóstico (2D)</div>
-                        <div class="result-img-container">
-                            <img id="rect2DImg">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="legend">
-                    <div class="legend-item">
-                        <div class="dot" style="background:var(--green)"></div> Vacía
-                    </div>
-                    <div class="legend-item">
-                        <div class="dot" style="background:var(--red)"></div> Ocupada
-                    </div>
-                </div>
-
-                <div class="stats-grid">
-                    <div class="stat-box">
-                        <div id="squaresCount" class="stat-val">0</div>
-                        <div class="stat-lbl">Casillas Ocupadas / Total</div>
-                    </div>
-                    <div class="stat-box">
-                        <div id="latencyVal" class="stat-val">0</div>
-                        <div class="stat-lbl">Latencia ms</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- SECCIÓN DERECHA: DATOS Y DEBUG -->
-        <section class="section sidebar">
-            <div class="card">
-                <div class="card-title">Tablero Detectado (Input Original)</div>
-                <img id="debugImage" style="width: 100%; border-radius: 8px; border: 1px solid var(--border);">
-                <div class="hint" style="border-left-color: var(--green); color: #afffaf;">
-                    <b>Feedback:</b> El **perímetro verde** muestra la zona del tablero proyectada. Los **puntos rojos**
-                    son los 49 cruces internos detectados.
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-title">Variables de Diagnóstico</div>
-                <div class="hint">
-                    Muestra los 15 valores de desviación estándar (STD) más altos.
-                    Umbrales calculados: <span id="threshInfo" style="font-weight: bold; color: var(--text);">STD > ... |
-                        Bordes > ...</span>
-                    <div id="cropInfo" style="font-size: 8px; color: var(--muted); margin-top: 4px;">Análisis del 65% central de cada casilla (evita ruido de bordes).</div>
-                </div>
-                <div style="max-height: 250px; overflow-y: auto; margin-top: 15px;">
-                    <table class="diag-table">
-                        <thead>
-                            <tr style="text-align: left; color: var(--muted);">
-                                <th>Casilla</th>
-                                <th>Estado</th>
-                                <th>Ruido (STD)</th>
-                                <th>Detalle (Edge)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="diagBody"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-title">Logs Sistema</div>
-                <div id="logs"
-                    style="font-size: 9px; color: var(--muted); max-height: 100px; overflow: auto; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 6px;">
-                    <div>Esperando cámara...</div>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <canvas id="hiddenCanvas" style="display:none;"></canvas>
+    <!-- Log de eventos -->
+    <div id="logs">Esperando cámara...</div>
 
     <script>
-        const video = document.getElementById('webcam');
-        const canvas = document.getElementById('hiddenCanvas');
-        const snapBtn = document.getElementById('snap');
-        const reportBtn = document.getElementById('reportBtn');
-        const autoBtn = document.getElementById('autoToggle');
-        const rectRealImg = document.getElementById('rectRealImg');
-        const rect2DImg = document.getElementById('rect2DImg');
-        const debugImg = document.getElementById('debugImage');
-        const apiStatus = document.getElementById('apiStatus');
-        const squaresVal = document.getElementById('squaresCount');
-        const latencyVal = document.getElementById('latencyVal');
-        const threshInfo = document.getElementById('threshInfo');
-        const cropInfo = document.getElementById('cropInfo');
-        const diagBody = document.getElementById('diagBody');
-        const logs = document.getElementById('logs');
+        // Referencias a los elementos del DOM
+        const video      = document.getElementById('webcam');
+        const canvas     = document.getElementById('canvas');
+        const btnCap     = document.getElementById('btnCapturar');
+        const btnAuto    = document.getElementById('btnAuto');
+        const btnRep     = document.getElementById('btnReporte');
+        const estado     = document.getElementById('estado');
+        const imgReal    = document.getElementById('imgReal');
+        const img2D      = document.getElementById('img2D');
+        const imgDebug   = document.getElementById('imgDebug');
+        const ocupadas   = document.getElementById('ocupadas');
+        const latencia   = document.getElementById('latencia');
+        const tablaDiag  = document.getElementById('tablaDiag');
+        const logs       = document.getElementById('logs');
 
-        let isAuto = false, isProcessing = false;
-        let lastReportB64 = null;
+        let modoAuto    = false;   // controla si está en captura automática
+        let procesando  = false;   // evita llamadas simultáneas a la API
+        let ultimoB64   = null;    // guarda la última imagen de reporte
 
+        // Escribe una línea en el panel de logs con la hora actual
+        function log(msg) {
+            const hora = new Date().toLocaleTimeString();
+            logs.innerHTML = `[${hora}] ${msg}<br>` + logs.innerHTML;
+        }
+
+        // Inicia la cámara (preferiblemente la trasera en móvil)
         async function initCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 1280, height: 720, facingMode: 'environment' }
+                    video: { facingMode: 'environment' }
                 });
                 video.srcObject = stream;
-                document.getElementById('camStatus').innerHTML = 'LIVE';
-                document.getElementById('camStatus').className = 'status-pill ok';
                 log("Cámara iniciada");
             } catch (err) {
-                document.getElementById('camStatus').innerHTML = 'ERROR';
-                document.getElementById('camStatus').className = 'status-pill error';
-                log("Error cámara: " + err);
+                log("Error al iniciar cámara: " + err);
             }
         }
 
-        function log(msg) {
-            logs.innerHTML = `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>` + logs.innerHTML;
-        }
+        // Captura un frame, lo envía a la API y actualiza la UI con la respuesta
+        async function procesarFrame() {
+            if (procesando) return;
+            procesando = true;
 
-        async function processFrame() {
-            if (isProcessing) return;
-            isProcessing = true;
-            const start = performance.now();
+            const inicio = performance.now();
 
-            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            // Dibuja el frame actual del vídeo en el canvas oculto
+            canvas.width  = video.videoWidth;
+            canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
-            apiStatus.innerText = "Procesando...";
 
+            estado.innerText = "Procesando...";
+
+            // Convierte el canvas a Blob JPEG y lo manda como FormData
             canvas.toBlob(async (blob) => {
-                const fd = new FormData(); fd.append('file', blob);
+                const fd = new FormData();
+                fd.append('file', blob);
+
                 try {
-                    const res = await fetch('/vision/recognize-board', { method: 'POST', body: fd });
+                    const res  = await fetch('/vision/recognize-board', { method: 'POST', body: fd });
                     const data = await res.json();
-                    latencyVal.innerText = Math.round(performance.now() - start);
+
+                    // Actualiza la latencia
+                    latencia.innerText = Math.round(performance.now() - inicio);
 
                     if (data.success) {
-                        rectRealImg.src = data.rectified_real;
-                        rect2DImg.src = data.rectified_2d;
-                        debugImg.src = data.debug_image;
-                        squaresVal.innerText = `${data.occupied_count} / ${data.num_squares}`;
+                        // Muestra las imágenes devueltas por el backend
+                        imgReal.src  = data.rectified_real;
+                        img2D.src    = data.rectified_2d;
+                        imgDebug.src = data.debug_image;
 
-                        // Actualizar info de umbrales desde el config del backend
-                        if (data.config) {
-                            threshInfo.innerText = `STD > ${data.config.std_thresh} | Bordes > ${data.config.edge_thresh}`;
-                            cropInfo.innerText = `Utilizando recorte central (${Math.round(data.config.crop_pct * 100)}%) de cada casilla.`;
-                        }
+                        // Actualiza el contador de casillas ocupadas
+                        ocupadas.innerText = `${data.occupied_count} / ${data.num_squares}`;
 
+                        estado.innerText = data.status || "OK";
+
+                        // Si el backend devuelve imagen de reporte, la guardamos para descarga
                         if (data.export_image) {
-                            lastReportB64 = data.export_image;
-                            reportBtn.disabled = false;
+                            ultimoB64       = data.export_image;
+                            btnRep.disabled = false;
                         }
 
-                        apiStatus.innerText = data.status || "OK";
-                        if (data.status && data.status.includes("MEMORIA")) {
-                            apiStatus.className = "status-pill warning";
-                        } else {
-                            apiStatus.className = "status-pill ok";
-                        }
+                        // Rellena la tabla de diagnóstico con las 15 casillas de mayor STD
+                        actualizarTabla(data.squares);
 
-                        updateDiag(data.squares);
                     } else {
-                        apiStatus.innerText = data.error;
-                        apiStatus.className = "status-pill error";
+                        estado.innerText = "Error: " + data.error;
+                        log("Error API: " + data.error);
                     }
-                } catch (e) { log("Error API: " + e); }
-                finally {
-                    isProcessing = false;
-                    if (isAuto) setTimeout(processFrame, 180);
+
+                } catch (e) {
+                    log("Fallo en fetch: " + e);
+                } finally {
+                    procesando = false;
+                    // Si sigue en modo auto, lanza otro ciclo tras 180ms
+                    if (modoAuto) setTimeout(procesarFrame, 180);
                 }
             }, 'image/jpeg', 0.8);
         }
 
-        function updateDiag(sqs) {
-            const list = sqs.sort((a, b) => b.std - a.std).slice(0, 15);
-            diagBody.innerHTML = list.map(s => `
-                <tr class="${s.occupied ? 'occupied' : ''}">
-                    <td>${s.id}</td>
-                    <td>${s.occupied ? 'Ocupada' : 'Vacía'}</td>
-                    <td>${s.std}</td>
-                    <td>${s.edges}</td>
+        // Ordena las casillas por STD descendente y pinta las 15 primeras en la tabla
+        function actualizarTabla(casillas) {
+            const top15 = casillas
+                .sort((a, b) => b.std - a.std)
+                .slice(0, 15);
+
+            tablaDiag.innerHTML = top15.map(c => `
+                <tr class="${c.occupied ? 'ocupada' : ''}">
+                    <td>${c.id}</td>
+                    <td>${c.occupied ? 'Ocupada' : 'Vacía'}</td>
+                    <td>${c.std}</td>
+                    <td>${c.edges}</td>
                 </tr>
             `).join('');
         }
 
-        snapBtn.onclick = () => { isAuto = false; autoBtn.innerText = "Auto: OFF"; processFrame(); };
-        autoBtn.onclick = () => { isAuto = !isAuto; autoBtn.innerText = `Auto: ${isAuto ? 'ON' : 'OFF'}`; if (isAuto) processFrame(); };
+        // Botón captura manual: desactiva el auto y lanza un ciclo
+        btnCap.onclick = () => {
+            modoAuto = false;
+            btnAuto.innerText = "Auto: OFF";
+            procesarFrame();
+        };
 
-        reportBtn.onclick = () => {
-            if (!lastReportB64) return;
-            const a = document.createElement('a');
-            a.href = lastReportB64;
-            a.download = `reporte_ajedrez_${new Date().getTime()}.jpg`;
+        // Botón auto: alterna entre ON y OFF
+        btnAuto.onclick = () => {
+            modoAuto = !modoAuto;
+            btnAuto.innerText = `Auto: ${modoAuto ? 'ON' : 'OFF'}`;
+            if (modoAuto) procesarFrame();
+        };
+
+        // Botón reporte: descarga la última imagen de reporte como JPG
+        btnRep.onclick = () => {
+            if (!ultimoB64) return;
+            const a      = document.createElement('a');
+            a.href       = ultimoB64;
+            a.download   = `reporte_${Date.now()}.jpg`;
             a.click();
             log("Reporte descargado");
         };
 
+        // Arranca la cámara al cargar la página
         initCamera();
     </script>
 </body>
-
 </html>

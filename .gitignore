@@ -29,3 +29,6 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Todo lo que empiece por .*
+.*
