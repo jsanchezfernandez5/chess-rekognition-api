@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, usuarios, partidas, engine, vision
+from routers import auth, usuarios, partidas, engine, vision, retransmision
 
 # Configuración de etiquetas para que el Swagger se vea organizado por secciones
 tags_metadata = [
@@ -67,6 +67,7 @@ app.include_router(usuarios.router)
 app.include_router(partidas.router)
 app.include_router(engine.router)
 app.include_router(vision.router)
+app.include_router(retransmision.router)
 
 # Ruta específica para el favicon del navegador
 @app.get("/favicon.ico", include_in_schema=False)
