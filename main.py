@@ -55,10 +55,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Configuración de CORS: Vital para que el frontend en React pueda hablar con este backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # En producción se podría restringir a dominios específicos
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Registro de las rutas del sistema
