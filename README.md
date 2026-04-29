@@ -1,90 +1,80 @@
-# chess-rekognition-api
+# Chess Rekognition API
 
-FastAPI - Chess Rekognition.
+El "cerebro" del sistema. Esta API construida con **FastAPI** se encarga del procesamiento de imágenes, la lógica de juego mediante Stockfish, la gestión de usuarios y la retransmisión en tiempo real mediante WebSockets.
 
-## Arquitectura
+---
+
+## Infraestructura y Servicios
+Para garantizar un rendimiento óptimo y alta disponibilidad, la API utiliza:
+
+*   **Railway**: Hosting del servidor de aplicaciones (FastAPI) y la base de datos gestionada **MySQL**. 
+    *   Configuración automática mediante `Procfile`.
+    *   Persistencia de datos garantizada en el cloud.
+*   **Resend**: Integración para el envío de correos electrónicos transaccionales (como el registro de usuarios).
+*   **Stockfish 17.1**: Motor de ajedrez integrado para el análisis y juego contra la IA.
+
+---
+
+## 🛠️ Stack Técnico y Librerías
+
+El backend está desarrollado en **Python 3.11+** utilizando las siguientes bibliotecas clave:
+
+*   **FastAPI**: Framework moderno y rápido para construir APIs con WebSockets.
+*   **SQLAlchemy**: ORM para la comunicación fluida con MySQL.
+*   **PyMySQL**: Driver de conexión para la base de datos.
+*   **OpenCV (`opencv-python`)**: Procesamiento de imagen para visión artificial.
+*   **PyJWT**: Generación y validación de tokens de seguridad (JWT).
+*   **Passlib (Bcrypt)**: Encriptación segura de contraseñas.
+*   **Pydantic**: Validación de datos y esquemas de entrada/salida.
+*   **Resend Python SDK**: Comunicación con el servicio de correo.
+*   **Python-Multipart**: Para la recepción y gestión de archivos/imágenes.
+
+---
+
+## Estructura del Proyecto
+
 ```text
 api/
-├── main.py                  # Router principal + config Swagger
-├── Procfile                 # Comando de arranque para Railway
-├── requirements.txt         # Dependencias
-├── .env                     # Variables de entorno (JWT secret, DB, Resend). No se sube a GitHub y se configura en Railway en Variables
-│
-├── static/
-│   └── favicon.ico          # Favicon de la API
-│
-├── core/
-│   ├── __init__.py
-│   ├── config.py            # Settings (carga .env)
-│   ├── security.py          # Lógica JWT (crear/verificar tokens)
-│   └── dependencies.py      # Dependencias reutilizables (get_current_user)
-│
-├── db/
-│   ├── __init__.py
-│   └── database.py          # Conexión SQLAlchemy
-│
-├── models/
-│   ├── __init__.py
-│   └── usuarios.py          # Modelo ORM tabla usuarios
-│
-├── schemas/
-│   ├── __init__.py
-│   └── usuarios.py          # Pydantic schemas (validación + Swagger docs)
-│
-├── services/
-│   ├── __init__.py
-│   ├── auth.py              # Lógica de negocio: login, tokens, whoami
-│   ├── usuarios.py          # Lógica: registro + envío de correo
-│   ├── email.py             # Servicio de envío de emails (Resend)
-│   └── vision.py            # Lógica OpenCV: detección y rectificación de tablero
-│
-└── routers/
-    ├── __init__.py
-    ├── auth.py              # Endpoints: /login /refresh /whoami
-    ├── usuarios.py          # Endpoints: /register
-    ├── vision.py            # Endpoints: /vision (reconocimiento de imagen)
-    └── retransmision.py     # Endpoints: /retransmision (WebSockets para emisión en directo)
+├── main.py              # Punto de entrada y configuración de Swagger
+├── Procfile             # Instrucciones de ejecución para Railway
+├── requirements.txt     # Listado de librerías y versiones
+├── .env                 # Configuración sensible (API Keys, DB URL)
+├── core/                # Configuración global y seguridad (JWT)
+├── db/                  # Configuración de base de datos y sesión
+├── models/              # Modelos ORM (SQLAlchemy)
+├── schemas/             # Modelos de validación (Pydantic)
+├── routers/             # Endpoints de la API organizados por módulos
+├── services/            # Lógica de negocio (Email, Motor, Visión)
+└── static/              # Archivos estáticos y recursos
 ```
 
-## Ejecución en Local
+---
 
-Para levantar el backend en tu entorno local, sigue estos pasos:
+## Instalación Local
 
-1. **Crear el entorno virtual:**
-   ```bash
-   python -m venv venv
-   ```
+1.  **Instalar dependencias**:
+    Es necesario instalar todas las librerías indicadas en el archivo de requisitos:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-2. **Activar el entorno virtual:**
-   - En **Windows**:
-     ```bash
-     .\venv\Scripts\activate
-     ```
-   - En **macOS / Linux**:
-     ```bash
-     source venv/bin/activate
-     ```
+2.  **Configurar Variables de Entorno**:
+    Crea un archivo `.env` basado en la configuración de producción:
+    ```env
+    DATABASE_URL=mysql+pymysql://user:password@host:port/dbname
+    JWT_SECRET=tu_secreto_para_tokens
+    RESEND_API_KEY=re_xxxxxxxxxxxx
+    MAIL_FROM=tu_email_configurado@dominio.com
+    ```
 
-3. **Instalar dependencias:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+3.  **Ejecutar Servidor**:
+    ```bash
+    uvicorn main:app --reload
+    ```
 
-4. **Variables de Entorno:**
-   Asegúrate de crear un archivo `.env` en la raíz de la carpeta `api/` con las credenciales necesarias, por ejemplo:
-   ```env
-   DATABASE_URL=postgresql://...
-   JWT_SECRET_KEY=tu_secreto_jwt
-   RESEND_API_KEY=re_...
-   ```
+---
 
-5. **Iniciar el servidor:**
-   Ejecuta FastAPI en modo recarga automática para desarrollo:
-   ```bash
-   uvicorn main:app --reload
-   ```
-   *La API estará accesible localmente en `http://localhost:8000`.*
-
-## Documentación
-
-Swagger UI: https://chess-rekognition-api-production.up.railway.app/docs
+## Documentación Interactiva
+Una vez arrancado el servidor, puedes acceder a la documentación interactiva autogenerada en:
+*   **Swagger UI**: `http://localhost:8000/docs`
+*   **ReDoc**: `http://localhost:8000/redoc`
