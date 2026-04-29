@@ -43,13 +43,15 @@ async def register(data: UsuarioCreate, db: Session) -> Usuario:
     )
 
     db.add(nuevo_usuario)
-    db.commit()
-    db.refresh(nuevo_usuario)  # Recarga el objeto con los datos de BD
 
-    # Enviar email de bienvenida de forma asíncrona. Si falla, no bloquea el registro del usuario.
+    # Intentar enviar el email antes de hacer el commit final.
+    # Si el email falla, se hace rollback y no se crea el usuario.
     try:
         await send_welcome_email(nombre=nuevo_usuario.nombre, mail=nuevo_usuario.mail)
-    except Exception:
-        pass
+        db.commit()
+        db.refresh(nuevo_usuario)  # Recarga el objeto con los datos de BD
+    except Exception as e:
+        db.rollback()
+        raise ValueError(f"No se pudo completar el registro por un error en el envío del email: {e}")
 
     return nuevo_usuario

@@ -2,7 +2,22 @@ import os
 import subprocess
 import pathlib
 import platform
-from typing import Optional
+from typing import Optional, Tuple, TypedDict
+
+class ScoreType(TypedDict):
+    type: str
+    value: int
+
+class EngineInfo(TypedDict):
+    score: Optional[ScoreType]
+    depth: int
+    nodes: int
+    pv: str
+
+class StatusResponse(TypedDict, total=False):
+    status: str
+    message: str
+    engine: str
 
 class StockfishService:
     def __init__(self):
@@ -21,7 +36,7 @@ class StockfishService:
             except Exception as e:
                 print(f"Aviso: No se pudieron aplicar permisos al motor: {e}")
 
-    def check_status(self) -> dict:
+    def check_status(self) -> StatusResponse:
         """
         Verifica de forma rápida que el binario existe y responde a comandos UCI.
         """
@@ -29,31 +44,30 @@ class StockfishService:
             return {"status": "error", "message": "Binario no encontrado"}
         
         try:
+            # Usar communicate con timeout para evitar bloqueos indefinidos
             process = subprocess.Popen(
                 [self.stockfish_path],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1
+                text=True
             )
             
-            process.stdin.write("uci\n")
-            process.stdin.flush()
+            try:
+                outs, _ = process.communicate(input="uci\nquit\n", timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                return {"status": "error", "message": "Timeout al comunicar con el motor"}
             
             uciok = False
             version = "Stockfish"
-            for _ in range(20):
-                line = process.stdout.readline().strip()
-                if not line: break
-                if "Stockfish" in line: version = line
+            
+            for line in outs.splitlines():
+                if "Stockfish" in line:
+                    version = line
                 if line == "uciok": 
                     uciok = True
                     break
-            
-            process.stdin.write("quit\n")
-            process.stdin.flush()
-            process.terminate()
             
             if uciok:
                 return {"status": "ok", "engine": version}
@@ -63,7 +77,7 @@ class StockfishService:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    def get_best_move(self, fen: str, elo: Optional[int] = None, depth: int = 15) -> tuple:
+    def get_best_move(self, fen: str, elo: Optional[int] = None, depth: int = 15) -> Tuple[Optional[str], EngineInfo]:
         """
         Llama al binario de Stockfish para obtener la mejor jugada y datos de análisis.
         Retorna (best_move, info_dict)
@@ -76,48 +90,51 @@ class StockfishService:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1
+            text=True
         )
 
         try:
-            def send_command(cmd):
-                process.stdin.write(cmd + "\n")
-                process.stdin.flush()
-
-            send_command("uci")
-            for _ in range(30):
-                line = process.stdout.readline().strip()
-                if not line: break
-                if line == "uciok": break
-
-            send_command("setoption name Threads value 1")
-            if elo is not None:
-                skill = int(round((elo - 1320) / ((3190 - 1320) / 20)))
-                skill = max(0, min(skill, 20))
-                send_command("setoption name UCI_LimitStrength value true")
-                send_command("setoption name UCI_Elo value " + str(elo))
-                send_command("setoption name Skill Level value " + str(skill))
+            commands = "uci\nsetoption name Threads value 1\n"
             
-            send_command("ucinewgame")
-            send_command(f"position fen {fen}")
-            send_command(f"go depth {depth}")
+            if elo is not None:
+                # Mapeo aproximado de ELO a Skill Level de Stockfish (0-20)
+                # Stockfish asume que Skill Level 0 es aprox ELO 1320 y Skill Level 20 es ELO 3190
+                # Esta fórmula es la interpolación lineal estándar usada por la comunidad UCI.
+                MIN_ELO = 1320
+                MAX_ELO = 3190
+                SKILL_LEVELS = 20
+                
+                skill = int(round((elo - MIN_ELO) / ((MAX_ELO - MIN_ELO) / SKILL_LEVELS)))
+                skill = max(0, min(skill, 20))
+                
+                commands += "setoption name UCI_LimitStrength value true\n"
+                commands += f"setoption name UCI_Elo value {elo}\n"
+                commands += f"setoption name Skill Level value {skill}\n"
+            
+            commands += "ucinewgame\n"
+            commands += f"position fen {fen}\n"
+            commands += f"go depth {depth}\n"
+            
+            try:
+                # Tiempo de espera máximo calculado aprox según profundidad (15 segundos max de seguridad)
+                outs, _ = process.communicate(input=commands, timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                raise TimeoutError("El motor excedió el tiempo máximo de respuesta.")
 
             best_move = None
-            info = {
+            info: EngineInfo = {
                 "score": None,
                 "depth": 0,
                 "nodes": 0,
                 "pv": ""
             }
 
-            while True:
-                line = process.stdout.readline()
-                if not line: break
+            # Parseo de salida
+            for line in outs.splitlines():
                 line = line.strip()
                 if not line: continue
                 
-                # Parseo de info
                 if line.startswith("info "):
                     parts = line.split(" ")
                     if "depth" in parts:
@@ -138,14 +155,13 @@ class StockfishService:
                 if line.startswith("bestmove"):
                     parts = line.split(" ")
                     best_move = parts[1]
-                    break
 
             return best_move, info
 
         finally:
+            # Asegurarse siempre de matar el proceso por seguridad,
+            # communicate() cierra stdin/out y espera al exit code, pero por si acaso.
             if process.poll() is None:
-                process.stdin.write("quit\n")
-                process.stdin.flush()
-                process.terminate()
+                process.kill()
 
 engine_service = StockfishService()

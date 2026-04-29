@@ -1,12 +1,25 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
 from typing import Dict, List
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+import string
+import random
+
+from db.database import get_db
+from models.usuarios import Usuario
+from routers.auth import get_current_user
+from schemas.retransmisiones import RetransmisionCreate, RetransmisionResponse
+from models.retransmisiones import Retransmision
 
 router = APIRouter(
     prefix="/retransmision",
     tags=["Retransmisión"],
     responses={404: {"description": "No encontrado"}},
 )
+
+def generate_token(length=8):
+    chars = string.ascii_lowercase + string.digits
+    return ''.join(random.choice(chars) for _ in range(length))
 
 class RetransmisionStatus(BaseModel):
     token: str
@@ -42,9 +55,30 @@ class ConnectionManager:
         if token not in self.viewers:
             self.viewers[token] = []
 
-    def disconnect_host(self, token: str):
+    async def disconnect_host(self, token: str, db):
         if token in self.hosts:
             del self.hosts[token]
+        
+        # Sincronización con la Base de Datos
+        if db:
+            from models.retransmisiones import Retransmision
+            retransmision = db.query(Retransmision).filter(Retransmision.token == token).first()
+            if retransmision:
+                retransmision.is_activa = False
+                db.commit()
+
+        # Limpieza de memoria (evitar fugas de salas huérfanas)
+        if token in self.states:
+            del self.states[token]
+            
+        if token in self.viewers:
+            # Desconectar a todos los espectadores activos
+            for viewer in self.viewers[token]:
+                try:
+                    await viewer.close(code=1000, reason="Host finalizó la retransmisión")
+                except Exception:
+                    pass
+            del self.viewers[token]
 
     async def broadcast_to_viewers(self, token: str, message: dict):
         self.states[token] = message
@@ -60,6 +94,39 @@ class ConnectionManager:
                 self.disconnect_viewer(dead, token)
 
 manager = ConnectionManager()
+
+@router.post("/host", response_model=RetransmisionResponse, summary="Inicializar una nueva retransmisión")
+def init_retransmision(
+    datos: RetransmisionCreate, 
+    db: Session = Depends(get_db), 
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Crea un registro de retransmisión en la base de datos y genera un token único.
+    """
+    token = generate_token()
+    # Asegurarnos de que no hay colisión de token
+    while db.query(Retransmision).filter(Retransmision.token == token).first():
+        token = generate_token()
+
+    nueva_retransmision = Retransmision(
+        token=token,
+        username=current_user.username,
+        blancas=datos.blancas,
+        negras=datos.negras,
+        resultado=datos.resultado,
+        evento=datos.evento,
+        ronda=datos.ronda,
+        tablero=datos.tablero,
+        lugar=datos.lugar,
+        is_activa=True  # Se marca como activa desde el inicio
+    )
+
+    db.add(nueva_retransmision)
+    db.commit()
+    db.refresh(nueva_retransmision)
+
+    return nueva_retransmision
 
 @router.get("/status/{token}", summary="Obtener el estado de una retransmisión por token")
 async def get_retransmision_status(token: str):
@@ -80,7 +147,7 @@ async def get_retransmision_status(token: str):
     }
 
 @router.websocket("/ws/host/{token}")
-async def websocket_host(websocket: WebSocket, token: str):
+async def websocket_host(websocket: WebSocket, token: str, db: Session = Depends(get_db)):
     """
     WebSocket para el emisor de la retransmisión.
     Recibe el estado del tablero (generado por vision.py) y lo reenvía a los espectadores.
@@ -92,7 +159,7 @@ async def websocket_host(websocket: WebSocket, token: str):
             data = await websocket.receive_json()
             await manager.broadcast_to_viewers(token, data)
     except WebSocketDisconnect:
-        manager.disconnect_host(token)
+        await manager.disconnect_host(token, db)
 
 
 @router.websocket("/ws/viewer/{token}")
@@ -103,7 +170,9 @@ async def websocket_viewer(websocket: WebSocket, token: str):
     await manager.connect_viewer(websocket, token)
     try:
         while True:
-            # Los espectadores normalmente no envían datos, pero mantenemos la conexión abierta
-            await websocket.receive_text()
+            # Los espectadores pueden enviar "ping" como heartbeat
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
     except WebSocketDisconnect:
         manager.disconnect_viewer(websocket, token)
