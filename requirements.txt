@@ -1,12 +1,6 @@
 # ═══════════════════════════════════════════════════════════════
 # requirements.txt — Chess Rekognition API
 # ═══════════════════════════════════════════════════════════════
-# Instalación limpia en entorno virtual:
-#   python -m venv venv_api
-#   venv_api\Scripts\activate        (Windows)
-#   source venv_api/bin/activate     (Linux/Mac)
-#   pip install -r requirements.txt
-# ═══════════════════════════════════════════════════════════════
 
 # FastAPI: framework principal de la API REST. Incluye soporte para async, validación automática y Swagger UI
 fastapi==0.135.1

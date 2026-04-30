@@ -1,12 +1,15 @@
 # routers/engine.py
 # Endpoints para interactuar con Stockfish
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from typing import Optional
 from services.engine import engine_service
 
+# Creación del Router de Stockfish
 router = APIRouter(prefix="/engine", tags=["Motor"])
 
+# Esquemas Pydantic
+# Request de Stockfish
 class EngineRequest(BaseModel):
     fen: str = Field(
         ..., 
@@ -28,12 +31,15 @@ class EngineRequest(BaseModel):
         examples=[15]
     )
 
+# Response de Stockfish
 class EngineResponse(BaseModel):
     ok: bool
     best_move: str
     info: Optional[dict] = Field(None, description="Información de análisis (score, depth, pv, nodes)")
     message: Optional[str] = None
 
+# Endpoint de Estado del Motor
+# GET /engine/status
 @router.get(
     "/status",
     summary="Verificar salud y versión del motor",
@@ -44,14 +50,16 @@ def get_engine_status():
     """
     return engine_service.check_status()
 
+# Endpoint de Movimiento del Motor
+# POST /engine/move
 @router.post(
     "/move",
     response_model=EngineResponse,
-    summary="Obtener la mejor jugada para una posición",
+    summary="Obtiene la mejor jugada dada una posición en FEN",
 )
 def get_move(request: EngineRequest):
     """
-    Solicita al motor Stockfish que analice la posición y devuelva la mejor continuación.
+    Solicita al motor Stockfish que analice la posición y devuelva la mejor jugada.
     """
     try:
         best_move, info = engine_service.get_best_move(

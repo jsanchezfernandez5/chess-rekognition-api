@@ -1,6 +1,5 @@
 # main.py - Punto de entrada del servidor FastAPI
 # Este archivo centraliza la configuración de la API, rutas y documentación técnica.
-
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -20,22 +19,26 @@ tags_metadata = [
     },
     {
         "name": "Partidas",
-        "description": "Operaciones CRUD para gestionar el historial de partidas guardadas.",
+        "description": "Operaciones CRUD de partidas PGN.",
     },
     {
         "name": "Motor",
-        "description": "Integración con Stockfish para análisis y juego contra el ordenador.",
+        "description": "Integración con Stockfish para jugar contra el ordenador.",
     },
     {
         "name": "Visión",
-        "description": "Procesamiento de imagen mediante OpenCV para el reconocimiento del tablero.",
+        "description": "Reconocimiento del tablero mediante OpenCV.",
+    },
+    {
+        "name": "Retransmisión",
+        "description": "Servicio para retransmitir partidas en directo.",
     }
 ]
 
-# Inicialización de la app con metadatos personalizados para el TFG
+# Inicialización de la app con metadatos
 app = FastAPI(
     title="Chess Rekognition API",
-    description="### Sistema para el registro y retransmisión inteligente de partidas de ajedrez.",
+    description="### Reconocimiento visual de jugadas en partidas de ajedrez presencial.",
     version="1.0.0",
     openapi_tags=tags_metadata,
     contact={
@@ -49,10 +52,10 @@ app = FastAPI(
     docs_url=None, # Desactivamos la URL por defecto para personalizarla abajo
 )
 
-# Servimos archivos estáticos (como el favicon o imágenes)
+# Carpeta de archivos estáticos (favicon, imágenes, etc.)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Configuración de CORS: Vital para que el frontend en React pueda hablar con este backend
+# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -62,7 +65,7 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Registro de las rutas del sistema
+# Registro de rutas (router)
 app.include_router(auth.router)
 app.include_router(usuarios.router)
 app.include_router(partidas.router)
@@ -70,17 +73,17 @@ app.include_router(engine.router)
 app.include_router(vision.router)
 app.include_router(retransmision.router)
 
-# Ruta específica para el favicon del navegador
+# Ruta del favicon del navegador
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     return FileResponse("static/favicon.ico")
 
-# Ruta unificada para pruebas de visión
+# Ruta para pruebas de visión
 @app.get("/opencv", include_in_schema=False)
 def opencv():
     return FileResponse("static/opencv.html")
 
-# Personalización de la interfaz de Swagger para que use nuestro logo y título
+# Ruta DOC personalizada para la interfaz de Swagger
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui():
     return get_swagger_ui_html(

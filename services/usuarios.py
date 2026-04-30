@@ -1,14 +1,13 @@
 # services/usuarios.py
-# Lógica de negocio para gestión de usuarios:
-#   - register: crea usuario, hashea password, envía email de bienvenida
+# Lógica de negocio para gestión de usuarios
 from sqlalchemy.orm import Session
-
 from core.security import hash_password
 from models.usuarios import Usuario
 from schemas.usuarios import UsuarioCreate
 from services.email import send_welcome_email
 
-# Función principal para registrar un nuevo usuario. Se llama desde el endpoint POST /usuarios/register.
+# Función para registrar un nuevo usuario.
+# Se llama desde el endpoint POST /usuarios/register.
 async def register(data: UsuarioCreate, db: Session) -> Usuario:
     """
     Registra un nuevo usuario en la BD.

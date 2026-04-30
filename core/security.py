@@ -24,7 +24,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Compara contraseña en texto plano con su hash almacenado."""
     return pwd_context.verify(plain_password, hashed_password)
 
-
 # Función interna genérica para crear tokens JWT
 def _create_token(
     subject: str,
@@ -81,7 +80,7 @@ def decode_token(token: str, expected_type: Literal["access", "refresh"]) -> str
 
     Lanza ValueError en caso de:
       - Token expirado
-      - Firma inválida
+      - Firma no válida
       - Tipo de token incorrecto (ej: usar refresh token como access token)
       - Payload malformado
     """

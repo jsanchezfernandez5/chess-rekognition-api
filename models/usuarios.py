@@ -18,11 +18,11 @@ class Usuario(Base):
     mail      = Column(String(255), nullable=False)
 
     # Relaciones con otras tablas (Partida, Retransmision)
-    # back_populates crea la relación bidireccional entre modelos
+    # back_populates: crea la relación bidireccional entre modelos
     # lazy="dynamic": las partidas no se cargan hasta que se accede explícitamente
     partidas         = relationship("Partida",         back_populates="usuario", lazy="dynamic")
     retransmisiones  = relationship("Retransmision",   back_populates="usuario", lazy="dynamic")
 
-    # Método de representación para facilitar debugging y logging
+    # Método de representación para facilitar debugging y logging (como toString() en java)
     def __repr__(self) -> str:
         return f"<Usuario username={self.username!r} nombre={self.nombre!r}>"

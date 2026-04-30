@@ -1,5 +1,4 @@
 # models/partidas.py
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, Date, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 from db.database import Base
@@ -16,10 +15,10 @@ class Partida(Base):
     evento         = Column(String(250), nullable=False)
     blancas        = Column(String(250), nullable=False)
     negras         = Column(String(250), nullable=False)
-    fecha          = Column(Date, nullable=False) # Fecha del Evento
-    resultado      = Column(String(7), nullable=False) # Ej: "1-0", "0-1", "1/2-1/2"
-    pgn            = Column(Text, nullable=False) # PGN (Portable Game Notation)
-    tipo_partida   = Column(String(2), default=None) # 'PI' (Partida Introducida) o 'PR' (Partida Retransmitida)
+    fecha          = Column(Date, nullable=False)            # Fecha del evento
+    resultado      = Column(String(7), nullable=False)       # Ej: "1-0", "0-1", "1/2-1/2"
+    pgn            = Column(Text, nullable=False)            # PGN (Portable Game Notation)
+    tipo_partida   = Column(String(2), default=None)         # 'PI' (Partida Introducida) o 'PR' (Partida Retransmitida)
     ronda          = Column(Integer)
     tablero        = Column(Integer)
     lugar          = Column(String(250))
@@ -29,5 +28,6 @@ class Partida(Base):
     # Relación inversa con el Usuario propietario de la partida.
     usuario = relationship("Usuario", back_populates="partidas")
 
+    # Representación en String para debugging (como toString() en java)
     def __repr__(self) -> str:
         return f"<Partida id={self.id_partida} evento={self.evento!r} blancas={self.blancas!r} negras={self.negras!r}>"

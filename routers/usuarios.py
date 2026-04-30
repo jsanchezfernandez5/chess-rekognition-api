@@ -7,10 +7,11 @@ from db.database import get_db
 from schemas.usuarios import UsuarioCreate, UsuarioResponse
 from services import usuarios
 
-# Router específico para endpoints relacionados con usuarios, con prefijo "/usuarios" y etiqueta "Usuarios" para la documentación.
+# Router de usuarios
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
 # Endpoint de registro de nuevos usuarios
+# POST /usuarios/register
 @router.post(
     "/register",
     response_model=UsuarioResponse,

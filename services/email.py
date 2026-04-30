@@ -8,6 +8,7 @@ from core.config import settings
 resend.api_key = settings.RESEND_API_KEY
 
 # Función para enviar un correo de bienvenida al usuario recién registrado.
+# Se llama desde el endpoint POST /register.
 async def send_welcome_email(nombre: str, mail: str) -> None:
     html_body = f"""
     <html>

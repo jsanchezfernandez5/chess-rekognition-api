@@ -31,7 +31,7 @@ def get_current_user(
       3. Busca el usuario en la BD
       4. Devuelve el objeto Usuario o lanza 401
     """
-    # Sin credenciales → no autenticado
+    # Sin credenciales = usuario no autenticado
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -48,7 +48,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Verificar que el usuario sigue existiendo en la BD
+    # Verificar que el usuario existe en la BD
     usuario = db.query(Usuario).filter(Usuario.username == username).first()
     if not usuario:
         raise HTTPException(

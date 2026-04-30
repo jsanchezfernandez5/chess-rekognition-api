@@ -1,25 +1,35 @@
+# services/engine.py
+# Lógica de negocio relacionada con el motor de ajedrez Stockfish.
 import os
 import subprocess
 import pathlib
 import platform
 from typing import Optional, Tuple, TypedDict
 
+# Clases internas para el tipado.
+
+# Tipos para la respuesta del motor.
 class ScoreType(TypedDict):
     type: str
     value: int
 
+# Info del análisis del motor.
 class EngineInfo(TypedDict):
     score: Optional[ScoreType]
     depth: int
     nodes: int
     pv: str
 
+# Status de la respuesta del motor.
 class StatusResponse(TypedDict, total=False):
     status: str
     message: str
     engine: str
 
+# Clase principal para el motor de ajedrez.
+# Gestiona la comunicación con el binario de Stockfish.
 class StockfishService:
+    # Constructor. 
     def __init__(self):
         # Determinamos la ruta del binario según el SO
         current_dir = pathlib.Path(__file__).parent.parent
@@ -36,6 +46,7 @@ class StockfishService:
             except Exception as e:
                 print(f"Aviso: No se pudieron aplicar permisos al motor: {e}")
 
+    # Método para verificar el estado del motor.
     def check_status(self) -> StatusResponse:
         """
         Verifica de forma rápida que el binario existe y responde a comandos UCI.
@@ -77,6 +88,8 @@ class StockfishService:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    # Método principal para obtener la mejor jugada.
+    # Calcula la mejor jugada según la posición y el ELO del jugador.
     def get_best_move(self, fen: str, elo: Optional[int] = None, depth: int = 15) -> Tuple[Optional[str], EngineInfo]:
         """
         Llama al binario de Stockfish para obtener la mejor jugada y datos de análisis.
@@ -164,4 +177,6 @@ class StockfishService:
             if process.poll() is None:
                 process.kill()
 
+# Instancia global del servicio.
+# Uso: from services.engine import engine_service
 engine_service = StockfishService()

@@ -1,21 +1,26 @@
+# services/vision.py
+# Servicio de visión por computador para detectar el tablero de ajedrez y las piezas.
 import cv2
 import numpy as np
 import base64
 import traceback
 
+# Constantes de configuración para el procesamiento de imágenes.
 BOARD_SIZE = 400
 CELL_SIZE = BOARD_SIZE // 8
 COLS = "abcdefgh"
+# Usar solo el 65% central de la casilla.
+INNER_CROP_PCT = 0.65
 
-INNER_CROP_PCT = 0.65  # Usar solo el 65% central de la casilla
-
-
+# Función auxiliar para convertir una imagen numpy a base64.
+# Se usa para enviar la imagen al frontend.
 def _encode_image(img: np.ndarray) -> str:
     """Convierte un array numpy a base64 para enviar al frontend."""
     _, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
     return "data:image/jpeg;base64," + base64.b64encode(buffer).decode("utf-8")
 
-
+# Función para detectar el tablero de ajedrez en una imagen.
+# Usa findChessboardCornersSB para detectar las 49 esquinas internas.
 def _detectar_tablero(frame: np.ndarray):
     """
     Detecta el tablero usando findChessboardCornersSB.
@@ -23,14 +28,14 @@ def _detectar_tablero(frame: np.ndarray):
     """
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    # Intento principal — más robusto
+    # Intento principal (más robusto)
     found, corners = cv2.findChessboardCornersSB(
         gray, (7, 7),
         cv2.CALIB_CB_NORMALIZE_IMAGE | cv2.CALIB_CB_EXHAUSTIVE
     )
 
     if not found:
-        # Fallback clásico
+        # intento clásico
         found, corners = cv2.findChessboardCorners(
             gray, (7, 7),
             cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE
@@ -45,13 +50,12 @@ def _detectar_tablero(frame: np.ndarray):
 
     return True, corners
 
-
+# Función para calcular las 4 esquinas exteriores del tablero a partir de las 49 esquinas internas.
+# Usa vectores locales por esquina para mayor precisión cuando el tablero está en perspectiva.
 def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
     """
-    Calcula las 4 esquinas exteriores del tablero completo a partir
-    de las 49 esquinas internas (7x7).
-    Usa vectores locales por esquina para mayor precisión
-    cuando el tablero está en perspectiva.
+    Calcula las 4 esquinas exteriores del tablero completo a partir de las 49 esquinas internas (7x7).
+    Usa vectores locales por esquina para mayor precisión cuando el tablero está en perspectiva.
     """
     tl = corners[0][0]   # fila 0, col 0
     tr = corners[6][0]   # fila 0, col 6
@@ -73,12 +77,13 @@ def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
     board_bl = bl - step_h_bottom * MARGIN + step_v_left   * MARGIN
     board_br = br + step_h_bottom * MARGIN + step_v_right  * MARGIN
 
+    # Devuelve las 4 esquinas exteriores del tablero en formato numpy array.
     return np.array(
         [board_tl, board_tr, board_br, board_bl],
         dtype=np.float32
     )
 
-
+# Función para aplicar la homografía y obtener la vista cenital del tablero.
 def _rectificar(frame: np.ndarray, exterior: np.ndarray) -> np.ndarray:
     """Aplica la homografía para obtener vista cenital 400x400."""
     dst = np.array([
@@ -88,11 +93,14 @@ def _rectificar(frame: np.ndarray, exterior: np.ndarray) -> np.ndarray:
         [0, BOARD_SIZE]
     ], dtype=np.float32)
 
+    # Calcula la matriz de transformación afín
     M = cv2.getPerspectiveTransform(exterior, dst)
+    # Aplica la transformación afín a la imagen
     warped = cv2.warpPerspective(frame, M, (BOARD_SIZE, BOARD_SIZE))
     return warped
 
-
+# Función para calibrar los umbrales de detección de piezas.
+# Calcula umbrales dinámicamente a partir del tablero rectificado.
 def _calibrar_umbrales(warped: np.ndarray) -> tuple:
     """
     Calcula umbrales dinámicamente a partir del tablero rectificado.
@@ -101,6 +109,7 @@ def _calibrar_umbrales(warped: np.ndarray) -> tuple:
     gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
     stds = []
 
+    # Itera sobre cada casilla del tablero.
     for row in range(8):
         for col in range(8):
             x, y = col * CELL_SIZE, row * CELL_SIZE
@@ -130,7 +139,8 @@ def _calibrar_umbrales(warped: np.ndarray) -> tuple:
 
     return std_thresh, edge_thresh
 
-
+# Función para analizar las 64 casillas del tablero.
+# Autocalibra los umbrales según la iluminación actual.
 def _analizar_casillas(warped: np.ndarray) -> tuple:
     """
     Analiza las 64 casillas del tablero rectificado.
@@ -169,7 +179,7 @@ def _analizar_casillas(warped: np.ndarray) -> tuple:
 
     return squares, std_thresh, edge_thresh
 
-
+# Función para generar la vista cenital real del tablero con overlay verde/rojo sobre las casillas.
 def _generar_vista_real(warped: np.ndarray, squares: list) -> np.ndarray:
     """
     Vista cenital real con overlay verde/rojo sobre las casillas.
@@ -198,7 +208,8 @@ def _generar_vista_real(warped: np.ndarray, squares: list) -> np.ndarray:
 
     return output
 
-
+# Función para generar la vista 2D diagnóstica.
+# Tablero sintético con colores clásicos de casillas y marcadores de ocupación.
 def _generar_vista_2d(squares: list) -> np.ndarray:
     """
     Vista diagnóstico 2D: tablero sintético con colores
@@ -236,7 +247,8 @@ def _generar_vista_2d(squares: list) -> np.ndarray:
 
     return output
 
-
+# Función para generar imagen de debug.
+# Frame original con los 49 puntos internos en rojo y el perímetro del tablero en verde.
 def _generar_debug(frame: np.ndarray, corners: np.ndarray,
                    exterior: np.ndarray) -> np.ndarray:
     """
@@ -256,7 +268,8 @@ def _generar_debug(frame: np.ndarray, corners: np.ndarray,
 
     return debug
 
-
+# Función para generar un collage con las 3 vistas (debug, real, diagnóstico).
+# Incluye metadatos técnicos para diagnóstico profundo.
 def _generar_collage(debug: np.ndarray, real: np.ndarray, diag: np.ndarray, 
                      occ: int, total: int, stdt: float, edget: float) -> np.ndarray:
     """
@@ -294,10 +307,12 @@ def _generar_collage(debug: np.ndarray, real: np.ndarray, diag: np.ndarray,
     
     return np.vstack([collage, footer])
 
-
+# Clase principal VisionService con el método público para procesar imágenes.
+# Contiene el pipeline completo de detección y rectificación del tablero.
 class VisionService:
 
     @staticmethod
+    # Método público que orquesta todo el flujo.
     def detect_and_rectify(image_bytes: bytes) -> dict:
         """
         Pipeline completo:

@@ -1,11 +1,12 @@
-# services/partidas.py - Lógica de negocio para las partidas
-# Aquí gestionamos las operaciones directas con la base de datos para las partidas.
-
+# services/partidas.py
+# Lógica de negocio para las partidas
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from models.partidas import Partida
 from schemas.partidas import PartidaCreate, PartidaUpdate
 
+# Función para crear una nueva partida.
+# Se llama desde el endpoint POST /partidas.
 def create(partida_in: PartidaCreate, username: str, db: Session) -> Partida:
     """
     Crea un nuevo registro de partida en la base de datos vinculado al usuario.
@@ -17,6 +18,8 @@ def create(partida_in: PartidaCreate, username: str, db: Session) -> Partida:
     db.refresh(db_partida)
     return db_partida
 
+# Función para listar todas las partidas de un usuario.
+# Se llama desde el endpoint GET /partidas.
 def list_by_user(username: str, db: Session, tipo: Optional[str] = None) -> List[Partida]:
     """
     Obtiene todas las partidas de un usuario. Permite filtrar por tipo (PI o PR).
@@ -27,6 +30,8 @@ def list_by_user(username: str, db: Session, tipo: Optional[str] = None) -> List
         query = query.filter(Partida.tipo_partida == tipo)
     return query.order_by(Partida.fecha_registro.desc()).all()
 
+# Función para obtener una partida concreta.
+# Se llama desde el endpoint GET /partidas/{id_partida}.
 def get_one(id_partida: int, username: str, db: Session) -> Optional[Partida]:
     """
     Busca una partida concreta asegurando que pertenece al usuario que la solicita.
@@ -36,6 +41,8 @@ def get_one(id_partida: int, username: str, db: Session) -> Optional[Partida]:
         Partida.username == username
     ).first()
 
+# Función para actualizar una partida existente.
+# Se llama desde el endpoint PUT /partidas/{id_partida}.
 def update(id_partida: int, username: str, partida_in: PartidaUpdate, db: Session) -> Optional[Partida]:
     """
     Modifica campos específicos de una partida (actualización parcial).
@@ -53,6 +60,8 @@ def update(id_partida: int, username: str, partida_in: PartidaUpdate, db: Sessio
     db.refresh(db_partida)
     return db_partida
 
+# Función para borrar una partida existente.
+# Se llama desde el endpoint DELETE /partidas/{id_partida}.
 def delete(id_partida: int, username: str, db: Session) -> bool:
     """
     Borra una partida de la base de datos si existe y es propiedad del usuario.

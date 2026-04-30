@@ -38,7 +38,8 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
 
-# Función para obtener la configuración de la aplicación. Patrón Singlenton usando lru_cache para evitar múltiples instancias.
+# Función para obtener la configuración de la aplicación.
+# Patrón Singlenton usando lru_cache para evitar múltiples instancias.
 @lru_cache()
 def get_settings() -> Settings:
     """

@@ -15,7 +15,7 @@ Para garantizar un rendimiento óptimo y alta disponibilidad, la API utiliza:
 
 ---
 
-## 🛠️ Stack Técnico y Librerías
+## Stack Técnico y Librerías
 
 El backend está desarrollado en **Python 3.11+** utilizando las siguientes bibliotecas clave:
 
