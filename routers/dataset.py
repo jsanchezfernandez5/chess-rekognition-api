@@ -8,7 +8,9 @@ import gc
 import cv2
 import numpy as np
 import traceback
+import tensorflow as tf
 from fastapi import APIRouter, UploadFile, File, WebSocket, WebSocketDisconnect, Depends, Query
+
 from core.config import settings
 from core.dependencies import get_current_user
 from core.security import decode_token
@@ -47,7 +49,7 @@ def ensure_dataset_dirs():
 
 ensure_dataset_dirs()
 
-@router.post("/capture")
+@router.post("/capture", summary="Captura y recorta el tablero")
 async def capture(file: UploadFile = File(...), user=Depends(get_current_user)):
     """
     Recibe un frame de la cámara, detecta el tablero y devuelve 64 recortes.
@@ -104,7 +106,7 @@ async def capture(file: UploadFile = File(...), user=Depends(get_current_user)):
             "detail": traceback.format_exc()
         }
 
-@router.post("/save")
+@router.post("/save", summary="Guarda recortes etiquetados")
 async def save_squares(payload: dict, user=Depends(get_current_user)):
     """
     Guarda las imágenes etiquetadas por el usuario en disco.
@@ -135,7 +137,7 @@ async def save_squares(payload: dict, user=Depends(get_current_user)):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-@router.get("/stats")
+@router.get("/stats", summary="Estadísticas del dataset")
 def get_stats(user=Depends(get_current_user)):
     """Devuelve estadísticas del dataset actual."""
     stats = {}
@@ -148,7 +150,7 @@ def get_stats(user=Depends(get_current_user)):
         "total": sum(stats.values())
     }
 
-@router.post("/train")
+@router.post("/train", summary="Inicia el entrenamiento")
 async def start_training(user=Depends(get_current_user)):
     """Inicia el proceso de entrenamiento en un hilo separado."""
     if training_state["running"]:
@@ -164,7 +166,7 @@ async def start_training(user=Depends(get_current_user)):
     
     return {"success": True, "message": "Entrenamiento iniciado."}
 
-@router.get("/train/status")
+@router.get("/train/status", summary="Estado del entrenamiento")
 def get_train_status(user=Depends(get_current_user)):
     """Polling del estado del entrenamiento."""
     return training_state.copy()
@@ -216,8 +218,6 @@ def _run_training_wrapper():
 
 def _run_training_logic():
     """Lógica principal de entrenamiento con TensorFlow."""
-    import tensorflow as tf
-    
     training_state.update({
         "running": True,
         "status": "loading",

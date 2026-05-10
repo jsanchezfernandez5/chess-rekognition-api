@@ -70,7 +70,6 @@ class ConnectionManager:
         
         # Sincronización con la Base de Datos
         if db:
-            from models.retransmisiones import Retransmision
             retransmision = db.query(Retransmision).filter(Retransmision.token == token).first()
             if retransmision:
                 retransmision.is_activa = False

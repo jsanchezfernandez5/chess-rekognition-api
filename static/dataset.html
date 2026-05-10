@@ -54,6 +54,31 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
+        /* --- LOGIN --- */
+        #loginCard {
+            max-width: 400px;
+            margin: 100px auto;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
         .section-title {
             font-weight: 600;
             margin-bottom: 15px;
@@ -185,70 +210,91 @@
 
         .stat-val { font-weight: 700; color: var(--primary); }
 
-        .hidden { display: none; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <header>
-        <h1>Dataset de Ajedrez</h1>
-        <p>Captura imágenes del tablero real para entrenar el sistema de reconocimiento.</p>
-    </header>
-
-    <div class="layout">
-        <!-- Columna Izquierda -->
-        <div class="main">
-            <div class="card">
-                <span class="section-title">Cámara en vivo</span>
-                <div class="camera-box">
-                    <video id="cam" autoplay playsinline muted></video>
-                </div>
-                <div class="btn-group">
-                    <button onclick="initCam()">Reiniciar Cámara</button>
-                    <button class="btn-main" id="btnCapture" onclick="capturar()">Capturar Tablero</button>
-                </div>
-            </div>
-
-            <div class="card hidden" id="gridCard" style="margin-top: 20px;">
-                <span class="section-title">Etiquetar casillas</span>
-                <p>Haz clic en una casilla y elige qué pieza hay. Las vacías se marcan solas.</p>
-                <div class="grid-container" id="grid"></div>
-                
-                <div id="selectorArea" class="hidden">
-                    <p style="margin-top: 15px; font-weight: 600;">Casilla <span id="targetSq">--</span>:</p>
-                    <div class="piece-selector" id="selector"></div>
-                </div>
-
-                <button class="btn-save" onclick="guardar()">Guardar estas 64 muestras</button>
-            </div>
+    <!-- Pantalla de Login -->
+    <div id="loginCard" class="card">
+        <span class="section-title">Identificación</span>
+        <p>Inicia sesión para poder subir imágenes al dataset.</p>
+        <div class="input-group">
+            <label>Usuario</label>
+            <input type="text" id="user" placeholder="Tu username">
         </div>
+        <div class="input-group">
+            <label>Contraseña</label>
+            <input type="password" id="pass" placeholder="••••••••">
+        </div>
+        <button class="btn-main" style="width: 100%; margin-top: 10px;" onclick="doLogin()">Entrar</button>
+    </div>
 
-        <!-- Columna Derecha -->
-        <div class="sidebar">
-            <div class="card">
-                <span class="section-title">Estado del entrenamiento</span>
-                <div class="stat-row">
-                    <span>Total imágenes:</span>
-                    <span class="stat-val" id="statTotal">0</span>
+    <!-- Pantalla Principal -->
+    <div id="mainUI" class="hidden">
+        <header>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>Dataset de Ajedrez</h1>
+                    <p>Captura imágenes del tablero real para entrenar el sistema.</p>
                 </div>
-                <div class="stat-row">
-                    <span>Clases completas:</span>
-                    <span class="stat-val" id="statClasses">0/13</span>
+                <button onclick="logout()" style="font-size: 12px;">Cerrar Sesión</button>
+            </div>
+        </header>
+
+        <div class="layout">
+            <div class="main">
+                <div class="card">
+                    <span class="section-title">Cámara en vivo</span>
+                    <div class="camera-box">
+                        <video id="cam" autoplay playsinline muted></video>
+                    </div>
+                    <div class="btn-group">
+                        <button onclick="initCam()">Reiniciar Cámara</button>
+                        <button class="btn-main" id="btnCapture" onclick="capturar()">Capturar Tablero</button>
+                    </div>
                 </div>
-                
-                <button style="width: 100%; margin-top: 15px;" onclick="entrenar()">Entrenar Modelo (CNN)</button>
-                
-                <div id="log">--- Consola de estado ---</div>
+
+                <div class="card hidden" id="gridCard" style="margin-top: 20px;">
+                    <span class="section-title">Etiquetar casillas</span>
+                    <p>Haz clic en una casilla y elige qué pieza hay. Las vacías se marcan solas.</p>
+                    <div class="grid-container" id="grid"></div>
+                    
+                    <div id="selectorArea" class="hidden">
+                        <p style="margin-top: 15px; font-weight: 600;">Casilla <span id="targetSq">--</span>:</p>
+                        <div class="piece-selector" id="selector"></div>
+                    </div>
+
+                    <button class="btn-save" onclick="guardar()">Guardar estas 64 muestras</button>
+                </div>
             </div>
 
-            <div class="card" style="margin-top: 20px; font-size: 13px;">
-                <span class="section-title">Consejos rápidos</span>
-                <ul style="padding-left: 18px; margin: 0;">
-                    <li>Pon el tablero plano bajo la cámara.</li>
-                    <li>Evita sombras fuertes que crucen las casillas.</li>
-                    <li>Captura varias posiciones con las mismas piezas.</li>
-                </ul>
+            <div class="sidebar">
+                <div class="card">
+                    <span class="section-title">Estado del entrenamiento</span>
+                    <div class="stat-row">
+                        <span>Total imágenes:</span>
+                        <span class="stat-val" id="statTotal">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Clases completas:</span>
+                        <span class="stat-val" id="statClasses">0/13</span>
+                    </div>
+                    
+                    <button style="width: 100%; margin-top: 15px;" onclick="entrenar()">Entrenar Modelo (CNN)</button>
+                    
+                    <div id="log">--- Consola de estado ---</div>
+                </div>
+
+                <div class="card" style="margin-top: 20px; font-size: 13px;">
+                    <span class="section-title">Consejos rápidos</span>
+                    <ul style="padding-left: 18px; margin: 0;">
+                        <li>Pon el tablero plano bajo la cámara.</li>
+                        <li>Evita sombras fuertes que crucen las casillas.</li>
+                        <li>Captura varias posiciones con las mismas piezas.</li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
@@ -265,19 +311,63 @@
 
     let squares = [];
     let selectedIdx = null;
-    const token = localStorage.getItem("token");
+    let token = localStorage.getItem("token");
+
+    // Lógica de Login
+    async function doLogin() {
+        const username = document.getElementById('user').value;
+        const password = document.getElementById('pass').value;
+        
+        try {
+            const res = await fetch('/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                token = data.access_token;
+                localStorage.setItem("token", token);
+                checkAuth();
+            } else {
+                alert("Error: " + (data.detail || "Credenciales incorrectas"));
+            }
+        } catch (e) {
+            alert("Error al conectar con el servidor.");
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem("token");
+        token = null;
+        checkAuth();
+    }
+
+    function checkAuth() {
+        if (token) {
+            document.getElementById('loginCard').classList.add('hidden');
+            document.getElementById('mainUI').classList.remove('hidden');
+            initCam();
+            updateStats();
+        } else {
+            document.getElementById('loginCard').classList.remove('hidden');
+            document.getElementById('mainUI').classList.add('hidden');
+        }
+    }
 
     async function apiFetch(url, options = {}) {
         const response = await fetch(url, {
             ...options,
             headers: { ...options.headers, 'Authorization': `Bearer ${token}` }
         });
-        if (response.status === 401) addLog("¡Sesión expirada! Por favor, vuelve a entrar.");
+        if (response.status === 401) {
+            addLog("¡Sesión expirada!");
+            logout();
+        }
         return response;
     }
 
     async function initCam() {
-        if (!token) addLog("⚠️ Sin token. Los cambios no se guardarán.");
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: 'environment', width: 1280, height: 720 }
@@ -369,6 +459,7 @@
     }
 
     async function updateStats() {
+        if (!token) return;
         try {
             const res = await apiFetch('/dataset/stats');
             const data = await res.json();
@@ -403,8 +494,8 @@
         };
     }
 
-    initCam();
-    updateStats();
+    // Al cargar la página, verificamos si ya estamos logueados
+    checkAuth();
     setInterval(updateStats, 10000);
 </script>
 </body>
