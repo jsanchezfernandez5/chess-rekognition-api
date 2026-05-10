@@ -41,3 +41,9 @@ aiofiles==24.1.0
 # Procesamiento de imagen y utilidades
 numpy==2.2.3
 opencv-python-headless>=4.8.0
+
+# Reglas de ajedrez y validación de movimientos
+python-chess==1.999
+
+# Modelo ML (MobileNetV2). Usamos tensorflow-cpu para ahorrar espacio en Railway
+tensorflow-cpu>=2.13.0

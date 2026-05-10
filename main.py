@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, usuarios, partidas, engine, vision, retransmision
+from routers import auth, usuarios, partidas, engine, vision, retransmision, dataset
 
 # Configuración de etiquetas para que el Swagger se vea organizado por secciones
 tags_metadata = [
@@ -32,6 +32,10 @@ tags_metadata = [
     {
         "name": "Retransmisión",
         "description": "Servicio para retransmitir partidas en directo.",
+    },
+    {
+        "name": "Dataset",
+        "description": "Herramientas para captura de imágenes y entrenamiento del modelo ML.",
     }
 ]
 
@@ -72,6 +76,7 @@ app.include_router(partidas.router)
 app.include_router(engine.router)
 app.include_router(vision.router)
 app.include_router(retransmision.router)
+app.include_router(dataset.router)
 
 # Ruta del favicon del navegador
 @app.get("/favicon.ico", include_in_schema=False)
@@ -82,6 +87,11 @@ def favicon():
 @app.get("/opencv", include_in_schema=False)
 def opencv():
     return FileResponse("static/opencv.html")
+
+# Ruta para la herramienta de dataset
+@app.get("/dataset-tool", include_in_schema=False)
+def dataset_tool():
+    return FileResponse("static/dataset_tool.html")
 
 # Ruta DOC personalizada para la interfaz de Swagger
 @app.get("/docs", include_in_schema=False)

@@ -22,6 +22,19 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str
     RESEND_FROM: str = "onboarding@resend.dev"
 
+    # DATASET Y MODELOS
+    DATASET_DIR: str = "./data/dataset"
+    MODELS_DIR: str = "./data/models"
+    CLASSES: list = [
+        "empty",
+        "w_P", "w_N", "w_B", "w_R", "w_Q", "w_K",
+        "b_P", "b_N", "b_B", "b_R", "b_Q", "b_K"
+    ]
+    BOARD_SIZE: int = 400
+    CELL_SIZE: int = 50
+    IMG_SIZE: tuple = (96, 96)
+    COLS: str = "abcdefgh"
+
     @property
     def DATABASE_URL(self) -> str:
         """
