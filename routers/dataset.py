@@ -8,11 +8,20 @@ import gc
 import cv2
 import numpy as np
 import traceback
-from fastapi import APIRouter, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, UploadFile, File, WebSocket, WebSocketDisconnect, Depends, Query
 from core.config import settings
+from core.dependencies import get_current_user
+from core.security import decode_token
 from services.vision import _detectar_tablero, _calcular_esquinas_exteriores, _rectificar
 
-router = APIRouter(prefix="/dataset", tags=["Dataset"])
+# Variable global para capturar el loop de eventos del servidor
+_main_loop: asyncio.AbstractEventLoop | None = None
+
+# Router sin dependencia global para permitir WebSockets por query param
+router = APIRouter(
+    prefix="/dataset", 
+    tags=["Dataset"]
+)
 
 # Estado global del entrenamiento
 training_state = {
@@ -39,7 +48,7 @@ def ensure_dataset_dirs():
 ensure_dataset_dirs()
 
 @router.post("/capture")
-async def capture(file: UploadFile = File(...)):
+async def capture(file: UploadFile = File(...), user=Depends(get_current_user)):
     """
     Recibe un frame de la cámara, detecta el tablero y devuelve 64 recortes.
     """
@@ -96,7 +105,7 @@ async def capture(file: UploadFile = File(...)):
         }
 
 @router.post("/save")
-async def save_squares(payload: dict):
+async def save_squares(payload: dict, user=Depends(get_current_user)):
     """
     Guarda las imágenes etiquetadas por el usuario en disco.
     """
@@ -127,7 +136,7 @@ async def save_squares(payload: dict):
         return {"success": False, "error": str(e)}
 
 @router.get("/stats")
-def get_stats():
+def get_stats(user=Depends(get_current_user)):
     """Devuelve estadísticas del dataset actual."""
     stats = {}
     for cls in settings.CLASSES:
@@ -140,10 +149,14 @@ def get_stats():
     }
 
 @router.post("/train")
-async def start_training():
+async def start_training(user=Depends(get_current_user)):
     """Inicia el proceso de entrenamiento en un hilo separado."""
     if training_state["running"]:
         return {"success": False, "error": "Ya hay un entrenamiento en curso."}
+    
+    # Capturamos el loop del hilo principal antes de lanzar el worker
+    global _main_loop
+    _main_loop = asyncio.get_running_loop()
     
     # Iniciar en background
     thread = threading.Thread(target=_run_training_wrapper, daemon=True)
@@ -152,13 +165,20 @@ async def start_training():
     return {"success": True, "message": "Entrenamiento iniciado."}
 
 @router.get("/train/status")
-def get_train_status():
+def get_train_status(user=Depends(get_current_user)):
     """Polling del estado del entrenamiento."""
     return training_state.copy()
 
 @router.websocket("/train/ws")
-async def train_websocket(websocket: WebSocket):
+async def train_websocket(websocket: WebSocket, token: str = Query(...)):
     """Canal de comunicación en tiempo real para el progreso del entrenamiento."""
+    try:
+        # Validamos el token por query param (los WebSockets en navegador no soportan headers)
+        decode_token(token, expected_type="access")
+    except ValueError:
+        await websocket.close(code=1008) # Policy Violation
+        return
+
     await websocket.accept()
     ws_clients.append(websocket)
     try:
@@ -170,22 +190,16 @@ async def train_websocket(websocket: WebSocket):
             ws_clients.remove(websocket)
 
 def _broadcast_training_update(data: dict):
-    """Envía actualización a todos los WebSockets conectados."""
+    """
+    Envía actualización a todos los WebSockets conectados de forma segura desde otros hilos.
+    """
+    if _main_loop is None:
+        return
+        
     msg = json.dumps(data)
-    loop = None
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        # Si no hay loop en este hilo, esto no debería ocurrir si se usa run_coroutine_threadsafe bien
-        pass
-
-    if loop:
-        for client in ws_clients[:]:
-            try:
-                asyncio.run_coroutine_threadsafe(client.send_text(msg), loop)
-            except:
-                if client in ws_clients:
-                    ws_clients.remove(client)
+    for client in ws_clients[:]:
+        # Usamos el loop capturado globalmente
+        asyncio.run_coroutine_threadsafe(client.send_text(msg), _main_loop)
 
 def _run_training_wrapper():
     """Wrapper para ejecutar el entrenamiento y manejar errores."""

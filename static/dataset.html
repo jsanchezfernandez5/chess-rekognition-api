@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Rekognition · Dataset</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #16a34a;
+            --bg: #f8fafc;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 30px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        h1 { font-size: 24px; margin: 0; }
+        p { color: #64748b; font-size: 14px; margin-top: 5px; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: block;
+            border-bottom: 1px solid #f1f5f9;
+            padding-bottom: 8px;
+        }
+
+        /* --- CÁMARA --- */
+        .camera-box {
+            width: 100%;
+            background: #000;
+            border-radius: 6px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+        }
+
+        video { width: 100%; height: 100%; object-fit: cover; }
+
+        .btn-group {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: white;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        button:hover { background: #f1f5f9; }
+
+        .btn-main {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .btn-main:hover { background: #1d4ed8; }
+
+        .btn-save {
+            background: var(--success);
+            color: white;
+            border-color: var(--success);
+            width: 100%;
+            margin-top: 20px;
+            padding: 15px;
+        }
+
+        /* --- REJILLA --- */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            background: #cbd5e1;
+            padding: 2px;
+            margin-top: 15px;
+        }
+
+        .cell {
+            background: white;
+            aspect-ratio: 1;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .cell img { width: 100%; height: 100%; display: block; }
+
+        .cell.active { outline: 3px solid var(--primary); z-index: 10; }
+        .cell.empty { border: 2px solid #bbf7d0; }
+        .cell.piece { border: 2px solid #fed7aa; }
+
+        .cell-id {
+            position: absolute;
+            top: 2px; left: 2px;
+            font-size: 8px;
+            background: rgba(255,255,255,0.8);
+            padding: 1px 3px;
+            border-radius: 2px;
+        }
+
+        /* --- SELECCIÓN --- */
+        .piece-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .piece-opt {
+            border: 1px solid var(--border);
+            padding: 5px;
+            text-align: center;
+            font-size: 11px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .piece-opt.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        /* --- LOGS --- */
+        #log {
+            font-family: monospace;
+            font-size: 12px;
+            height: 150px;
+            overflow-y: auto;
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .stat-val { font-weight: 700; color: var(--primary); }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Dataset de Ajedrez</h1>
+        <p>Captura imágenes del tablero real para entrenar el sistema de reconocimiento.</p>
+    </header>
+
+    <div class="layout">
+        <!-- Columna Izquierda -->
+        <div class="main">
+            <div class="card">
+                <span class="section-title">Cámara en vivo</span>
+                <div class="camera-box">
+                    <video id="cam" autoplay playsinline muted></video>
+                </div>
+                <div class="btn-group">
+                    <button onclick="initCam()">Reiniciar Cámara</button>
+                    <button class="btn-main" id="btnCapture" onclick="capturar()">Capturar Tablero</button>
+                </div>
+            </div>
+
+            <div class="card hidden" id="gridCard" style="margin-top: 20px;">
+                <span class="section-title">Etiquetar casillas</span>
+                <p>Haz clic en una casilla y elige qué pieza hay. Las vacías se marcan solas.</p>
+                <div class="grid-container" id="grid"></div>
+                
+                <div id="selectorArea" class="hidden">
+                    <p style="margin-top: 15px; font-weight: 600;">Casilla <span id="targetSq">--</span>:</p>
+                    <div class="piece-selector" id="selector"></div>
+                </div>
+
+                <button class="btn-save" onclick="guardar()">Guardar estas 64 muestras</button>
+            </div>
+        </div>
+
+        <!-- Columna Derecha -->
+        <div class="sidebar">
+            <div class="card">
+                <span class="section-title">Estado del entrenamiento</span>
+                <div class="stat-row">
+                    <span>Total imágenes:</span>
+                    <span class="stat-val" id="statTotal">0</span>
+                </div>
+                <div class="stat-row">
+                    <span>Clases completas:</span>
+                    <span class="stat-val" id="statClasses">0/13</span>
+                </div>
+                
+                <button style="width: 100%; margin-top: 15px;" onclick="entrenar()">Entrenar Modelo (CNN)</button>
+                
+                <div id="log">--- Consola de estado ---</div>
+            </div>
+
+            <div class="card" style="margin-top: 20px; font-size: 13px;">
+                <span class="section-title">Consejos rápidos</span>
+                <ul style="padding-left: 18px; margin: 0;">
+                    <li>Pon el tablero plano bajo la cámara.</li>
+                    <li>Evita sombras fuertes que crucen las casillas.</li>
+                    <li>Captura varias posiciones con las mismas piezas.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<canvas id="snap" style="display:none"></canvas>
+
+<script>
+    const CLASSES = ["empty", "w_P", "w_N", "w_B", "w_R", "w_Q", "w_K", "b_P", "b_N", "b_B", "b_R", "b_Q", "b_K"];
+    const NAMES = {
+        empty: "Vacía", w_P: "Peón B", w_N: "Caballo B", w_B: "Alfil B", w_R: "Torre B", w_Q: "Dama B", w_K: "Rey B",
+        b_P: "Peón N", b_N: "Caballo N", b_B: "Alfil N", b_R: "Torre N", b_Q: "Dama N", b_K: "Rey N"
+    };
+
+    let squares = [];
+    let selectedIdx = null;
+    const token = localStorage.getItem("token");
+
+    async function apiFetch(url, options = {}) {
+        const response = await fetch(url, {
+            ...options,
+            headers: { ...options.headers, 'Authorization': `Bearer ${token}` }
+        });
+        if (response.status === 401) addLog("¡Sesión expirada! Por favor, vuelve a entrar.");
+        return response;
+    }
+
+    async function initCam() {
+        if (!token) addLog("⚠️ Sin token. Los cambios no se guardarán.");
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment', width: 1280, height: 720 }
+            });
+            document.getElementById('cam').srcObject = stream;
+        } catch (e) {
+            addLog("Error de cámara: " + e.message);
+        }
+    }
+
+    async function capturar() {
+        const video = document.getElementById('cam');
+        const canvas = document.getElementById('snap');
+        if (!video.videoWidth) return;
+
+        addLog("Detectando tablero...");
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
+        const fd = new FormData(); fd.append('file', blob);
+
+        try {
+            const res = await apiFetch('/dataset/capture', { method: 'POST', body: fd });
+            const data = await res.json();
+
+            if (data.success) {
+                squares = data.squares.map(s => ({ ...s, label: s.suggested_label === 'empty' ? 'empty' : 'w_P' }));
+                renderGrid();
+                document.getElementById('gridCard').classList.remove('hidden');
+                addLog("Tablero listo para etiquetar.");
+            } else {
+                addLog("Error: " + data.error);
+            }
+        } catch (e) { addLog("Error de conexión."); }
+    }
+
+    function renderGrid() {
+        const grid = document.getElementById('grid');
+        grid.innerHTML = squares.map((s, i) => `
+            <div class="cell ${s.label === 'empty' ? 'empty' : 'piece'}" id="sq-${i}" onclick="selectCell(${i})">
+                <img src="${s.image}">
+                <div class="cell-id">${s.id}</div>
+            </div>
+        `).join('');
+        initSelector();
+    }
+
+    function initSelector() {
+        const sel = document.getElementById('selector');
+        sel.innerHTML = CLASSES.map(cls => `<div class="piece-opt" id="opt-${cls}" onclick="applyLabel('${cls}')">${NAMES[cls]}</div>`).join('');
+        document.getElementById('selectorArea').classList.remove('hidden');
+    }
+
+    function selectCell(idx) {
+        if (selectedIdx !== null) document.getElementById(`sq-${selectedIdx}`).classList.remove('active');
+        selectedIdx = idx;
+        document.getElementById(`sq-${idx}`).classList.add('active');
+        document.getElementById('targetSq').textContent = squares[idx].id;
+        
+        document.querySelectorAll('.piece-opt').forEach(el => el.classList.remove('active'));
+        document.getElementById(`opt-${squares[idx].label}`).classList.add('active');
+    }
+
+    function applyLabel(label) {
+        if (selectedIdx === null) return;
+        squares[selectedIdx].label = label;
+        const cell = document.getElementById(`sq-${selectedIdx}`);
+        cell.className = `cell active ${label === 'empty' ? 'empty' : 'piece'}`;
+        document.querySelectorAll('.piece-opt').forEach(el => el.classList.remove('active'));
+        document.getElementById(`opt-${label}`).classList.add('active');
+    }
+
+    async function guardar() {
+        addLog("Guardando...");
+        try {
+            const res = await apiFetch('/dataset/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ squares: squares })
+            });
+            const data = await res.json();
+            if (data.success) {
+                addLog(`Guardadas ${data.saved} imágenes.`);
+                updateStats();
+                document.getElementById('gridCard').classList.add('hidden');
+            }
+        } catch (e) { addLog("Error al guardar."); }
+    }
+
+    async function updateStats() {
+        try {
+            const res = await apiFetch('/dataset/stats');
+            const data = await res.json();
+            document.getElementById('statTotal').textContent = data.total;
+            const ok = Object.values(data.classes).filter(v => v >= 100).length;
+            document.getElementById('statClasses').textContent = `${ok}/13`;
+        } catch (e) {}
+    }
+
+    function addLog(msg) {
+        const log = document.getElementById('log');
+        log.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}<br>` + log.innerHTML;
+    }
+
+    async function entrenar() {
+        if (!confirm("¿Empezar entrenamiento?")) return;
+        try {
+            const res = await apiFetch('/dataset/train', { method: 'POST' });
+            const data = await res.json();
+            addLog(data.message || data.error);
+            if (data.success) initTrainingWS();
+        } catch (e) { addLog("Error al iniciar."); }
+    }
+
+    function initTrainingWS() {
+        const ws = new WebSocket(`${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/dataset/train/ws?token=${token}`);
+        ws.onmessage = (e) => {
+            const d = JSON.parse(e.data);
+            if (d.status === "training") addLog(`Época ${d.epoch}: Acc=${d.accuracy}`);
+            else if (d.status === "done") addLog("✅ ¡Listo!");
+            else if (d.status === "error") addLog("❌ Error: " + d.message);
+        };
+    }
+
+    initCam();
+    updateStats();
+    setInterval(updateStats, 10000);
+</script>
+</body>
+</html>

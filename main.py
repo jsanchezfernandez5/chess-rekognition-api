@@ -89,9 +89,9 @@ def opencv():
     return FileResponse("static/opencv.html")
 
 # Ruta para la herramienta de dataset
-@app.get("/dataset-tool", include_in_schema=False)
+@app.get("/dataset", include_in_schema=False)
 def dataset_tool():
-    return FileResponse("static/dataset_tool.html")
+    return FileResponse("static/dataset.html")
 
 # Ruta DOC personalizada para la interfaz de Swagger
 @app.get("/docs", include_in_schema=False)
