@@ -1,28 +1,31 @@
-# models/usuarios.py
-# Modelo ORM que mapea la tabla 'usuarios' de la base de datos.
+"""Modelo ORM para la tabla de usuarios.
+
+Define la estructura y relaciones del modelo Usuario
+que se mapea a la tabla 'usuarios' en la base de datos.
+"""
 from sqlalchemy import Column, String
 from sqlalchemy.orm import relationship
 from db.database import Base
 
-# Clase Usuario que hereda de Base, representando la tabla 'usuarios' en la BD.
+
 class Usuario(Base):
+    """Representa un usuario registrado en la plataforma.
+
+    Mapea la tabla 'usuarios' y contiene las credenciales,
+    datos personales y relaciones con partidas y retransmisiones.
+    """
     __tablename__ = "usuarios"
 
-    # PRIMARY KEY
     username = Column(String(50), primary_key=True, index=True)
 
-    # Datos personales
     nombre    = Column(String(255), nullable=False)
     apellidos = Column(String(255), nullable=False)
-    password  = Column(String(255), nullable=False) # Almacenamos el hash de la contraseña, no el texto plano
+    password  = Column(String(255), nullable=False)
     mail      = Column(String(255), nullable=False)
 
-    # Relaciones con otras tablas (Partida, Retransmision)
-    # back_populates: crea la relación bidireccional entre modelos
-    # lazy="dynamic": las partidas no se cargan hasta que se accede explícitamente
     partidas         = relationship("Partida",         back_populates="usuario", lazy="dynamic")
     retransmisiones  = relationship("Retransmision",   back_populates="usuario", lazy="dynamic")
 
-    # Método de representación para facilitar debugging y logging (como toString() en java)
     def __repr__(self) -> str:
+        """Representación legible del usuario para depuración y logging."""
         return f"<Usuario username={self.username!r} nombre={self.nombre!r}>"

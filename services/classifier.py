@@ -1,3 +1,8 @@
+"""Módulo de clasificación de piezas de ajedrez mediante un modelo TensorFlow (MobileNetV2).
+
+Proporciona la clase ChessClassifier que carga un modelo preentrenado desde disco y
+clasifica las 64 casillas de un tablero rectificado en un solo batch, devolviendo
+la etiqueta y confianza para cada casilla."""
 import cv2
 import json
 import os
@@ -7,17 +12,31 @@ import tensorflow as tf
 from core.config import settings
 
 class ChessClassifier:
-    """
-    Servicio de clasificación de piezas usando un modelo de TensorFlow (MobileNetV2).
+    """Clasificador de piezas de ajedrez basado en un modelo MobileNetV2 de TensorFlow.
+
+    Gestiona la carga del modelo y los nombres de clases desde el disco, y proporciona
+    un método para clasificar las 64 casillas de un tablero rectificado en un solo batch.
+    Incluye sincronización con RLock para evitar condiciones de carrera durante la carga
+    y la inferencia simultánea.
     """
     def __init__(self):
+        """Inicializa el clasificador cargando el modelo y los nombres de clase desde el disco."""
         self.model = None
         self.class_names = []
-        self._lock = threading.RLock() # Sincronización para evitar race conditions
+        self._lock = threading.RLock()
         self._load()
 
     def _load(self):
-        """Carga el modelo y los nombres de las clases desde el disco."""
+        """Carga el modelo TensorFlow y el archivo de nombres de clase desde el directorio de modelos.
+
+        Busca los archivos chess_model.h5 y class_names.json en MODELS_DIR.
+        Si no existen, el clasificador queda en estado no listo. Utiliza el candado
+        _lock para garantizar que no se realicen predicciones durante la carga.
+
+        Raises:
+            Exception: Si el archivo del modelo existe pero no puede cargarse correctamente.
+                       El error se captura y se muestra en consola sin propagarse.
+        """
         model_path = os.path.join(settings.MODELS_DIR, "chess_model.h5")
         names_path = os.path.join(settings.MODELS_DIR, "class_names.json")
         
@@ -34,17 +53,40 @@ class ChessClassifier:
                 print("No se encontró un modelo entrenado. Por favor, entrena el modelo primero.")
 
     def reload(self):
-        """Recarga el modelo en memoria sin reiniciar el servidor."""
+        """Recarga el modelo y los nombres de clase desde el disco sin necesidad de reiniciar el servidor.
+
+        Útil para actualizar el modelo tras un reentrenamiento en caliente.
+        """
         self._load()
 
     def is_ready(self) -> bool:
-        """Indica si el modelo está listo para realizar predicciones."""
+        """Verifica si el modelo y los nombres de clase están cargados y listos para inferencia.
+
+        Returns:
+            True si el modelo no es None y la lista de nombres de clase no está vacía.
+            False en caso contrario.
+        """
         with self._lock:
             return self.model is not None and len(self.class_names) > 0
 
     def classify_board(self, warped: np.ndarray) -> dict:
-        """
-        Clasifica las 64 casillas de un tablero rectificado en un solo batch.
+        """Clasifica las 64 casillas de un tablero rectificado usando el modelo MobileNetV2.
+
+        Procesa todas las casillas en un solo batch para maximizar el rendimiento.
+        Cada casilla se redimensiona a IMG_SIZE y se convierte a RGB antes de la
+        inferencia. Los resultados incluyen la etiqueta y la confianza para cada
+        casilla identificada por su notación algebraica.
+
+        Args:
+            warped: Imagen del tablero rectificado en vista cenital (400x400).
+
+        Returns:
+            Diccionario con una entrada por cada casilla. La clave es la notación
+            algebraica (ej: "e4") y el valor es otro diccionario con las claves
+            "label" (str) y "confidence" (float entre 0 y 1).
+
+        Raises:
+            RuntimeError: Si el clasificador no está listo (modelo no cargado).
         """
         with self._lock: # Bloquea el acceso al modelo durante la predicción
             if not self.is_ready():

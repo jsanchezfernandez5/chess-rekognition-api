@@ -1,5 +1,10 @@
 # services/engine.py
 # Lógica de negocio relacionada con el motor de ajedrez Stockfish.
+"""Módulo de integración con el motor de ajedrez Stockfish.
+
+Proporciona la clase StockfishService que gestiona la comunicación con el binario
+de Stockfish mediante subprocesos y el protocolo UCI. Ofrece métodos para verificar
+el estado del motor y calcular la mejor jugada dada una posición FEN."""
 import os
 import subprocess
 import pathlib
@@ -10,11 +15,25 @@ from typing import Optional, Tuple, TypedDict
 
 # Tipos para la respuesta del motor.
 class ScoreType(TypedDict):
+    """Tipo estructurado que representa la puntuación calculada por el motor.
+
+    Attributes:
+        type: Tipo de puntuación ("cp" para centipeones, "mate" para mate).
+        value: Valor numérico de la puntuación.
+    """
     type: str
     value: int
 
 # Info del análisis del motor.
 class EngineInfo(TypedDict):
+    """Tipo estructurado con la información detallada del análisis del motor.
+
+    Attributes:
+        score: Puntuación de la posición (puede ser None si no se ha calculado).
+        depth: Profundidad de búsqueda en semimovidas alcanzada por el motor.
+        nodes: Número de nodos explorados durante el análisis.
+        pv: Línea principal (principal variation) como cadena de movimientos UCI.
+    """
     score: Optional[ScoreType]
     depth: int
     nodes: int
@@ -22,6 +41,13 @@ class EngineInfo(TypedDict):
 
 # Status de la respuesta del motor.
 class StatusResponse(TypedDict, total=False):
+    """Tipo estructurado para la respuesta de verificación de estado del motor.
+
+    Attributes:
+        status: Estado del motor ("ok" o "error").
+        message: Mensaje descriptivo del resultado de la verificación.
+        engine: Información de versión del motor Stockfish.
+    """
     status: str
     message: str
     engine: str
@@ -29,8 +55,13 @@ class StatusResponse(TypedDict, total=False):
 # Clase principal para el motor de ajedrez.
 # Gestiona la comunicación con el binario de Stockfish.
 class StockfishService:
-    # Constructor. 
     def __init__(self):
+        """Inicializa el servicio de Stockfish determinando la ruta del binario según el sistema operativo.
+
+        Selecciona el binario adecuado entre las versiones Linux y Windows almacenadas
+        en el directorio engine/. En sistemas Linux, aplica permisos de ejecución (755)
+        al binario si es necesario.
+        """
         # Determinamos la ruta del binario según el SO
         current_dir = pathlib.Path(__file__).parent.parent
         self.stockfish_path = os.path.join(current_dir, "engine", "stockfish-linux-17.1")
@@ -46,10 +77,17 @@ class StockfishService:
             except Exception as e:
                 print(f"Aviso: No se pudieron aplicar permisos al motor: {e}")
 
-    # Método para verificar el estado del motor.
     def check_status(self) -> StatusResponse:
-        """
-        Verifica de forma rápida que el binario existe y responde a comandos UCI.
+        """Verifica que el binario de Stockfish existe y responde correctamente al protocolo UCI.
+
+        Lanza un subproceso con el binario, envía los comandos "uci" y "quit",
+        y comprueba que la respuesta contiene la línea "uciok". Incluye un timeout
+        de 5 segundos para evitar bloqueos indefinidos.
+
+        Returns:
+            StatusResponse con status "ok" e información de versión si el motor
+            responde correctamente. En caso contrario, status "error" con un mensaje
+            descriptivo del fallo.
         """
         if not os.path.exists(self.stockfish_path):
             return {"status": "error", "message": "Binario no encontrado"}
@@ -88,12 +126,28 @@ class StockfishService:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    # Método principal para obtener la mejor jugada.
-    # Calcula la mejor jugada según la posición y el ELO del jugador.
     def get_best_move(self, fen: str, elo: Optional[int] = None, depth: int = 15) -> Tuple[Optional[str], EngineInfo]:
-        """
-        Llama al binario de Stockfish para obtener la mejor jugada y datos de análisis.
-        Retorna (best_move, info_dict)
+        """Calcula la mejor jugada para una posición dada usando Stockfish.
+
+        Comunica con el binario de Stockfish mediante el protocolo UCI, enviando
+        la posición FEN y los parámetros de búsqueda. Si se proporciona un ELO,
+        limita la fuerza del motor mediante UCI_LimitStrength para adaptarse al
+        nivel del jugador. Parsea la salida para extraer la mejor jugada y los
+        datos de análisis (puntuación, profundidad, nodos, línea principal).
+
+        Args:
+            fen: Notación FEN de la posición actual del tablero.
+            elo: Puntuación ELO del jugador para limitar la fuerza del motor.
+                 Si es None, el motor juega a máxima capacidad.
+            depth: Profundidad de búsqueda en semimovidas (por defecto 15).
+
+        Returns:
+            Tupla (best_move, info) donde best_move es la jugada UCI o None si no
+            se encontró, e info es un diccionario EngineInfo con los detalles del análisis.
+
+        Raises:
+            FileNotFoundError: Si el binario de Stockfish no existe en la ruta esperada.
+            TimeoutError: Si el motor excede el tiempo máximo de respuesta (20 segundos).
         """
         if not os.path.exists(self.stockfish_path):
             raise FileNotFoundError(f"El binario de Stockfish no se encuentra en {self.stockfish_path}")

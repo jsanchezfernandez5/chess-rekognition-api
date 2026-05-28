@@ -1,11 +1,15 @@
-# schemas/retransmisiones.py
-# Esquemas para retransmisiones
+"""Schemas Pydantic para la validación de datos de retransmisiones.
+
+Define los modelos de entrada y respuesta para las
+operaciones relacionadas con retransmisiones en directo.
+"""
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 
-# Esquema para la creación de una nueva retransmisión (POST)
+
 class RetransmisionCreate(BaseModel):
+    """Schema para la creación de una nueva retransmisión (POST)."""
     blancas:       Optional[str] = None
     negras:        Optional[str] = None
     resultado:     Optional[str] = None
@@ -14,8 +18,9 @@ class RetransmisionCreate(BaseModel):
     tablero:       Optional[int] = None
     lugar:         Optional[str] = None
 
-# Esquema para la respuesta al cliente (GET)
+
 class RetransmisionResponse(RetransmisionCreate):
+    """Schema de respuesta al cliente con los datos completos de la retransmisión (GET)."""
     id_retransmision:    int
     token:               str
     username:            str
@@ -23,5 +28,4 @@ class RetransmisionResponse(RetransmisionCreate):
     fecha_creacion:      datetime
     fecha_actualizacion: datetime
 
-    # Permite a Pydantic leer directamente de objetos ORM de SQLAlchemy.
     model_config = ConfigDict(from_attributes=True)

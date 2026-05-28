@@ -1,12 +1,18 @@
-# models/partidas.py
+"""Modelo ORM para la tabla de partidas.
+
+Define la estructura y relaciones del modelo Partida
+que se mapea a la tabla 'partidas' en la base de datos.
+"""
 from sqlalchemy import Column, Integer, String, Text, Date, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 from db.database import Base
 
+
 class Partida(Base):
-    """
-    Modelo ORM que representa una partida de ajedrez en la base de datos.
-    Sigue el esquema definido para la tabla 'partidas'.
+    """Representa una partida de ajedrez almacenada en la plataforma.
+
+    Contiene los metadatos de la partida (evento, jugadores, resultado),
+    el contenido PGN completo y la relación con el usuario propietario.
     """
     __tablename__ = "partidas"
 
@@ -15,19 +21,23 @@ class Partida(Base):
     evento         = Column(String(250), nullable=False)
     blancas        = Column(String(250), nullable=False)
     negras         = Column(String(250), nullable=False)
-    fecha          = Column(Date, nullable=False)            # Fecha del evento
-    resultado      = Column(String(7), nullable=False)       # Ej: "1-0", "0-1", "1/2-1/2"
-    pgn            = Column(Text, nullable=False)            # PGN (Portable Game Notation)
-    tipo_partida   = Column(String(2), default=None)         # 'PI' (Partida Introducida) o 'PR' (Partida Retransmitida)
+    fecha          = Column(Date, nullable=False)
+    resultado      = Column(String(7), nullable=False)
+    pgn            = Column(Text, nullable=False)
+    tipo_partida   = Column(String(2), default=None)
     ronda          = Column(Integer)
     tablero        = Column(Integer)
     lugar          = Column(String(250))
     observaciones  = Column(Text)
     fecha_registro = Column(DateTime, nullable=False, server_default=func.now())
 
-    # Relación inversa con el Usuario propietario de la partida.
     usuario = relationship("Usuario", back_populates="partidas")
 
-    # Representación en String para debugging (como toString() en java)
     def __repr__(self) -> str:
-        return f"<Partida id={self.id_partida} evento={self.evento!r} blancas={self.blancas!r} negras={self.negras!r}>"
+        """Representación legible de la partida para depuración y logging."""
+        return (
+            f"<Partida id={self.id_partida}"
+            f" evento={self.evento!r}"
+            f" blancas={self.blancas!r}"
+            f" negras={self.negras!r}>"
+        )

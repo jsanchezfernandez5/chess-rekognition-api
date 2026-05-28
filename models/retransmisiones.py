@@ -1,9 +1,20 @@
+"""Modelo ORM para la tabla de retransmisiones.
+
+Define la estructura y relaciones del modelo Retransmision
+que se mapea a la tabla 'retransmisiones' en la base de datos.
+"""
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from db.database import Base
 
+
 class Retransmision(Base):
+    """Representa una retransmisión en directo de una partida de ajedrez.
+
+    Almacena el token único de la retransmisión, los metadatos
+    de la partida y su estado activo o inactivo.
+    """
     __tablename__ = "retransmisiones"
 
     id_retransmision    = Column(Integer, primary_key=True, autoincrement=True, index=True)

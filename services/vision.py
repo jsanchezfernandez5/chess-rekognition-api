@@ -1,5 +1,10 @@
 # services/vision.py
 # Servicio de visión por computador para detectar el tablero de ajedrez y las piezas.
+"""Módulo de visión por computador para la detección y rectificación del tablero de ajedrez.
+
+Proporciona funciones para detectar el tablero mediante findChessboardCornersSB,
+calcular sus esquinas exteriores, rectificar la perspectiva, analizar las 64 casillas
+y generar imágenes de diagnóstico. La clase VisionService orquesta el pipeline completo."""
 import cv2
 import numpy as np
 import base64
@@ -15,16 +20,34 @@ INNER_CROP_PCT = 0.65
 # Función auxiliar para convertir una imagen numpy a base64.
 # Se usa para enviar la imagen al frontend.
 def _encode_image(img: np.ndarray) -> str:
-    """Convierte un array numpy a base64 para enviar al frontend."""
+    """Convierte una imagen en formato numpy array a una cadena base64 para su envío al frontend.
+
+    Codifica la imagen en formato JPEG con calidad 85 y la empaqueta como data URI.
+
+    Args:
+        img: Imagen como array numpy (BGR).
+
+    Returns:
+        Cadena en formato data URI lista para usar en etiquetas img del frontend.
+    """
     _, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
     return "data:image/jpeg;base64," + base64.b64encode(buffer).decode("utf-8")
 
 # Función para detectar el tablero de ajedrez en una imagen.
 # Usa findChessboardCornersSB para detectar las 49 esquinas internas.
 def _detectar_tablero(frame: np.ndarray):
-    """
-    Detecta el tablero usando findChessboardCornersSB.
-    Devuelve (found, corners) donde corners son las 49 esquinas internas.
+    """Detecta el tablero de ajedrez en una imagen y obtiene las 49 esquinas internas (7x7).
+
+    Utiliza findChessboardCornersSB como método principal por su robustez ante perspectiva
+    y desenfoque. Si falla, recurre a findChessboardCorners clásico. Las esquinas detectadas
+    se refinan a nivel subpíxel para mayor precisión.
+
+    Args:
+        frame: Imagen BGR de entrada.
+
+    Returns:
+        Tupla (found, corners). Si se detecta el tablero, found es True y corners contiene
+        las 49 coordenadas de las esquinas internas. En caso contrario, (False, None).
     """
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -53,9 +76,17 @@ def _detectar_tablero(frame: np.ndarray):
 # Función para calcular las 4 esquinas exteriores del tablero a partir de las 49 esquinas internas.
 # Usa vectores locales por esquina para mayor precisión cuando el tablero está en perspectiva.
 def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
-    """
-    Calcula las 4 esquinas exteriores del tablero completo a partir de las 49 esquinas internas (7x7).
-    Usa vectores locales por esquina para mayor precisión cuando el tablero está en perspectiva.
+    """Calcula las cuatro esquinas exteriores del tablero a partir de las 49 esquinas internas.
+
+    Extrapola una casilla adicional hacia afuera usando vectores locales calculados
+    para cada lado del tablero. Esto permite obtener el perímetro completo incluso
+    cuando el tablero está en perspectiva.
+
+    Args:
+        corners: Array de 49 coordenadas de esquinas internas (salida de _detectar_tablero).
+
+    Returns:
+        Array numpy con las cuatro esquinas exteriores en orden: tl, tr, br, bl.
     """
     tl = corners[0][0]   # fila 0, col 0
     tr = corners[6][0]   # fila 0, col 6
@@ -85,7 +116,17 @@ def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
 
 # Función para aplicar la homografía y obtener la vista cenital del tablero.
 def _rectificar(frame: np.ndarray, exterior: np.ndarray) -> np.ndarray:
-    """Aplica la homografía para obtener vista cenital 400x400."""
+    """Aplica una transformación de perspectiva (homografía) para obtener la vista cenital del tablero.
+
+    La imagen resultante se redimensiona a 400x400 píxeles, con cada casilla ocupando 50x50.
+
+    Args:
+        frame: Imagen original BGR.
+        exterior: Cuatro esquinas exteriores del tablero (de _calcular_esquinas_exteriores).
+
+    Returns:
+        Imagen rectificada de 400x400 con el tablero en vista cenital.
+    """
     dst = np.array([
         [0, 0],
         [BOARD_SIZE, 0],
@@ -102,9 +143,18 @@ def _rectificar(frame: np.ndarray, exterior: np.ndarray) -> np.ndarray:
 # Función para calibrar los umbrales de detección de piezas.
 # Calcula umbrales dinámicamente a partir del tablero rectificado.
 def _calibrar_umbrales(warped: np.ndarray) -> tuple:
-    """
-    Calcula umbrales dinámicamente a partir del tablero rectificado.
-    Funciona con cualquier iluminación sin necesidad de ajuste manual.
+    """Calcula umbrales de detección de forma dinámica según la iluminación del tablero rectificado.
+
+    Analiza la desviación estándar de cada casilla y aplica percentiles para separar
+    casillas ocupadas de vacías. Se adapta automáticamente a cualquier condición de luz
+    sin necesidad de calibración manual.
+
+    Args:
+        warped: Imagen del tablero rectificado en vista cenital.
+
+    Returns:
+        Tupla (std_thresh, edge_thresh) con los umbrales calculados para desviación estándar
+        y detección de bordes respectivamente.
     """
     gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
     stds = []
@@ -142,9 +192,19 @@ def _calibrar_umbrales(warped: np.ndarray) -> tuple:
 # Función para analizar las 64 casillas del tablero.
 # Autocalibra los umbrales según la iluminación actual.
 def _analizar_casillas(warped: np.ndarray) -> tuple:
-    """
-    Analiza las 64 casillas del tablero rectificado.
-    Autocalibra los umbrales según la iluminación actual.
+    """Analiza las 64 casillas del tablero rectificado para determinar qué casillas están ocupadas.
+
+    Autocalibra los umbrales según la iluminación actual mediante _calibrar_umbrales
+    y clasifica cada casilla en ocupada o vacía usando la desviación estándar y el
+    recuento de bordes de la porción central de cada casilla.
+
+    Args:
+        warped: Imagen del tablero rectificado en vista cenital.
+
+    Returns:
+        Tupla (squares, std_thresh, edge_thresh) donde squares es una lista de diccionarios
+        con los datos de cada casilla (id, fila, columna, ocupada, std, bordes, es_clara),
+        y los dos umbrales calculados.
     """
     std_thresh, edge_thresh = _calibrar_umbrales(warped)
     gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
@@ -181,8 +241,17 @@ def _analizar_casillas(warped: np.ndarray) -> tuple:
 
 # Función para generar la vista cenital real del tablero con overlay verde/rojo sobre las casillas.
 def _generar_vista_real(warped: np.ndarray, squares: list) -> np.ndarray:
-    """
-    Vista cenital real con overlay verde/rojo sobre las casillas.
+    """Genera una vista cenital del tablero con overlay visual de ocupación sobre las casillas.
+
+    Las casillas ocupadas se marcan en rojo y las vacías en verde, con bordes de colores
+    y una cuadrícula superpuesta para facilitar la lectura.
+
+    Args:
+        warped: Imagen del tablero rectificado.
+        squares: Lista de diccionarios con los resultados del análisis de casillas.
+
+    Returns:
+        Imagen BGR con el overlay de ocupación aplicado.
     """
     output = warped.copy()
 
@@ -211,9 +280,17 @@ def _generar_vista_real(warped: np.ndarray, squares: list) -> np.ndarray:
 # Función para generar la vista 2D diagnóstica.
 # Tablero sintético con colores clásicos de casillas y marcadores de ocupación.
 def _generar_vista_2d(squares: list) -> np.ndarray:
-    """
-    Vista diagnóstico 2D: tablero sintético con colores
-    de casilla clásicos y marcadores de ocupación.
+    """Genera una vista de diagnóstico 2D con un tablero sintético de colores clásicos.
+
+    Las casillas ocupadas se muestran como rectángulos rojos con la notación algebraica,
+    y las vacías como círculos verdes. Proporciona una representación visual clara del
+    estado de ocupación del tablero.
+
+    Args:
+        squares: Lista de diccionarios con los resultados del análisis de casillas.
+
+    Returns:
+        Imagen BGR sintética de 400x400 representando el tablero de diagnóstico.
     """
     output = np.zeros((BOARD_SIZE, BOARD_SIZE, 3), dtype=np.uint8)
 
@@ -251,9 +328,18 @@ def _generar_vista_2d(squares: list) -> np.ndarray:
 # Frame original con los 49 puntos internos en rojo y el perímetro del tablero en verde.
 def _generar_debug(frame: np.ndarray, corners: np.ndarray,
                    exterior: np.ndarray) -> np.ndarray:
-    """
-    Imagen de debug: frame original con los 49 puntos internos
-    en rojo y el perímetro del tablero en verde.
+    """Genera una imagen de depuración sobre el frame original con anotaciones visuales.
+
+    Dibuja el perímetro del tablero en verde y las 49 esquinas internas detectadas
+    como puntos rojos, permitiendo verificar visualmente la precisión de la detección.
+
+    Args:
+        frame: Imagen original BGR.
+        corners: Coordenadas de las 49 esquinas internas (de _detectar_tablero).
+        exterior: Cuatro esquinas exteriores del tablero (de _calcular_esquinas_exteriores).
+
+    Returns:
+        Imagen BGR con las anotaciones de depuración superpuestas.
     """
     debug = frame.copy()
 
@@ -272,9 +358,23 @@ def _generar_debug(frame: np.ndarray, corners: np.ndarray,
 # Incluye metadatos técnicos para diagnóstico profundo.
 def _generar_collage(debug: np.ndarray, real: np.ndarray, diag: np.ndarray, 
                      occ: int, total: int, stdt: float, edget: float) -> np.ndarray:
-    """
-    Crea una imagen única combinando los 3 estados principales para exportación fácil.
-    Incluye metadatos técnicos para diagnóstico profundo.
+    """Compone un collage con las tres vistas principales del tablero y metadatos técnicos.
+
+    Combina la imagen de depuración, la vista real con overlay y la vista 2D de diagnóstico
+    en una sola imagen. Incluye un pie con información técnica (umbrales, ocupación, marca
+    de tiempo) para facilitar la exportación y el diagnóstico.
+
+    Args:
+        debug: Imagen de depuración con anotaciones.
+        real: Vista cenital real con overlay de ocupación.
+        diag: Vista 2D de diagnóstico sintética.
+        occ: Número de casillas ocupadas detectadas.
+        total: Número total de casillas (64).
+        stdt: Umbral de desviación estándar utilizado.
+        edget: Umbral de detección de bordes utilizado.
+
+    Returns:
+        Imagen BGR del collage completo con pie informativo.
     """
     # Escalar todo a tamaños consistentes
     h_main = 450
@@ -312,16 +412,26 @@ def _generar_collage(debug: np.ndarray, real: np.ndarray, diag: np.ndarray,
 class VisionService:
 
     @staticmethod
-    # Método público que orquesta todo el flujo.
     def detect_and_rectify(image_bytes: bytes) -> dict:
-        """
-        Pipeline completo:
-        1. Decodificar imagen
-        2. Detectar tablero (findChessboardCornersSB)
-        3. Calcular esquinas exteriores
-        4. Rectificar (homografía)
-        5. Analizar 64 casillas
-        6. Generar las 3 imágenes de respuesta
+        """Ejecuta el pipeline completo de detección y rectificación del tablero de ajedrez.
+
+        El flujo de procesamiento incluye:
+        1. Decodificar la imagen desde bytes.
+        2. Detectar el tablero mediante findChessboardCornersSB.
+        3. Calcular las esquinas exteriores del tablero.
+        4. Rectificar la perspectiva mediante homografía.
+        5. Analizar las 64 casillas para determinar ocupación.
+        6. Generar las imágenes de respuesta (vista real, vista 2D, depuración, collage).
+
+        Args:
+            image_bytes: Datos binarios de la imagen de entrada.
+
+        Returns:
+            Diccionario con los resultados del pipeline. Incluye las claves:
+            success (bool), status (str), rectified_real, rectified_2d, debug_image,
+            export_image (cadenas base64), squares (lista de casillas),
+            occupied_count, num_squares y config (umbrales calculados).
+            En caso de error, success es False e incluye error y detail.
         """
         try:
             # 1. Decodificar

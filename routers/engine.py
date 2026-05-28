@@ -1,5 +1,13 @@
 # routers/engine.py
 # Endpoints para interactuar con Stockfish
+
+"""Módulo de interacción con el motor de ajedrez Stockfish.
+
+Proporciona endpoints para consultar el estado del motor,
+obtener la mejor jugada desde una posición FEN y configurar
+parámetros como el nivel ELO y la profundidad de búsqueda.
+"""
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -8,9 +16,17 @@ from services.engine import engine_service
 # Creación del Router de Stockfish
 router = APIRouter(prefix="/engine", tags=["Motor"])
 
-# Esquemas Pydantic
-# Request de Stockfish
 class EngineRequest(BaseModel):
+    """Modelo de solicitud para consultar al motor Stockfish.
+
+    Contiene la posición en formato FEN y los parámetros
+    opcionales de configuración del análisis.
+
+    Attributes:
+        fen: Posición actual del tablero en notación FEN.
+        elo: Nivel ELO objetivo del motor (1320-3190).
+        depth: Profundidad de búsqueda en semimovidas (1-30).
+    """
     fen: str = Field(
         ..., 
         description="Posición en formato FEN (Forsyth-Edwards Notation)",
@@ -31,8 +47,18 @@ class EngineRequest(BaseModel):
         examples=[15]
     )
 
-# Response de Stockfish
 class EngineResponse(BaseModel):
+    """Modelo de respuesta del motor Stockfish.
+
+    Contiene el resultado del análisis junto con información
+    detallada de la evaluación.
+
+    Attributes:
+        ok: Indica si la operación se completó correctamente.
+        best_move: Mejor jugada encontrada en notación UCI.
+        info: Información adicional del análisis (score, depth, pv, nodes).
+        message: Mensaje descriptivo adicional.
+    """
     ok: bool
     best_move: str
     info: Optional[dict] = Field(None, description="Información de análisis (score, depth, pv, nodes)")
@@ -45,8 +71,14 @@ class EngineResponse(BaseModel):
     summary="Verificar salud y versión del motor",
 )
 def get_engine_status():
-    """
-    Confirma que el binario existe y responde correctamente a los comandos UCI.
+    """Verifica el estado y la versión del motor de ajedrez.
+
+    Comprueba que el binario de Stockfish existe y responde
+    correctamente a los comandos UCI, devolviendo información
+    sobre su disponibilidad y versión.
+
+    Returns:
+        Dict con el estado del motor, versión y mensaje informativo.
     """
     return engine_service.check_status()
 
@@ -58,8 +90,21 @@ def get_engine_status():
     summary="Obtiene la mejor jugada dada una posición en FEN",
 )
 def get_move(request: EngineRequest):
-    """
-    Solicita al motor Stockfish que analice la posición y devuelva la mejor jugada.
+    """Obtiene la mejor jugada desde una posición FEN mediante Stockfish.
+
+    Envía la posición al motor de ajedrez, que la analiza con los
+    parámetros especificados (ELO y profundidad) y devuelve la
+    mejor jugada encontrada junto con información de evaluación.
+
+    Args:
+        request: Parámetros de la solicitud (FEN, ELO opcional, depth).
+
+    Returns:
+        EngineResponse con la mejor jugada y análisis asociado.
+
+    Raises:
+        HTTPException 503: Si el binario de Stockfish no está disponible.
+        HTTPException 500: Si ocurre un error interno durante el análisis.
     """
     try:
         best_move, info = engine_service.get_best_move(

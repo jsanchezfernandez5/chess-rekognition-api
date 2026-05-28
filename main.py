@@ -1,5 +1,8 @@
-# main.py - Punto de entrada del servidor FastAPI
-# Este archivo centraliza la configuración de la API, rutas y documentación técnica.
+﻿"""Punto de entrada del servidor FastAPI.
+
+Centraliza la configuración de la API, el registro de rutas,
+la documentación técnica y los endpoints auxiliares.
+"""
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -39,7 +42,6 @@ tags_metadata = [
     }
 ]
 
-# Inicialización de la app con metadatos
 app = FastAPI(
     title="Chess Rekognition API",
     description="### Reconocimiento visual de jugadas en partidas de ajedrez presencial.",
@@ -50,7 +52,7 @@ app = FastAPI(
         "email": "jsanchezfernandez5@uoc.edu",
     },
     license_info={
-        "name": "CC BY-SA 4.0", 
+        "name": "CC BY-SA 4.0",
         "url": "https://creativecommons.org/licenses/by-sa/4.0/"
     },
     docs_url=None, # Desactivamos la URL por defecto para personalizarla abajo
@@ -78,34 +80,39 @@ app.include_router(vision.router)
 app.include_router(retransmision.router)
 app.include_router(dataset.router)
 
-# Ruta del favicon del navegador
+
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
+    """Devuelve el favicon de la aplicación para los navegadores."""
     return FileResponse("static/favicon.ico")
 
-# Ruta para pruebas de visión
+
 @app.get("/opencv", include_in_schema=False)
 def opencv():
+    """Sirve la página de pruebas del módulo de visión por computadora."""
     return FileResponse("static/opencv.html")
 
-# Ruta para la herramienta de dataset
+
 @app.get("/dataset", include_in_schema=False)
 def dataset_tool():
+    """Sirve la herramienta interactiva de captura de imágenes para el dataset."""
     return FileResponse("static/dataset.html")
 
-# Ruta DOC personalizada para la interfaz de Swagger
+
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui():
+    """Genera la interfaz de Swagger UI personalizada con el favicon de la aplicación."""
     return get_swagger_ui_html(
         openapi_url="/openapi.json",
         title="Documentación - Chess Rekognition API",
         swagger_favicon_url="/static/favicon.ico"
     )
 
-# Endpoint de comprobación rápida para ver si el servidor responde
+
 @app.get("/", tags=["Sistema"], summary="Estado de la API")
 def root():
+    """Comprueba que el servidor está operativo y devuelve su estado actual."""
     return {
-        "status": "online", 
+        "status": "online",
         "message": "Servidor Chess Rekognition operando correctamente."
     }

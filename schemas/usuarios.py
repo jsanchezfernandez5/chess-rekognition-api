@@ -1,13 +1,13 @@
-# schemas/usuarios.py
-# Schemas Pydantic para validación de datos de entrada/salida relacionados con usuarios.
-# Los field descriptions aparecen automáticamente en Swagger /docs.
+"""Schemas Pydantic para la validación de datos de usuarios.
+
+Define los modelos de entrada y salida para el registro,
+login y consulta de perfil de usuario.
+"""
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
-# Esquema para el registro de un nuevo usuario (POST /register).
+
 class UsuarioCreate(BaseModel):
-    """
-    Schema para el endpoint POST /register. Valida los datos del nuevo usuario.
-    """
+    """Schema para el registro de un nuevo usuario (POST /register)."""
     username: str = Field(
         ...,
         min_length=3,
@@ -39,24 +39,22 @@ class UsuarioCreate(BaseModel):
         examples=["jsanchezfernandez5@uoc.edu"],
     )
 
-# Esquema de respuesta pública del usuario (GET /whoami y respuesta POST /register).
+
 class UsuarioResponse(BaseModel):
-    """
-    Schema de respuesta. Nunca incluye el password.
-    Se usa en /whoami y en la respuesta del registro.
+    """Schema de respuesta pública del usuario.
+
+    Nunca incluye el password. Se usa en /whoami y en la respuesta del registro.
     """
     username:  str
     nombre:    str
     apellidos: str
     mail:      str
-    # Permite crear desde un objeto ORM (como el modelo Usuario de SQLAlchemy) sin necesidad de convertirlo a dict primero.
+
     model_config = ConfigDict(from_attributes=True)
 
-# Esquema para el login (POST /auth/login).
+
 class LoginRequest(BaseModel):
-    """
-    Credenciales para el endpoint POST /auth/login.
-    """
+    """Credenciales para el inicio de sesión (POST /auth/login)."""
     username: str = Field(
         ...,
         description="Nombre de usuario registrado.",
@@ -68,21 +66,21 @@ class LoginRequest(BaseModel):
         examples=["chess_test01"],
     )
 
-# Esquema de respuesta del login y del refresh (POST /auth/login y POST /auth/refresh).
+
 class TokenResponse(BaseModel):
-    """
-    Respuesta del login y del refresh.
-    Contiene ambos tokens JWT.
+    """Respuesta del login y del refresh.
+
+    Contiene ambos tokens JWT (access y refresh).
     """
     access_token:  str = Field(..., description="Token de acceso. Expira en 30 minutos.")
     refresh_token: str = Field(..., description="Token de refresco. Expira en 7 días.")
     token_type:    str = Field(default="bearer", description="Tipo de token. Siempre 'bearer'.")
 
-# Esquema para el refresh token (POST /auth/refresh).
+
 class RefreshRequest(BaseModel):
-    """
-    Body para el endpoint POST /auth/refresh.
-    Requiere solo el refresh token para obtener un nuevo access token.
+    """Body para la renovación del token (POST /auth/refresh).
+
+    Requiere el refresh token para obtener un nuevo access token.
     """
     refresh_token: str = Field(
         ...,

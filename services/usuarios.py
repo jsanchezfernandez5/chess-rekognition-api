@@ -1,5 +1,10 @@
 # services/usuarios.py
 # Lógica de negocio para gestión de usuarios
+"""Módulo de gestión de usuarios.
+
+Proporciona la función de registro de nuevos usuarios con validación de
+unicidad de username y email, hash de contraseña con bcrypt, y envío de
+correo de bienvenida mediante el servicio de email."""
 from sqlalchemy.orm import Session
 from core.security import hash_password
 from models.usuarios import Usuario
@@ -9,20 +14,26 @@ from services.email import send_welcome_email
 # Función para registrar un nuevo usuario.
 # Se llama desde el endpoint POST /usuarios/register.
 async def register(data: UsuarioCreate, db: Session) -> Usuario:
-    """
-    Registra un nuevo usuario en la BD.
+    """Registra un nuevo usuario en la base de datos y envía el correo de bienvenida.
 
-    Flujo:
-      1. Verifica que username y email no estén en uso
-      2. Hashea la contraseña con bcrypt
-      3. Inserta el usuario en BD
-      4. Envía email de bienvenida (async, no bloquea)
+    El flujo de registro incluye:
+    1. Verificar que el username y el email no estén ya registrados.
+    2. Hashear la contraseña con bcrypt para almacenamiento seguro.
+    3. Insertar el nuevo usuario en la base de datos.
+    4. Enviar un correo de bienvenida de forma asíncrona.
+    Si el envío del email falla, la transacción se revierte completamente.
+
+    Args:
+        data: Esquema UsuarioCreate con los datos del nuevo usuario (username,
+              nombre, apellidos, password, mail).
+        db: Sesión de base de datos SQLAlchemy.
 
     Returns:
-        El objeto Usuario recién creado.
+        Objeto Usuario recién creado con los datos persistidos.
 
     Raises:
-        ValueError: si el username o email ya están registrados.
+        ValueError: Si el username o el email ya están registrados, o si ocurre
+                    un error al enviar el correo de bienvenida.
     """
     # Verificar username duplicado
     if db.query(Usuario).filter(Usuario.username == data.username).first():

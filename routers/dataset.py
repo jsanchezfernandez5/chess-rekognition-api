@@ -1,3 +1,11 @@
+"""Módulo de gestión del dataset y entrenamiento del modelo de clasificación.
+
+Proporciona endpoints para capturar y etiquetar casillas de tableros
+de ajedrez, así como para entrenar el modelo MobileNetV2 con los
+datos recopilados. Incluye comunicación WebSocket para monitorizar
+el progreso del entrenamiento en tiempo real.
+"""
+
 import os
 import uuid
 import base64
@@ -42,7 +50,11 @@ training_state = {
 ws_clients: list[WebSocket] = []
 
 def ensure_dataset_dirs():
-    """Asegura que existan las carpetas para el dataset."""
+    """Crea las carpetas necesarias para el dataset y los modelos.
+
+    Verifica que existan los directorios para cada clase del dataset
+    y el directorio de modelos. Los crea si no existen.
+    """
     for cls in settings.CLASSES:
         os.makedirs(os.path.join(settings.DATASET_DIR, cls), exist_ok=True)
     os.makedirs(settings.MODELS_DIR, exist_ok=True)
@@ -51,8 +63,19 @@ ensure_dataset_dirs()
 
 @router.post("/capture", summary="Captura y recorta el tablero")
 async def capture(file: UploadFile = File(...), user=Depends(get_current_user)):
-    """
-    Recibe un frame de la cámara, detecta el tablero y devuelve 64 recortes.
+    """Captura una imagen y extrae las 64 casillas del tablero.
+
+    Recibe un frame de la cámara, detecta el tablero mediante visión
+    clásica, lo rectifica y recorta cada una de las 64 casillas.
+    Cada recorte se codifica en base64 e incluye una heurística
+    de sugerencia de etiqueta basada en la desviación estándar.
+
+    Args:
+        file: Imagen subida con el tablero a procesar.
+        user: Usuario autenticado (requerido).
+
+    Returns:
+        Dict con los 64 recortes, sus coordenadas y sugerencias de etiqueta.
     """
     try:
         data = await file.read()
@@ -108,8 +131,18 @@ async def capture(file: UploadFile = File(...), user=Depends(get_current_user)):
 
 @router.post("/save", summary="Guarda recortes etiquetados")
 async def save_squares(payload: dict, user=Depends(get_current_user)):
-    """
-    Guarda las imágenes etiquetadas por el usuario en disco.
+    """Guarda en disco las casillas etiquetadas por el usuario.
+
+    Almacena las imágenes de las casillas en el directorio
+    correspondiente a su clase, usando un nombre de archivo
+    UUID único para evitar colisiones.
+
+    Args:
+        payload: Diccionario con la lista de recortes etiquetados.
+        user: Usuario autenticado (requerido).
+
+    Returns:
+        Dict con el número de imágenes guardadas correctamente.
     """
     try:
         saved = 0
@@ -139,7 +172,17 @@ async def save_squares(payload: dict, user=Depends(get_current_user)):
 
 @router.get("/stats", summary="Estadísticas del dataset")
 def get_stats(user=Depends(get_current_user)):
-    """Devuelve estadísticas del dataset actual."""
+    """Obtiene las estadísticas actuales del dataset de entrenamiento.
+
+    Cuenta el número de imágenes almacenadas para cada clase
+    y calcula el total de muestras disponibles.
+
+    Args:
+        user: Usuario autenticado (requerido).
+
+    Returns:
+        Dict con el recuento por clase y el total de imágenes.
+    """
     stats = {}
     for cls in settings.CLASSES:
         path = os.path.join(settings.DATASET_DIR, cls)
@@ -152,7 +195,18 @@ def get_stats(user=Depends(get_current_user)):
 
 @router.post("/train", summary="Inicia el entrenamiento")
 async def start_training(user=Depends(get_current_user)):
-    """Inicia el proceso de entrenamiento en un hilo separado."""
+    """Inicia el proceso de entrenamiento del modelo en un hilo separado.
+
+    Lanza el entrenamiento del modelo MobileNetV2 en un hilo
+    background, capturando el event loop del hilo principal
+    para poder enviar actualizaciones por WebSocket.
+
+    Args:
+        user: Usuario autenticado (requerido).
+
+    Returns:
+        Dict indicando si el entrenamiento se inició correctamente.
+    """
     if training_state["running"]:
         return {"success": False, "error": "Ya hay un entrenamiento en curso."}
     
@@ -168,12 +222,32 @@ async def start_training(user=Depends(get_current_user)):
 
 @router.get("/train/status", summary="Estado del entrenamiento")
 def get_train_status(user=Depends(get_current_user)):
-    """Polling del estado del entrenamiento."""
+    """Obtiene el estado actual del entrenamiento mediante polling.
+
+    Devuelve una copia del estado global del entrenamiento,
+    incluyendo época actual, pérdida, precisión y mensajes
+    de progreso.
+
+    Args:
+        user: Usuario autenticado (requerido).
+
+    Returns:
+        Dict con el estado completo del entrenamiento.
+    """
     return training_state.copy()
 
 @router.websocket("/train/ws")
 async def train_websocket(websocket: WebSocket, token: str = Query(...)):
-    """Canal de comunicación en tiempo real para el progreso del entrenamiento."""
+    """Canal WebSocket para recibir actualizaciones del entrenamiento.
+
+    Establece una conexión WebSocket que envía actualizaciones
+    periódicas sobre el progreso del entrenamiento. La autenticación
+    se realiza mediante un query param con el token JWT.
+
+    Args:
+        websocket: Conexión WebSocket del cliente.
+        token: Token JWT de acceso para autenticación.
+    """
     try:
         # Validamos el token por query param (los WebSockets en navegador no soportan headers)
         decode_token(token, expected_type="access")
@@ -192,8 +266,14 @@ async def train_websocket(websocket: WebSocket, token: str = Query(...)):
             ws_clients.remove(websocket)
 
 def _broadcast_training_update(data: dict):
-    """
-    Envía actualización a todos los WebSockets conectados de forma segura desde otros hilos.
+    """Envía una actualización a todos los clientes WebSocket conectados.
+
+    Función segura para usar desde hilos secundarios. Utiliza el
+    event loop capturado del hilo principal para programar el envío
+    de datos JSON a cada cliente WebSocket activo.
+
+    Args:
+        data: Diccionario con los datos de progreso del entrenamiento.
     """
     if _main_loop is None:
         return
@@ -204,7 +284,12 @@ def _broadcast_training_update(data: dict):
         asyncio.run_coroutine_threadsafe(client.send_text(msg), _main_loop)
 
 def _run_training_wrapper():
-    """Wrapper para ejecutar el entrenamiento y manejar errores."""
+    """Wrapper que ejecuta la lógica de entrenamiento y captura errores.
+
+    Llama a la lógica principal de entrenamiento y, si ocurre
+    cualquier excepción, actualiza el estado global a 'error'
+    y notifica a los clientes WebSocket.
+    """
     try:
         _run_training_logic()
     except Exception as e:
@@ -217,7 +302,18 @@ def _run_training_wrapper():
         _broadcast_training_update(training_state.copy())
 
 def _run_training_logic():
-    """Lógica principal de entrenamiento con TensorFlow."""
+    """Ejecuta el pipeline completo de entrenamiento del modelo.
+
+    Realiza las siguientes etapas:
+    1. Carga y partición del dataset (80% entrenamiento, 20% validación).
+    2. Construcción del modelo MobileNetV2 con transfer learning.
+    3. Entrenamiento con data augmentation, early stopping y reducción de LR.
+    4. Guardado del modelo entrenado en el sistema de archivos.
+    5. Limpieza de memoria (TensorFlow session y garbage collector).
+
+    Durante todo el proceso, actualiza el estado global y notifica
+    a los clientes WebSocket conectados.
+    """
     training_state.update({
         "running": True,
         "status": "loading",
@@ -297,8 +393,14 @@ def _run_training_logic():
     })
     _broadcast_training_update(training_state.copy())
 
-    # Callback personalizado para WebSocket
     class WSUpdateCallback(tf.keras.callbacks.Callback):
+        """Callback de Keras que notifica el progreso por WebSocket.
+
+        Al finalizar cada época de entrenamiento, actualiza el
+        estado global con las métricas obtenidas (pérdida, precisión,
+        pérdida de validación, precisión de validación) y las
+        difunde a todos los clientes WebSocket conectados.
+        """
         def on_epoch_end(self, epoch, logs=None):
             training_state.update({
                 "epoch": epoch + 1,

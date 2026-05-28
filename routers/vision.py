@@ -1,5 +1,13 @@
 # routers/vision.py
 # Visión por computador para el reconocimiento del tablero de ajedrez
+
+"""Módulo de visión por computador para el reconocimiento del tablero.
+
+Proporciona endpoints para detectar y rectificar tableros de ajedrez,
+clasificar piezas mediante un modelo ML y detectar movimientos entre
+dos estados consecutivos del tablero.
+"""
+
 import cv2
 import numpy as np
 import traceback
@@ -21,9 +29,17 @@ router = APIRouter(
 # Endpoint para reconocer el tablero
 @router.post("/recognize-board", summary="Reconoce y rectifica un tablero de ajedrez")
 async def recognize_board(file: UploadFile = File(...)):
-    """
-    Recibe una imagen (desde la cámara o archivo) 
-    y devuelve el tablero rectificado en perspectiva cenital.
+    """Reconoce y rectifica un tablero de ajedrez desde una imagen.
+
+    Recibe una imagen capturada desde la cámara o un archivo,
+    detecta el tablero mediante procesamiento de visión clásica
+    y devuelve una vista rectificada en perspectiva cenital (400x400).
+
+    Args:
+        file: Imagen subida en formato JPEG/PNG.
+
+    Returns:
+        Dict con el resultado de la detección y el tablero rectificado.
     """
     try:
         contents = await file.read()
@@ -41,7 +57,14 @@ async def recognize_board(file: UploadFile = File(...)):
 # Endpoint para obtener estado del motor de visión
 @router.get("/status", summary="Estado del motor de visión")
 def vision_status():
-    """Devuelve la versión de OpenCV para verificar que el módulo está cargado."""
+    """Obtiene el estado del módulo de visión por computador.
+
+    Verifica que el módulo de OpenCV está correctamente cargado
+    y devuelve información sobre su versión.
+
+    Returns:
+        Dict con el estado operativo y la versión de OpenCV.
+    """
     return {
         "estado": "operativo",
         "modulo": "OpenCV",
@@ -51,9 +74,19 @@ def vision_status():
 # Endpoint para clasificar las piezas del tablero
 @router.post("/classify", summary="Clasifica las 64 casillas del tablero")
 async def classify_board(file: UploadFile = File(...)):
-    """
-    Recibe un frame, detecta el tablero y usa el modelo ML para clasificar 
-    cada una de las 64 casillas (empty, w_P, b_R, etc.).
+    """Clasifica las 64 casillas del tablero de ajedrez mediante ML.
+
+    Recibe una imagen, detecta y rectifica el tablero, luego utiliza
+    el modelo de clasificación (MobileNetV2) para identificar el
+    contenido de cada casilla: vacía ('empty') o pieza con color
+    (ej. 'w_P', 'b_R', etc.). Finalmente, genera el FEN completo
+    del estado del tablero.
+
+    Args:
+        file: Imagen subida con el tablero a clasificar.
+
+    Returns:
+        Dict con el estado de cada casilla, el FEN generado y flag de éxito.
     """
     try:
         if not classifier.is_ready():
@@ -88,7 +121,15 @@ async def classify_board(file: UploadFile = File(...)):
 # Endpoint para recargar el modelo ML desde disco
 @router.post("/classify/reload", summary="Recarga el modelo ML desde disco")
 def reload_model():
-    """Recarga el modelo en memoria sin reiniciar el servidor."""
+    """Recarga el modelo de clasificación desde disco en caliente.
+
+    Vuelve a cargar el modelo ML guardado en el sistema de archivos
+    sin necesidad de reiniciar el servidor. Útil tras reentrenar
+    el modelo desde el módulo de dataset.
+
+    Returns:
+        Dict indicando si la recarga fue exitosa y el estado del modelo.
+    """
     classifier.reload()
     return {"success": True, "ready": classifier.is_ready()}
 
@@ -99,9 +140,19 @@ async def detect_move_endpoint(
     file: UploadFile = File(...),
     prev_fen: str = Form(...)
 ):
-    """
-    Recibe un frame de la cámara y el FEN completo del estado anterior.
-    Devuelve el movimiento legal que se ha producido (si existe).
+    """Detecta el movimiento de ajedrez entre dos estados del tablero.
+
+    Recibe un frame de la cámara y el FEN del estado anterior del
+    tablero. Clasifica las piezas del nuevo estado, compara con el
+    estado previo y determina el movimiento legal realizado, si existe.
+
+    Args:
+        file: Imagen actual del tablero.
+        prev_fen: FEN completo del estado anterior del tablero.
+
+    Returns:
+        Dict con el movimiento detectado (origen, destino, pieza)
+        y flag de éxito.
     """
     try:
         if not classifier.is_ready():

@@ -1,5 +1,12 @@
 # routers/usuarios.py
 # Endpoints de gestión de usuarios
+
+"""Módulo de gestión de usuarios del sistema.
+
+Proporciona los endpoints para el registro de nuevas cuentas
+de usuario en la aplicación.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -30,6 +37,23 @@ router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 )
 # La función del endpoint llama al servicio de usuario para manejar la lógica de negocio.
 async def register(body: UsuarioCreate, db: Session = Depends(get_db)):
+    """Registra un nuevo usuario en el sistema.
+
+    Crea una cuenta nueva con los datos proporcionados. La contraseña
+    se almacena hasheada con bcrypt. El username y el email deben
+    ser únicos en la base de datos.
+
+    Args:
+        body: Datos del nuevo usuario (username, email, password).
+        db: Sesión de base de datos.
+
+    Returns:
+        UsuarioResponse con los datos del usuario creado.
+
+    Raises:
+        HTTPException 409: Si el username o el email ya existen.
+        HTTPException 422: Si los datos de entrada no son válidos.
+    """
     try:
         return await usuarios.register(body, db)
     except ValueError as e:

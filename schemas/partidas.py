@@ -1,11 +1,15 @@
-# schemas/partidas.py
-# Esquemas de validación para partidas de ajedrez
+"""Schemas Pydantic para la validación de datos de partidas.
+
+Define los modelos de entrada, actualización y respuesta
+para las operaciones CRUD de partidas de ajedrez.
+"""
 from datetime import date, datetime
 from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
-# Esquema para la creación de una nueva partida (POST)
+
 class PartidaCreate(BaseModel):
+    """Schema para la creación de una nueva partida (POST)."""
     evento:          str = Field(..., max_length=250, description="Nombre del torneo o evento.")
     blancas:         str = Field(..., max_length=250, description="Nombre del jugador con blancas.")
     negras:          str = Field(..., max_length=250, description="Nombre del jugador con negras.")
@@ -18,8 +22,9 @@ class PartidaCreate(BaseModel):
     lugar:           Optional[str] = Field(None, max_length=250)
     observaciones:   Optional[str] = None
 
-# Esquema para actualización parcial (PATCH/PUT)
+
 class PartidaUpdate(BaseModel):
+    """Schema para la actualización parcial de una partida (PATCH/PUT)."""
     evento:          Optional[str] = Field(None, max_length=250)
     blancas:         Optional[str] = Field(None, max_length=250)
     negras:          Optional[str] = Field(None, max_length=250)
@@ -32,8 +37,9 @@ class PartidaUpdate(BaseModel):
     lugar:           Optional[str] = Field(None, max_length=250)
     observaciones:   Optional[str] = None
 
-# Esquema para la respuesta al cliente (GET)
+
 class PartidaResponse(BaseModel):
+    """Schema de respuesta al cliente con los datos completos de la partida (GET)."""
     id_partida:      int
     username:        str
     evento:          str
@@ -49,5 +55,4 @@ class PartidaResponse(BaseModel):
     observaciones:   Optional[str]
     fecha_registro:  datetime
 
-    # Permite a Pydantic leer directamente de objetos ORM de SQLAlchemy.
     model_config = ConfigDict(from_attributes=True)

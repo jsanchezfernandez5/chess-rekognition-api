@@ -1,10 +1,19 @@
-# core/config.py
-# Settings (carga .env y configuración de la aplicación)
+﻿"""Configuración de la aplicación.
+
+Carga variables de entorno mediante Pydantic Settings
+y provee una instancia singleton accesible desde cualquier módulo.
+"""
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
-# Configuración de la aplicación usando Pydantic BaseSettings
+
 class Settings(BaseSettings):
+    """Configuración centralizada de la aplicación.
+
+    Lee las variables del archivo .env y expone propiedades
+    como la URL de conexión a la base de datos y parámetros JWT.
+    """
+
     # BASE DE DATOS
     DB_HOST: str
     DB_PORT: int = 3306
@@ -37,9 +46,9 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        """
-        Construye la URL de conexión SQLAlchemy a partir de las variables individuales. 
-        Se usa pymysql como driver para MySQL/MariaDB.
+        """Construye la URL de conexión SQLAlchemy a partir de las variables individuales.
+
+        Usa pymysql como driver para MySQL o MariaDB.
         """
         return (
             f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}"
@@ -51,16 +60,15 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
 
-# Función para obtener la configuración de la aplicación.
-# Patrón Singlenton usando lru_cache para evitar múltiples instancias.
+
 @lru_cache()
 def get_settings() -> Settings:
-    """
-    Singleton de configuración usando lru_cache.
-    Se instancia una sola vez y se reutiliza en toda la aplicación evitando releer el .env en cada request.
+    """Retorna una instancia singleton de Settings.
+
+    Utiliza lru_cache para que la configuración se cargue una sola vez
+    y se reutilice en toda la aplicación, evitando releer el .env en cada request.
     """
     return Settings()
 
-# Instancia global de configuración que se puede importar en cualquier módulo de la aplicación
-# Uso: from core.config import settings
+
 settings = get_settings()
