@@ -1,22 +1,33 @@
 # services/vision.py
-# Servicio de visión por computador para detectar el tablero de ajedrez y las piezas.
-"""Módulo de visión por computador para la detección y rectificación del tablero de ajedrez.
+"""
+Módulo de visión por computador con OpenCV para la detección y rectificación del tablero de ajedrez.
 
-Proporciona funciones para detectar el tablero mediante findChessboardCornersSB,
-calcular sus esquinas exteriores, rectificar la perspectiva, analizar las 64 casillas
-y generar imágenes de diagnóstico. La clase VisionService orquesta el pipeline completo."""
+Proporciona funciones:
+    - Detectar el tablero mediante findChessboardCornersSB.
+    - Calcular sus esquinas exteriore.
+    - Rectificar la perspectiva a vista cenital (homografía).
+    - Analizar las 64 casillas y generar imágenes de diagnóstico. 
+    
+La clase VisionService orquesta el pipeline completo.
+"""
+import chess
 import cv2
 import numpy as np
 import base64
 import traceback
 
+# Dimensiones y constantes del tablero
 BOARD_SIZE = 400
 CELL_SIZE = BOARD_SIZE // 8
 COLS = "abcdefgh"
+
+# Porcentaje del centro de cada casilla que se utiliza para el análisis (el 65% central)
 INNER_CROP_PCT = 0.65
 
+# Método auxiliar para codificar imágenes en formato base64 para el frontend
 def _encode_image(img: np.ndarray) -> str:
-    """Convierte una imagen en formato numpy array a una cadena base64 para su envío al frontend.
+    """
+    Convierte una imagen en formato numpy array a una cadena base64 para su envío al frontend.
 
     Codifica la imagen en formato JPEG con calidad 85 y la empaqueta como data URI.
 
@@ -29,20 +40,24 @@ def _encode_image(img: np.ndarray) -> str:
     _, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
     return "data:image/jpeg;base64," + base64.b64encode(buffer).decode("utf-8")
 
+# Método para detectar el tablero de ajedrez en una imagen
 def _detectar_tablero(frame: np.ndarray):
-    """Detecta el tablero de ajedrez en una imagen y obtiene las 49 esquinas internas (7x7).
+    """
+    Detecta el tablero de ajedrez en una imagen y obtiene las 49 esquinas internas (7x7).
 
-    Utiliza findChessboardCornersSB como método principal por su robustez ante perspectiva
-    y desenfoque. Si falla, recurre a findChessboardCorners clásico. Las esquinas detectadas
-    se refinan a nivel subpíxel para mayor precisión.
+    - Utiliza findChessboardCornersSB como método principal por su robustez ante perspectiva y desenfoque. 
+    - Si falla, recurre a findChessboardCorners clásico. 
+    - Las esquinas detectadas se refinan a nivel subpíxel para mayor precisión.
 
     Args:
         frame: Imagen BGR de entrada.
 
     Returns:
-        Tupla (found, corners). Si se detecta el tablero, found es True y corners contiene
-        las 49 coordenadas de las esquinas internas. En caso contrario, (False, None).
+        Tupla (found, corners). 
+        Si se detecta el tablero, found es True y corners contiene las 49 coordenadas de las esquinas internas. 
+        En caso contrario, (False, None).
     """
+    # Convertir la imagen a escala de grises
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # Intento principal con findChessboardCornersSB (más robusto ante perspectiva y desenfoque)
@@ -61,7 +76,6 @@ def _detectar_tablero(frame: np.ndarray):
     if not found:
         return False, None
 
-    # Refinar a subpíxel
     # Refinamiento a nivel subpíxel para mayor precisión en la homografía
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
@@ -69,11 +83,8 @@ def _detectar_tablero(frame: np.ndarray):
     return True, corners
 
 def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
-    """Calcula las cuatro esquinas exteriores del tablero a partir de las 49 esquinas internas.
-
-    Extrapola una casilla adicional hacia afuera usando vectores locales calculados
-    para cada lado del tablero. Esto permite obtener el perímetro completo incluso
-    cuando el tablero está en perspectiva.
+    """
+    Calcula las cuatro esquinas exteriores del tablero a partir de las 49 esquinas internas.
 
     Args:
         corners: Array de 49 coordenadas de esquinas internas (salida de _detectar_tablero).
@@ -102,8 +113,10 @@ def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
         dtype=np.float32
     )
 
+# Función para rectificar la perspectiva del tablero
 def _rectificar(frame: np.ndarray, exterior: np.ndarray) -> np.ndarray:
-    """Aplica una transformación de perspectiva (homografía) para obtener la vista cenital del tablero.
+    """
+    Aplica una transformación de perspectiva (homografía) para obtener la vista cenital del tablero.
 
     La imagen resultante se redimensiona a 400x400 píxeles, con cada casilla ocupando 50x50.
 
@@ -123,31 +136,31 @@ def _rectificar(frame: np.ndarray, exterior: np.ndarray) -> np.ndarray:
 
     # Matriz de homografía que mapea la perspectiva original a cenital
     M = cv2.getPerspectiveTransform(exterior, dst)
+
+    # Aplica la transformación de perspectiva
     warped = cv2.warpPerspective(frame, M, (BOARD_SIZE, BOARD_SIZE))
     return warped
 
+# Función para calibrar umbrales de detección
 def _calibrar_umbrales(warped: np.ndarray) -> tuple:
-    """Calcula umbrales de detección de forma dinámica según la iluminación del tablero rectificado.
-
-    Analiza la desviación estándar de cada casilla y aplica percentiles para separar
-    casillas ocupadas de vacías. Se adapta automáticamente a cualquier condición de luz
-    sin necesidad de calibración manual.
+    """
+    Calcula umbrales de detección de forma dinámica según la iluminación del tablero rectificado.
 
     Args:
         warped: Imagen del tablero rectificado en vista cenital.
 
     Returns:
-        Tupla (std_thresh, edge_thresh) con los umbrales calculados para desviación estándar
-        y detección de bordes respectivamente.
+        Tupla (std_thresh, edge_thresh) con los umbrales calculados para desviación estándar y detección de bordes.
     """
     gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
     stds = []
 
+    # Recorre cada casilla del tablero
     for row in range(8):
         for col in range(8):
+            # Calcula la posición y extrae el 65% central de cada casilla
             x, y = col * CELL_SIZE, row * CELL_SIZE
             cell = gray[y:y+CELL_SIZE, x:x+CELL_SIZE]
-            # Solo el 65% central para evitar ruido en bordes de casilla
             h, w = cell.shape
             ch, cw = int(h * INNER_CROP_PCT), int(w * INNER_CROP_PCT)
             yo, xo = (h - ch) // 2, (w - cw) // 2
@@ -172,42 +185,62 @@ def _calibrar_umbrales(warped: np.ndarray) -> tuple:
 
     return std_thresh, edge_thresh
 
+# Función para analizar las casillas del tablero
 def _analizar_casillas(warped: np.ndarray) -> tuple:
-    """Analiza las 64 casillas del tablero rectificado para determinar qué casillas están ocupadas.
-
-    Autocalibra los umbrales según la iluminación actual mediante _calibrar_umbrales
-    y clasifica cada casilla en ocupada o vacía usando la desviación estándar y el
-    recuento de bordes de la porción central de cada casilla.
+    """
+    Analiza las 64 casillas del tablero rectificado para determinar qué casillas están ocupadas.
 
     Args:
         warped: Imagen del tablero rectificado en vista cenital.
 
     Returns:
-        Tupla (squares, std_thresh, edge_thresh) donde squares es una lista de diccionarios
-        con los datos de cada casilla (id, fila, columna, ocupada, std, bordes, es_clara),
-        y los dos umbrales calculados.
+        Tupla (squares, std_thresh, edge_thresh) dond: 
+        - squares es una lista de diccionarios con los datos de cada casilla 
+        (id, fila, columna, ocupada, std, bordes, es_clara) y
+        - y los dos umbrales calculados.
     """
+    # Calibra los umbrales de detección de forma dinámica
     std_thresh, edge_thresh = _calibrar_umbrales(warped)
+
+    # Convierte la imagen a escala de grises
     gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+
+    # Detecta los bordes de las piezas
     edges = cv2.Canny(gray, 50, 150)
+
+    # Inicializa la lista de casillas
     squares = []
 
+    # Itera sobre cada casilla del tablero
     for row in range(8):
         for col in range(8):
             x, y = col * CELL_SIZE, row * CELL_SIZE
+
+            # Extrae la porción correspondiente de la imagen en escala de grises
             cell_gray = gray[y:y+CELL_SIZE, x:x+CELL_SIZE]
+
+            # Extrae la porción correspondiente de la imagen con bordes detectados
             cell_edges = edges[y:y+CELL_SIZE, x:x+CELL_SIZE]
 
+            # Calcula el tamaño de la porción interna a analizar (65% del tamaño de la casilla)
             h, w = cell_gray.shape
             ch, cw = int(h * INNER_CROP_PCT), int(w * INNER_CROP_PCT)
             y_off, x_off = (h - ch) // 2, (w - cw) // 2
+
+            # Extrae la porción central de cada imagen
             inner_gray = cell_gray[y_off:y_off+ch, x_off:x_off+cw]
             inner_edges = cell_edges[y_off:y_off+ch, x_off:x_off+cw]
 
+            # Calcula la desviación estándar de la porción central
             std = float(np.std(inner_gray))
+
+            # Cuenta los bordes detectados en la porción central
             edge_count = int(np.sum(inner_edges > 0))
+            
+            # Determina si la casilla está ocupada
             occupied = std > std_thresh or edge_count > edge_thresh
 
+            # Añade los datos de la casilla a la lista
             squares.append({
                 "id": f"{COLS[col]}{8 - row}",
                 "row": row,
@@ -218,13 +251,16 @@ def _analizar_casillas(warped: np.ndarray) -> tuple:
                 "is_light": (row + col) % 2 == 0
             })
 
+    # Devuelve los datos de las casillas y los umbrales calculados
     return squares, std_thresh, edge_thresh
 
+# Función para generar la vista cenital del tablero
 def _generar_vista_real(warped: np.ndarray, squares: list) -> np.ndarray:
-    """Genera una vista cenital del tablero con overlay visual de ocupación sobre las casillas.
+    """
+    Genera una vista cenital del tablero con overlay visual de ocupación sobre las casillas.
 
-    Las casillas ocupadas se marcan en rojo y las vacías en verde, con bordes de colores
-    y una cuadrícula superpuesta para facilitar la lectura.
+    - Las casillas ocupadas se marcan en rojo y las vacías en verde, 
+    - con bordes de colores y una cuadrícula superpuesta para facilitar la lectura.
 
     Args:
         warped: Imagen del tablero rectificado.
@@ -233,36 +269,49 @@ def _generar_vista_real(warped: np.ndarray, squares: list) -> np.ndarray:
     Returns:
         Imagen BGR con el overlay de ocupación aplicado.
     """
+    # Copia la imagen warped
     output = warped.copy()
 
+    # Itera sobre cada casilla del tablero
     for sq in squares:
+        # Calcula la posición de la casilla
         x, y = sq["col"] * CELL_SIZE, sq["row"] * CELL_SIZE
+
+        # Determina el color y la transparencia del overlay
         color = (0, 80, 0) if not sq["occupied"] else (0, 0, 180)
         alpha = 0.18
+
+        # Crea un overlay con el color y la transparencia
         overlay = output.copy()
+
+        # Dibujar el rectángulo de la casilla
         cv2.rectangle(overlay, (x+2, y+2),
                       (x+CELL_SIZE-2, y+CELL_SIZE-2), color, -1)
+
+        # Combina el overlay con la imagen original
         cv2.addWeighted(overlay, alpha, output, 1 - alpha, 0, output)
 
+        # Dibuja el borde de la casilla
         border_color = (0, 200, 80) if not sq["occupied"] else (60, 60, 220)
-        cv2.rectangle(output, (x+2, y+2),
-                      (x+CELL_SIZE-2, y+CELL_SIZE-2), border_color, 1)
+        cv2.rectangle(output, (x+2, y+2), (x+CELL_SIZE-2, y+CELL_SIZE-2), border_color, 1)
 
-    # Cuadrícula
+    # Dibuja una cuadrícula sobre el tablero
     for i in range(9):
         cv2.line(output, (i*CELL_SIZE, 0),
                  (i*CELL_SIZE, BOARD_SIZE), (80, 80, 80), 1)
         cv2.line(output, (0, i*CELL_SIZE),
                  (BOARD_SIZE, i*CELL_SIZE), (80, 80, 80), 1)
 
+    # Devuelve la imagen con el overlay de ocupación aplicado
     return output
 
+# Función para generar la vista 2D del tablero
 def _generar_vista_2d(squares: list) -> np.ndarray:
-    """Genera una vista de diagnóstico 2D con un tablero sintético de colores clásicos.
+    """
+    Genera una vista de diagnóstico 2D con un tablero sintético de colores clásicos.
 
-    Las casillas ocupadas se muestran como rectángulos rojos con la notación algebraica,
-    y las vacías como círculos verdes. Proporciona una representación visual clara del
-    estado de ocupación del tablero.
+    Las casillas ocupadas se muestran como rectángulos rojos con la notación algebraica 
+    y las vacías como círculos verdes. 
 
     Args:
         squares: Lista de diccionarios con los resultados del análisis de casillas.
@@ -270,44 +319,50 @@ def _generar_vista_2d(squares: list) -> np.ndarray:
     Returns:
         Imagen BGR sintética de 400x400 representando el tablero de diagnóstico.
     """
+    # Crea una imagen sintética de 400x400 representando el tablero
     output = np.zeros((BOARD_SIZE, BOARD_SIZE, 3), dtype=np.uint8)
 
-    COLOR_LIGHT = (210, 200, 180)
-    COLOR_DARK  = (100, 70,  50)
-    COLOR_OCC   = (60,  60,  220)
-    COLOR_FREE  = (40,  180, 80)
+    # Definición de colores
+    COLOR_LIGHT = (210, 200, 180)   # Casillas claras
+    COLOR_DARK  = (100, 70,  50)   # Casillas oscuras
+    COLOR_OCC   = (60,  60,  220)   # Casillas ocupadas
+    COLOR_FREE  = (40,  180, 80)   # Casillas vacías
 
+    # Itera sobre cada casilla del tablero
     for sq in squares:
+        # Calcula la posición de la casilla
         x, y = sq["col"] * CELL_SIZE, sq["row"] * CELL_SIZE
-        base = COLOR_LIGHT if sq["is_light"] else COLOR_DARK
-        cv2.rectangle(output, (x, y),
-                      (x+CELL_SIZE, y+CELL_SIZE), base, -1)
 
+        # Determina el color base según si la casilla es clara u oscura
+        base = COLOR_LIGHT if sq["is_light"] else COLOR_DARK
+
+        # Dibujar el rectángulo de la casilla
+        cv2.rectangle(output, (x, y), (x+CELL_SIZE, y+CELL_SIZE), base, -1)
+
+        # Dibujar el contenido de la casilla
         if sq["occupied"]:
             cv2.rectangle(output, (x+4, y+4),
                           (x+CELL_SIZE-4, y+CELL_SIZE-4), COLOR_OCC, -1)
             cv2.putText(output, sq["id"], (x+6, y+CELL_SIZE-8),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.28, (255, 255, 255), 1)
         else:
+            # Dibuja un círculo verde en el centro de la casilla vacía
             cv2.circle(output,
                        (x + CELL_SIZE//2, y + CELL_SIZE//2),
                        4, COLOR_FREE, -1)
 
-    # Cuadrícula fina
+    # Dibuja una cuadrícula fina sobre el tablero
     for i in range(9):
-        cv2.line(output, (i*CELL_SIZE, 0),
-                 (i*CELL_SIZE, BOARD_SIZE), (50, 50, 50), 1)
-        cv2.line(output, (0, i*CELL_SIZE),
-                 (BOARD_SIZE, i*CELL_SIZE), (50, 50, 50), 1)
+        cv2.line(output, (i*CELL_SIZE, 0), (i*CELL_SIZE, BOARD_SIZE), (50, 50, 50), 1)
+        cv2.line(output, (0, i*CELL_SIZE), (BOARD_SIZE, i*CELL_SIZE), (50, 50, 50), 1)
 
     return output
 
+# Función para generar una imagen de depuración
 def _generar_debug(frame: np.ndarray, corners: np.ndarray,
                    exterior: np.ndarray) -> np.ndarray:
-    """Genera una imagen de depuración sobre el frame original con anotaciones visuales.
-
-    Dibuja el perímetro del tablero en verde y las 49 esquinas internas detectadas
-    como puntos rojos, permitiendo verificar visualmente la precisión de la detección.
+    """
+    Genera una imagen de depuración sobre el frame original con anotaciones visuales.
 
     Args:
         frame: Imagen original BGR.
@@ -317,9 +372,10 @@ def _generar_debug(frame: np.ndarray, corners: np.ndarray,
     Returns:
         Imagen BGR con las anotaciones de depuración superpuestas.
     """
+    # Copia la imagen frame
     debug = frame.copy()
 
-    # Perímetro verde del tablero
+    # Dibuja el perímetro del tablero en verde
     pts = exterior.reshape((-1, 1, 2)).astype(np.int32)
     cv2.polylines(debug, [pts], True, (0, 220, 80), 3)
 
@@ -330,13 +386,18 @@ def _generar_debug(frame: np.ndarray, corners: np.ndarray,
 
     return debug
 
-def _generar_collage(debug: np.ndarray, real: np.ndarray, diag: np.ndarray, 
-                     occ: int, total: int, stdt: float, edget: float) -> np.ndarray:
-    """Compone un collage con las tres vistas principales del tablero y metadatos técnicos.
-
-    Combina la imagen de depuración, la vista real con overlay y la vista 2D de diagnóstico
-    en una sola imagen. Incluye un pie con información técnica (umbrales, ocupación, marca
-    de tiempo) para facilitar la exportación y el diagnóstico.
+# Función para generar un collage con las tres vistas principales del tablero
+def _generar_collage(
+    debug: np.ndarray, 
+    real: np.ndarray, 
+    diag: np.ndarray, 
+    occ: int, 
+    total: int, 
+    stdt: float, 
+    edget: float
+) -> np.ndarray:
+    """
+    Crea un collage con las tres vistas principales del tablero y metadatos técnicos.
 
     Args:
         debug: Imagen de depuración con anotaciones.
@@ -376,13 +437,41 @@ def _generar_collage(debug: np.ndarray, real: np.ndarray, diag: np.ndarray,
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cv2.putText(footer, ts, (collage.shape[1]-150, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (100, 100, 100), 1)
     
+    # Retorna el collage
     return np.vstack([collage, footer])
 
+# Función auxiliar para convertir etiquetas de piezas
+def label_to_piece(label: str) -> chess.Piece | None:
+    """
+    Convierte una etiqueta del clasificador ('w_P', 'b_N', 'empty') a chess.Piece.
+    """
+    if label == "empty":
+        return None
+    
+    # Obtiene el color y el símbolo de la pieza
+    color = chess.WHITE if label.startswith("w_") else chess.BLACK
+    symbol = label.split("_")[1]
+
+    # Devuelve la pieza
+    return chess.Piece.from_symbol(symbol if color == chess.WHITE else symbol.lower())
+
+# Función auxiliar para convertir el estado del tablero a FEN
+def board_state_to_fen_board(board_state: dict) -> chess.Board:
+    """Convierte un dict {sq_id: label} a un objeto chess.Board."""
+    board = chess.Board(fen=None)
+    for sq_name, label in board_state.items():
+        piece = label_to_piece(label)
+        if piece:
+            board.set_piece_at(chess.parse_square(sq_name), piece)
+    return board
+
+# Clase VisionService
 class VisionService:
 
     @staticmethod
     def detect_and_rectify(image_bytes: bytes) -> dict:
-        """Ejecuta el pipeline completo de detección y rectificación del tablero de ajedrez.
+        """
+        Ejecuta el pipeline completo de detección y rectificación del tablero de ajedrez.
 
         El flujo de procesamiento incluye:
         1. Decodificar la imagen desde bytes.

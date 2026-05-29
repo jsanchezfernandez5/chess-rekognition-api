@@ -1,196 +1,217 @@
-# services/engine.py
-# Lógica de negocio relacionada con el motor de ajedrez Stockfish.
-"""Módulo de integración con el motor de ajedrez Stockfish.
-
-Proporciona la clase StockfishService que gestiona la comunicación con el binario
-de Stockfish mediante subprocesos y el protocolo UCI. Ofrece métodos para verificar
-el estado del motor y calcular la mejor jugada dada una posición FEN."""
+"""
+Módulo de integración con el motor de ajedrez Stockfish.
+"""
 import os
-import subprocess
-import pathlib
 import platform
-from typing import Optional, Tuple, TypedDict
+import pathlib
+import threading
+import logging
 
+import chess
+from stockfish import Stockfish
 
-class ScoreType(TypedDict):
-    """Tipo estructurado que representa la puntuación calculada por el motor.
+# Log
+logger = logging.getLogger("services.engine")
 
-    Attributes:
-        type: Tipo de puntuación ("cp" para centipeones, "mate" para mate).
-        value: Valor numérico de la puntuación.
+# Ruta al binario
+_BASE_DIR = pathlib.Path(__file__).parent.parent
+
+# En producción (Railway/Linux) se usa el binario Linux; en local Windows el .exe
+_STOCKFISH_PATH = str(
+    _BASE_DIR / "engine" / (
+        "stockfish-windows-17.1.exe"
+        if platform.system() == "Windows"
+        else "stockfish-linux-17.1"
+    )
+)
+
+# Parámetros base del motor
+_ENGINE_PARAMS = {
+    "Threads": 1,
+    "Move Overhead": 30,
+}
+
+# Lock global: evita llamadas concurrentes al binario
+_ENGINE_LOCK = threading.Lock()
+
+# Tabla ELO → Skill Level. Mapeo no lineal calibrado para Stockfish. Skill Level 0-20.
+# UCI_LimitStrength NO se usa porque `go depth` lo anula.
+_ELO_SKILL_TABLE = [
+    (1320, 0),  (1400, 1),  (1500, 2),  (1600, 4),
+    (1700, 5),  (1800, 7),  (1900, 9),  (2000, 10),
+    (2100, 12), (2200, 13), (2300, 14), (2400, 15),
+    (2500, 16), (2600, 17), (2700, 18), (2800, 19),
+    (2900, 19), (3000, 20), (3190, 20),
+]
+
+# Función para convertir ELO a Skill Level
+def _elo_to_skill(elo: int) -> int:
     """
-    type: str
-    value: int
-
-class EngineInfo(TypedDict):
-    """Tipo estructurado con la información detallada del análisis del motor.
-
-    Attributes:
-        score: Puntuación de la posición (puede ser None si no se ha calculado).
-        depth: Profundidad de búsqueda en semimovidas alcanzada por el motor.
-        nodes: Número de nodos explorados durante el análisis.
-        pv: Línea principal (principal variation) como cadena de movimientos UCI.
+    Convierte un valor ELO (1320-3190) al Skill Level correspondiente (0-20).
+    Usa interpolación lineal entre los puntos de la tabla calibrada.
     """
-    score: Optional[ScoreType]
-    depth: int
-    nodes: int
-    pv: str
+    if elo <= _ELO_SKILL_TABLE[0][0]:
+        return _ELO_SKILL_TABLE[0][1]
+    if elo >= _ELO_SKILL_TABLE[-1][0]:
+        return _ELO_SKILL_TABLE[-1][1]
 
-class StatusResponse(TypedDict, total=False):
-    """Tipo estructurado para la respuesta de verificación de estado del motor.
+    for i in range(1, len(_ELO_SKILL_TABLE)):
+        if elo < _ELO_SKILL_TABLE[i][0]:
+            elo_low,  skill_low  = _ELO_SKILL_TABLE[i - 1]
+            elo_high, skill_high = _ELO_SKILL_TABLE[i]
+            ratio = (elo - elo_low) / (elo_high - elo_low)
+            return round(skill_low + ratio * (skill_high - skill_low))
 
-    Attributes:
-        status: Estado del motor ("ok" o "error").
-        message: Mensaje descriptivo del resultado de la verificación.
-        engine: Información de versión del motor Stockfish.
+    return _ELO_SKILL_TABLE[-1][1]
+
+# Función para crear una instancia de Stockfish
+def _create_engine() -> Stockfish | None:
     """
-    status: str
-    message: str
-    engine: str
+    Crea y devuelve una instancia fresca de Stockfish, o None si falla.
+    """
+    if not os.path.isfile(_STOCKFISH_PATH):
+        logger.error(f"Binario no encontrado: {_STOCKFISH_PATH}")
+        return None
 
+    # En Linux aplicamos permisos de ejecución por si el binario llegó sin ellos
+    if platform.system() != "Windows":
+        try:
+            os.chmod(_STOCKFISH_PATH, 0o755)
+        except Exception as e:
+            logger.warning(f"No se pudieron aplicar permisos: {e}")
+
+    try:
+        # Retorna una instancia de Stockfish
+        eng = Stockfish(path=_STOCKFISH_PATH, parameters=_ENGINE_PARAMS)
+        return eng
+    except Exception as e:
+        logger.error(f"No se pudo inicializar Stockfish: {e}")
+        return None
+
+# Función para cerrar el proceso de Stockfish de forma segura
+def _safe_cleanup(eng: Stockfish | None) -> None:
+    """
+    Cierra el proceso de Stockfish de forma segura.
+    """
+    try:
+        if eng and hasattr(eng, "_stockfish") and eng._stockfish is not None:
+            process = eng._stockfish
+            if process.poll() is None:
+                try:
+                    eng.send_quit_command()
+                    process.wait(timeout=1.0)
+                except Exception:
+                    pass
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=1.5)
+                    except Exception:
+                        process.kill()
+                        process.wait()
+    except Exception as e:
+        logger.error(f"Error limpiando proceso Stockfish: {e}")
+
+# Clase principal
 class StockfishService:
-    def __init__(self):
-        """Inicializa el servicio de Stockfish con la ruta al binario según el SO."""
-        current_dir = pathlib.Path(__file__).parent.parent
-        self.stockfish_path = os.path.join(current_dir, "engine", "stockfish-linux-17.1")
-        
-        if platform.system() == "Windows":
-            self.stockfish_path = os.path.join(current_dir, "engine", "stockfish-windows-17.1.exe")
-        
-        # Permisos de ejecución necesarios en Linux
-        if platform.system() != "Windows" and os.path.exists(self.stockfish_path):
-            try:
-                os.chmod(self.stockfish_path, int('755', 8))
-            except Exception as e:
-                print(f"Aviso: No se pudieron aplicar permisos al motor: {e}")
 
-    def check_status(self) -> StatusResponse:
-        """Verifica que Stockfish responde al protocolo UCI correctamente.
-
-        Lanza un subproceso, envía "uci"/"quit" y busca "uciok" en la respuesta.
+    # Método para verificar el estado del binario
+    def check_status(self) -> dict:
+        """
+        Verifica que el binario de Stockfish existe y es accesible.
 
         Returns:
-            StatusResponse con "ok" y versión, o "error" con mensaje.
+            Dict con status 'ok' o 'error' y detalles.
         """
-        if not os.path.exists(self.stockfish_path):
-            return {"status": "error", "message": "Binario no encontrado"}
-        
-        try:
-            process = subprocess.Popen(
-                [self.stockfish_path],
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, text=True
-            )
-            try:
-                outs, _ = process.communicate(input="uci\nquit\n", timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                return {"status": "error", "message": "Timeout al comunicar con el motor"}
-            
-            uciok = False
-            version = "Stockfish"
-            for line in outs.splitlines():
-                if "Stockfish" in line:
-                    version = line
-                if line == "uciok":
-                    uciok = True
-                    break
-            if uciok:
-                return {"status": "ok", "engine": version}
-            return {"status": "error", "message": "Fallo de respuesta UCI"}
-        except Exception as e:
-            return {"status": "error", "message": str(e)}
+        if not os.path.isfile(_STOCKFISH_PATH):
+            return {
+                "status": "error",
+                "engine": "Stockfish",
+                "binary_exists": False,
+                "detail": f"Binario no encontrado en {_STOCKFISH_PATH}",
+            }
+        return {
+            "status": "ok",
+            "engine": "Stockfish 17.1",
+            "binary_exists": True,
+            "path": _STOCKFISH_PATH,
+        }
 
+    # Método para obtener la mejor jugada
     def get_best_move(
-        self, fen: str, elo: Optional[int] = None, depth: int = 15
-    ) -> Tuple[Optional[str], EngineInfo]:
-        """Calcula la mejor jugada para una posición FEN usando Stockfish.
-
-        Se comunica con el binario mediante protocolo UCI. Si se proporciona ELO,
-        limita la fuerza con UCI_LimitStrength. Parsea la salida para extraer
-        la jugada y métricas de análisis.
+        self,
+        fen: str,
+        elo: int | None = None,
+        depth: int = 15,
+    ) -> tuple[str | None, dict]:
+        """
+        Calcula la mejor jugada para una posición FEN.
 
         Args:
-            fen: Posición en notación FEN.
-            elo: ELO para limitar fuerza (None = máxima capacidad).
-            depth: Profundidad de búsqueda en semimovidas.
+            fen:   Posición en notación FEN.
+            elo:   ELO deseado (1320-3190). None = fuerza máxima.
+            depth: Profundidad de búsqueda (1-30).
 
         Returns:
-            Tupla (best_move, info) con jugada UCI y detalles del análisis.
+            Tupla (best_move, info). 
+            Si la partida ya terminó, best_move es None e info contiene 'game_over', 'result' y 'reason'.
 
         Raises:
-            FileNotFoundError: Si el binario no existe.
-            TimeoutError: Si el motor excede 20 segundos.
+            RuntimeError: Si el motor no está disponible.
         """
-        if not os.path.exists(self.stockfish_path):
-            raise FileNotFoundError(f"Binario no encontrado en {self.stockfish_path}")
+        # Validación básica del FEN
+        if not fen or any(c in fen for c in ("\n", "\r", ";")):
+            raise ValueError("FEN no válido")
 
-        process = subprocess.Popen(
-            [self.stockfish_path],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True
-        )
+        # Detección de partida terminada antes de llamar al motor
+        board = chess.Board(fen)
+        if board.is_game_over():
+            if board.is_checkmate():
+                reason = "checkmate"
+            elif board.is_stalemate():
+                reason = "stalemate"
+            elif board.is_insufficient_material():
+                reason = "insufficient_material"
+            else:
+                reason = "draw"
+            return None, {"game_over": True, "result": board.result(), "reason": reason}
 
-        try:
-            commands = "uci\nsetoption name Threads value 1\n"
-
-            if elo is not None:
-                # Interpolación lineal ELO → Skill Level (0-20)
-                # Rango Stockfish: 1320 (skill 0) a 3190 (skill 20)
-                MIN_ELO, MAX_ELO, SKILL_LEVELS = 1320, 3190, 20
-                skill = int(round((elo - MIN_ELO) / ((MAX_ELO - MIN_ELO) / SKILL_LEVELS)))
-                skill = max(0, min(skill, 20))
-
-                commands += "setoption name UCI_LimitStrength value true\n"
-                commands += f"setoption name UCI_Elo value {elo}\n"
-                commands += f"setoption name Skill Level value {skill}\n"
-
-            commands += "ucinewgame\n"
-            commands += f"position fen {fen}\n"
-            commands += f"go depth {depth}\n"
+        with _ENGINE_LOCK:
+            eng = _create_engine()
+            if eng is None:
+                raise RuntimeError("Motor Stockfish no disponible")
 
             try:
-                outs, _ = process.communicate(input=commands, timeout=20)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                raise TimeoutError("El motor excedió el tiempo máximo de respuesta.")
+                eng.set_fen_position(fen)
 
-            best_move = None
-            info: EngineInfo = {"score": None, "depth": 0, "nodes": 0, "pv": ""}
+                # Nivel de dificultad: solo Skill Level, nunca UCI_LimitStrength
+                if elo is not None:
+                    elo = max(1320, min(int(elo), 3190))
+                    eng.set_skill_level(_elo_to_skill(elo))
+                else:
+                    # Fuerza máxima: Skill Level 20
+                    eng.set_skill_level(20)
 
-            # Parseo de la salida UCI: busca líneas "info" con métricas y "bestmove" con jugada
-            for line in outs.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
+                # Profundidad de búsqueda
+                depth = max(1, min(int(depth), 30))
+                eng.set_depth(depth)
 
-                if line.startswith("info "):
-                    parts = line.split(" ")
-                    # Extrae profundidad, nodos y puntuación por palabras clave
-                    if "depth" in parts:
-                        idx = parts.index("depth")
-                        info["depth"] = int(parts[idx + 1])
-                    if "nodes" in parts:
-                        idx = parts.index("nodes")
-                        info["nodes"] = int(parts[idx + 1])
-                    if "score" in parts:
-                        idx = parts.index("score")
-                        score_type = parts[idx + 1]  # "cp" (centipeones) o "mate"
-                        score_val = parts[idx + 2]
-                        info["score"] = {"type": score_type, "value": int(score_val)}
-                    if "pv" in parts:
-                        idx = parts.index("pv")
-                        info["pv"] = " ".join(parts[idx + 1:])
+                # Recogemos los parámetros: best_move, evaluation y top_moves
+                best_move  = eng.get_best_move()
+                evaluation = eng.get_evaluation()
+                top_moves  = eng.get_top_moves(3)
 
-                if line.startswith("bestmove"):
-                    parts = line.split(" ")
-                    best_move = parts[1]
+                # Retornamos la mejor jugada y la información adicional
+                return best_move, {
+                    "evaluation": evaluation,
+                    "top_moves":  top_moves,
+                    "depth":      depth,
+                    "skill_level": _elo_to_skill(elo) if elo else 20,
+                }
 
-            return best_move, info
+            finally:
+                # Cerrar el proceso de Stockfish de forma segura
+                _safe_cleanup(eng)
 
-        finally:
-            if process.poll() is None:
-                process.kill()
-
-
+# Instancia global utilizada por el router
 engine_service = StockfishService()

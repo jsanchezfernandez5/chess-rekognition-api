@@ -8,7 +8,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, usuarios, partidas, engine, vision, retransmision, dataset
+
+# Importamos los routers
+from routers import auth, usuarios, partidas, engine, vision, dataset, retransmision
 
 # Metadatos para organizar la documentación de la API en categorías.
 tags_metadata = [
@@ -42,6 +44,7 @@ tags_metadata = [
     }
 ]
 
+# Inicialización de la API con Swagger UI personalizado
 app = FastAPI(
     title="Chess Rekognition API",
     description="### Reconocimiento visual de jugadas en partidas de ajedrez presencial.",
@@ -61,7 +64,7 @@ app = FastAPI(
 # Monta el directorio de archivos estáticos para servir recursos como el favicon y las páginas HTML auxiliares.
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Configura CORS para permitir solicitudes desde cualquier origen, lo que es útil durante el desarrollo y para aplicaciones frontend que consumen esta API.
+# Configura CORS para permitir solicitudes desde cualquier origen.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -71,35 +74,36 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Registra los routers de cada módulo para organizar las rutas de la API según su funcionalidad.
+# ROUTERS. Registra los routers de cada módulo para organizar las rutas de la API según su funcionalidad.
 app.include_router(auth.router)
 app.include_router(usuarios.router)
 app.include_router(partidas.router)
 app.include_router(engine.router)
 app.include_router(vision.router)
-app.include_router(retransmision.router)
 app.include_router(dataset.router)
+app.include_router(retransmision.router)
 
-# Endpoint favorito para servir el favicon de la aplicación
+# --------------------- ENDPOINTS DE SERVICIO ------------------------------------------------
+
+# Endpoint para servir el favicon de la aplicación
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     """Devuelve el favicon de la aplicación para los navegadores."""
     return FileResponse("static/favicon.ico")
 
-# Endpoint para servir la página de pruebas del módulo de visión por computadora, que incluye ejemplos de uso de OpenCV para el reconocimiento del tablero.
+# Endpoint pruebas de OpenCV para el reconocimiento del tablero.
 @app.get("/opencv", include_in_schema=False)
 def opencv():
     """Sirve la página de pruebas del módulo de visión por computadora."""
     return FileResponse("static/opencv.html")
 
-# Endpoint para servir la herramienta interactiva de captura de imágenes para el dataset, 
-# que permite a los usuarios generar nuevas muestras para entrenar el modelo de reconocimiento visual.
+# Endpoint CAPTURA IMAGENES para el dataset y ENTREAR el modelo de reconocimiento visual.
 @app.get("/dataset", include_in_schema=False)
 def dataset_tool():
     """Sirve la herramienta interactiva de captura de imágenes para el dataset."""
     return FileResponse("static/dataset.html")
 
-# Endpoint personalizado para servir la documentación de Swagger UI, que incluye un favicon personalizado y un título específico para la API.
+# Endpoint para servir la documentación de Swagger UI.
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui():
     """Genera la interfaz de Swagger UI personalizada con el favicon de la aplicación."""

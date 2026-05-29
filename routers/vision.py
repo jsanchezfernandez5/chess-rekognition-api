@@ -1,33 +1,31 @@
-"""Módulo de visión por computador para el reconocimiento del tablero.
-
-Proporciona endpoints para detectar y rectificar tableros de ajedrez,
-clasificar piezas mediante un modelo ML y detectar movimientos entre
-dos estados consecutivos del tablero.
 """
-
+Módulo de visión por computador.
+"""
 import cv2
 import numpy as np
 import traceback
 from fastapi import APIRouter, UploadFile, File, Form
 
-from services.vision import VisionService, _detectar_tablero, _calcular_esquinas_exteriores, _rectificar
+from services.vision import VisionService, _detectar_tablero, _calcular_esquinas_exteriores, _rectificar, board_state_to_fen_board
 from services.classifier import classifier
 from services.move_detector import detect_move as _detect_move
-from utils.chess_utils import board_state_to_fen_board
 
+# Creación del router.
 router = APIRouter(
     prefix="/vision",
     tags=["Visión"],
     responses={404: {"description": "No encontrado"}},
 )
 
-@router.post("/recognize-board", summary="Reconoce y rectifica un tablero de ajedrez")
+# Endpoint para reconocer y rectificar el tablero.
+@router.post(
+    "/recognize-board", 
+    summary="Reconoce y rectifica un tablero de ajedrez"
+)
 async def recognize_board(file: UploadFile = File(...)):
-    """Reconoce y rectifica un tablero de ajedrez desde una imagen.
-
-    Recibe una imagen capturada desde la cámara o un archivo,
-    detecta el tablero mediante procesamiento de visión clásica
-    y devuelve una vista rectificada en perspectiva cenital (400x400).
+    """
+    Reconoce y rectifica un tablero de ajedrez desde una imagen.
+    Devuelve una vista rectificada en perspectiva cenital (400x400).
 
     Args:
         file: Imagen subida en formato JPEG/PNG.
@@ -48,12 +46,14 @@ async def recognize_board(file: UploadFile = File(...)):
     except Exception as e:
         return {"success": False, "error": str(e), "detail": traceback.format_exc()}
 
-@router.get("/status", summary="Estado del motor de visión")
+# Endpoint para obtener el estado del motor de visión.
+@router.get(
+    "/status", 
+    summary="Estado del motor de visión"
+)
 def vision_status():
-    """Obtiene el estado del módulo de visión por computador.
-
-    Verifica que el módulo de OpenCV está correctamente cargado
-    y devuelve información sobre su versión.
+    """
+    Obtiene el estado del módulo de visión a través de OpenCV.
 
     Returns:
         Dict con el estado operativo y la versión de OpenCV.
@@ -64,15 +64,25 @@ def vision_status():
         "version": cv2.__version__
     }
 
-@router.post("/classify", summary="Clasifica las 64 casillas del tablero")
+# Endpoint para clasificar las 64 casillas del tablero. El corazón de la API.
+@router.post(
+    "/classify", 
+    summary="Clasifica las 64 casillas del tablero"
+)
 async def classify_board(file: UploadFile = File(...)):
-    """Clasifica las 64 casillas del tablero de ajedrez mediante ML.
+    """
+    Clasifica las 64 casillas del tablero de ajedrez mediante ML.
 
-    Recibe una imagen, detecta y rectifica el tablero, luego utiliza
-    el modelo de clasificación (MobileNetV2) para identificar el
-    contenido de cada casilla: vacía ('empty') o pieza con color
-    (ej. 'w_P', 'b_R', etc.). Finalmente, genera el FEN completo
-    del estado del tablero.
+    1. Recibe una imagen, detecta y rectifica el tablero.    
+    2. Posteriormente utiliza el modelo de clasificación (MobileNetV2) para identificar las clases. Tipos de clases: 
+        - White Pawn (w_P), Black Pawn (b_P), 
+        - White Rook (w_R), Black Rook (b_R), 
+        - White Knight (w_N), Black Knight (b_N), 
+        - White Bishop (w_B), Black Bishop (b_B), 
+        - White Queen (w_Q), Black Queen (b_Q), 
+        - White King (w_K), Black King (b_K),
+        - Casilla vacía (empty).    
+    3. Finalmente, genera el FEN completo del estado del tablero.
 
     Args:
         file: Imagen subida con el tablero a clasificar.
@@ -81,22 +91,29 @@ async def classify_board(file: UploadFile = File(...)):
         Dict con el estado de cada casilla, el FEN generado y flag de éxito.
     """
     try:
+        # Comprobamos si el modelo está cargado.
         if not classifier.is_ready():
             return {"success": False, "error": "El modelo de clasificación no está cargado. Entrena primero en /dataset."}
 
+        # Leemos el archivo
         contents = await file.read()
+        # Convertimos el archivo a array de numpy
         arr = np.frombuffer(contents, np.uint8)
+        # Decodificamos el array de numpy a imagen
         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         
+        # Detectamos el tablero en la imagen con OpenCV.
         found, corners = _detectar_tablero(frame)
         if not found:
             return {"success": False, "error": "Tablero no detectado"}
             
+        # Calculamos las esquinas exteriores del tablero.
         exterior = _calcular_esquinas_exteriores(corners)
+        # Rectificamos la imagen para obtener una vista cenital del tablero.
         warped = _rectificar(frame, exterior)
-        
+        # Clasificamos las 64 casillas del tablero.
         board_state = classifier.classify_board(warped)
-        
+        # Generamos el FEN completo del estado del tablero.
         simple_state = {sq: v["label"] for sq, v in board_state.items()}
         
         return {
@@ -107,13 +124,17 @@ async def classify_board(file: UploadFile = File(...)):
     except Exception as e:
         return {"success": False, "error": str(e), "detail": traceback.format_exc()}
 
-@router.post("/classify/reload", summary="Recarga el modelo ML desde disco")
+# Endpoint para recargar el modelo ML desde disco.
+@router.post(
+    "/classify/reload", 
+    summary="Recarga el modelo ML desde disco"
+)
 def reload_model():
-    """Recarga el modelo de clasificación desde disco en caliente.
+    """
+    Recarga el modelo de clasificación desde disco en caliente.
 
-    Vuelve a cargar el modelo ML guardado en el sistema de archivos
-    sin necesidad de reiniciar el servidor. Útil tras reentrenar
-    el modelo desde el módulo de dataset.
+    Vuelve a cargar el modelo ML guardado en el sistema de archivos sin necesidad de reiniciar el servidor. 
+    Útil tras reentrenar el modelo desde el módulo de dataset.
 
     Returns:
         Dict indicando si la recarga fue exitosa y el estado del modelo.
@@ -121,15 +142,19 @@ def reload_model():
     classifier.reload()
     return {"success": True, "ready": classifier.is_ready()}
 
-@router.post("/detect-move", summary="Detecta el movimiento entre dos posiciones")
+# Endpoint para detectar el movimiento entre dos posiciones.
+@router.post(
+    "/detect-move", 
+    summary="Detecta el movimiento entre dos posiciones")
 async def detect_move_endpoint(
     file: UploadFile = File(...),
     prev_fen: str = Form(...)
 ):
-    """Detecta el movimiento de ajedrez entre dos estados del tablero.
+    """
+    Detecta el movimiento de ajedrez entre dos estados del tablero.
 
-    Clasifica las piezas del nuevo estado mediante ML, compara con
-    el estado previo en FEN y determina el movimiento legal realizado.
+    1. Clasifica las piezas del nuevo estado mediante ML.
+    2. Compara con el estado previo en FEN y determina el movimiento legal realizado.
 
     Args:
         file: Imagen actual del tablero.
@@ -139,22 +164,30 @@ async def detect_move_endpoint(
         Dict con el movimiento detectado (origen, destino, pieza) y éxito.
     """
     try:
+        # Comprobamos si el modelo está cargado.
         if not classifier.is_ready():
             return {"success": False, "error": "Modelo no cargado. Entrena primero en /dataset."}
-
+        # Leemos el archivo
         contents = await file.read()
+        # Convertimos el archivo a array de numpy
         arr = np.frombuffer(contents, np.uint8)
+
+        # Decodificamos el array de numpy a imagen
         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         if frame is None:
             return {"success": False, "error": "Imagen no decodificable"}
 
+        # Detectamos el tablero en la imagen
         found, corners = _detectar_tablero(frame)
         if not found:
             return {"success": False, "error": "Tablero no detectado"}
 
+        # Calculamos las esquinas exteriores
         exterior = _calcular_esquinas_exteriores(corners)
+        # Rectificamos la imagen para obtener una vista cenital
         warped   = _rectificar(frame, exterior)
-
+        
+        # Detectamos el movimiento
         result = _detect_move(warped, prev_fen, classifier)
         return {"success": True, **result}
 

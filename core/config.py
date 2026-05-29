@@ -1,12 +1,12 @@
-﻿"""Configuración de la aplicación.
+﻿"""
+Configuración de la aplicación.
 
-Carga variables de entorno mediante Pydantic Settings
-y provee una instancia singleton accesible desde cualquier módulo.
+Carga variables de entorno mediante Pydantic Settings y provee una instancia singleton accesible desde cualquier módulo.
 """
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
-
+# Clase para la centralización de las variables de la aplicación
 class Settings(BaseSettings):
     """Configuración centralizada de la aplicación.
 
@@ -46,7 +46,8 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        """Construye la URL de conexión SQLAlchemy a partir de las variables individuales.
+        """
+        Construye la URL de conexión SQLAlchemy a partir de las variables individuales.
 
         Usa pymysql como driver para MySQL o MariaDB.
         """
@@ -56,11 +57,13 @@ class Settings(BaseSettings):
             f"?ssl_disabled=true"
         )
 
+    # Configuración del archivo .env
     class Config:
+        """Configuración del archivo .env."""
         env_file = ".env"
         env_file_encoding = "utf-8"
 
-
+# Instancia singleton de Settings
 @lru_cache()
 def get_settings() -> Settings:
     """Retorna una instancia singleton de Settings.

@@ -1,53 +1,62 @@
-"""Módulo de gestión de usuarios del sistema.
-
-Proporciona los endpoints para el registro de nuevas cuentas
-de usuario en la aplicación.
 """
-
+Endpoint de registro de nuevos usuarios.
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from db.database import get_db
-from schemas.usuarios import UsuarioCreate, UsuarioResponse
-from services import usuarios
+from core.database import get_db
+from core.models import Usuario, UsuarioCreate, UsuarioResponse
+from core.security import hash_password
+from services.email import send_welcome_email
 
+# Creación del router.
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
+# Endpoint para registrar nuevos usuarios.
 @router.post(
     "/register",
     response_model=UsuarioResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Registrar nuevo usuario",
-    description=(
-        "Crea una cuenta nueva. La contraseña se almacena hasheada con **bcrypt**. "
-        "Tras el registro, se envía un correo de bienvenida a la dirección indicada. "
-        "El `username` y el `mail` deben ser únicos."
-    ),
     responses={
         201: {"description": "Usuario creado correctamente."},
         409: {"description": "El username o email ya están en uso."},
-        422: {"description": "Datos de entrada no válidos (validación Pydantic)."},
     },
 )
 async def register(body: UsuarioCreate, db: Session = Depends(get_db)):
-    """Registra un nuevo usuario en el sistema.
-
-    Crea una cuenta nueva con los datos proporcionados. La contraseña
-    se almacena hasheada con bcrypt. El username y el email deben
-    ser únicos en la base de datos.
-
-    Args:
-        body: Datos del nuevo usuario (username, email, password).
-        db: Sesión de base de datos.
-
-    Returns:
-        UsuarioResponse con los datos del usuario creado.
-
-    Raises:
-        HTTPException 409: Si el username o el email ya existen.
-        HTTPException 422: Si los datos de entrada no son válidos.
     """
+    Registra un nuevo usuario: valida unicidad, hashea la contraseña y envía email de bienvenida.
+    """
+    # Valida la unicidad del username.
+    if db.query(Usuario).filter(Usuario.username == body.username).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"El username '{body.username}' ya está en uso")
+
+    # Valida la unicidad del correo.
+    if db.query(Usuario).filter(Usuario.mail == body.mail).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"El correo '{body.mail}' ya está registrado")
+
+    # Crea el nuevo usuario.
+    nuevo = Usuario(
+        username=body.username,
+        nombre=body.nombre,
+        apellidos=body.apellidos,
+        password=hash_password(body.password),
+        mail=body.mail,
+    )
+    db.add(nuevo)
+
+    # Intenta enviar el email de bienvenida a través de Resend. 
+    # En caso de error, hacemos rollback para que no se guarde el usuario y lanzamos HTTPException.
     try:
-        return await usuarios.register(body, db)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        await send_welcome_email(nombre=nuevo.nombre, mail=nuevo.mail)
+        db.commit()
+        db.refresh(nuevo)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Error al enviar el email de bienvenida: {e}"
+        )
+
+    # Retorna el nuevo usuario.
+    return nuevo

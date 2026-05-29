@@ -2,47 +2,59 @@
 
 El "cerebro" del sistema. Esta API construida con **FastAPI** se encarga del procesamiento de imágenes, la lógica de juego mediante Stockfish, la gestión de usuarios y la retransmisión en tiempo real mediante WebSockets.
 
+**¿Qué es FastAPI?** FastAPI es un framework web Python de alto rendimiento para construir APIs REST, con soporte nativo para operaciones asíncronas (`async/await`) y generación automática de documentación interactiva en formato OpenAPI/Swagger.
+
+Sobre FastAPI se construyen todos los endpoints REST (login, registro, CRUD de partidas, Stockfish, retransmisiones) y también los WebSockets para la retransmisión en tiempo real. Se sirve con **Uvicorn** (servidor ASGI) y está desplegado en **Railway**.
+
+La documentación automática está disponible en:
+**https://chess-rekognition-api-production.up.railway.app/docs**
+
+**Bibliografía:**
+- Documentación oficial: https://fastapi.tiangolo.com
+- Repositorio: https://github.com/fastapi/fastapi
+- Tutorial oficial completo: https://fastapi.tiangolo.com/tutorial/
+
 ---
 
 ## Arquitectura del Sistema
 
-### Patrón de Diseño: Arquitectura en Capas (Layered Architecture)
+### Patrón de Diseño: Arquitectura en 3 Capas
 
-El backend sigue el patrón **arquitectura en capas** con separación clara de responsabilidades, inspirado en Clean Architecture. Cada capa tiene una función específica y solo se comunica con la capa inmediatamente inferior:
+El backend sigue una **arquitectura en 3 capas** con separación clara de responsabilidades. Cada capa tiene una función específica y solo se comunica con la capa inmediatamente inferior:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                     Capa de Presentación                 │
 │                    (routers / endpoints)                  │
-│  Recibe requests HTTP/WS, delega en servicios, responde  │
+│  Recibe requests HTTP/WS, ejecuta lógica CRUD directa,  │
+│  delega en servicios cuando hay complejidad real         │
 ├──────────────────────────────────────────────────────────┤
 │                     Capa de Servicios                    │
-│                   (services / lógica de negocio)         │
-│  Orquesta reglas de negocio, visión, ML, motor ajedrez   │
+│              (services / lógica de negocio compleja)     │
+│  Solo donde hay complejidad real: visión por computador, │
+│  clasificador ML, motor Stockfish, retransmisión WS      │
 ├──────────────────────────────────────────────────────────┤
-│                   Capa de Acceso a Datos                 │
-│              (models ORM / schemas Pydantic)             │
-│  Define estructura de datos, validación y persistencia   │
-├──────────────────────────────────────────────────────────┤
-│                  Capa de Infraestructura                 │
-│         (core / db / engine / configuración global)      │
-│  Configuración, seguridad JWT, BD, binarios externos     │
+│                  Capa de Infraestructura (core)          │
+│      config · security · database · models (SQLModel)    │
+│  Configuración global, JWT/bcrypt, BD y definición de    │
+│  modelos de datos (ORM + validación Pydantic unificados) │
 └──────────────────────────────────────────────────────────┘
 ```
 
-### Patrones Específicos Implementados
+### Principio de diseño
+
+La capa de servicios **solo existe donde la lógica no cabe razonablemente en el router**: visión por computador (OpenCV), clasificador ML (TensorFlow/MobileNetV2), motor de ajedrez (Stockfish subprocess UCI) y retransmisión en tiempo real (WebSocket broadcast). Para operaciones CRUD sencillas (auth, usuarios, partidas), el propio router gestiona la lógica directamente contra la base de datos, evitando capas intermedias innecesarias.
+
+### Patrones Implementados
 
 | Patrón | Ubicación | Propósito |
 |--------|-----------|-----------|
 | **Singleton** | `core/config.py` — `get_settings()` con `@lru_cache` | Una única instancia de configuración global |
 | **Inyección de Dependencias** | `core/dependencies.py` — `Depends()` de FastAPI | Inyecta sesiones BD, usuario autenticado, etc. |
-| **Repository (DAO)** | `services/*.py` contra `models/*.py` | Aísla la lógica de negocio del ORM |
-| **Strategy (Transfer Learning)** | `routers/dataset.py` — MobileNetV2 + DA + Dropout | Permite intercambiar la cabeza clasificadora sin tocar la base |
 | **Observer (WebSocket)** | `routers/retransmision.py` — `ConnectionManager` | Broadcast de estado del tablero a múltiples viewers |
-| **Callback (Hook)** | `routers/dataset.py` — `WSUpdateCallback` | Keras callback para notificar progreso vía WebSocket |
+| **Callback (Hook)** | `services/training.py` — `_WSCallback` | Keras callback para notificar progreso vía WebSocket |
 | **Facade** | `services/vision.py` — `VisionService.detect_and_rectify()` | Orquesta todo el pipeline de visión en un solo método público |
-| **Template Method** | `routers/dataset.py` — `_run_training_logic()` | Pipeline fijo: cargar → construir → entrenar → guardar |
-| **Data Transfer Object (DTO)** | `schemas/*.py` — Pydantic models | Validación y serialización de datos de entrada/salida |
+| **Data Transfer Object (DTO)** | `core/models.py` — SQLAlchemy + Pydantic | ORM y schemas de validación unificados en un único módulo |
 
 ---
 
@@ -64,8 +76,8 @@ Cliente (React)                    FastAPI (Python)
      │                                  │      ├─► services/classifier.py
      │                                  │      │    └─ ChessClassifier       [TensorFlow]
      │                                  │      │
-     │                                  │      └─► utils/chess_utils.py
-     │                                  │           └─ board_state_to_fen()
+     │                                  │      └─► services/vision.py
+     │                                  │           └─ board_state_to_fen_board()
      │                                  │
      │  { success, board_state, fen }   │
      │ ◄────────────────────────────── │
@@ -146,12 +158,11 @@ Compara el estado ML vs FEN anterior:
 - **ConnectionManager**: Mantiene diccionarios de hosts, viewers y último estado (para inyectar a nuevos viewers)
 - **Heartbeat**: Los viewers envían "ping" para mantener la conexión activa
 
-### 🎯 Entrenamiento (`routers/dataset.py`)
+### 🎯 Entrenamiento (`services/training.py` + `routers/dataset.py`)
 
-- **Captura**: Extrae 64 casillas, sugiere etiqueta mediante heurística STD
-- **Dataset**: Estructura de directorios por clase, UUIDs para evitar colisiones
-- **Training Pipeline**: `image_dataset_from_directory` → MobileNetV2 + DA → EarlyStopping → ReduceLROnPlateau
-- **WebSocket broadcasting**: `WSUpdateCallback` notifica métricas en vivo
+- **Captura y dataset** (`routers/dataset.py`): extrae 64 casillas, sugiere etiqueta por heurística STD, guarda con UUID por clase
+- **Training pipeline** (`services/training.py`): `image_dataset_from_directory` → MobileNetV2 + Data Augmentation → EarlyStopping → ReduceLROnPlateau
+- **WebSocket broadcasting**: `_WSCallback` (Keras callback) notifica métricas época a época desde el hilo de entrenamiento al event loop principal
 
 ---
 
@@ -162,42 +173,37 @@ api/
 ├── main.py                 # Entrypoint FastAPI, CORS, routers, Swagger
 ├── Procfile                # Comando Railway (uvicorn)
 ├── requirements.txt        # Dependencias con versiones fijas
+│
 ├── core/                   # Capa de infraestructura
-│   ├── config.py           # Settings (singleton), 13 clases, BOARD_SIZE=400
-│   ├── security.py         # JWT (access/refresh) + bcrypt
-│   └── dependencies.py     # Inyección: get_current_user, get_db
-├── db/                     # Configuración BD
-│   ├── database.py         # Engine SQLAlchemy, SessionLocal, Base
-│   └── script.sql          # DDL + insert de prueba
-├── models/                 # Modelos ORM (SQLAlchemy)
-│   ├── usuarios.py         # PK: username, relaciones
-│   ├── partidas.py         # FK→usuarios, tipo_partida: PI/PR
-│   └── retransmisiones.py  # Token único, is_activa
-├── schemas/                # DTOs Pydantic (validación entrada/salida)
-│   ├── usuarios.py         # UsuarioCreate/Response, LoginRequest, tokens
-│   ├── partidas.py         # PartidaCreate/Update/Response
-│   └── retransmisiones.py  # RetransmisionCreate/Response
-├── routers/                # Capa de presentación (endpoints)
+│   ├── config.py           # Settings singleton (@lru_cache), constantes globales
+│   ├── security.py         # JWT (access/refresh, 30min/7días) + bcrypt
+│   ├── dependencies.py     # get_current_user, get_db — inyección de dependencias
+│   ├── database.py         # Engine SQLAlchemy, SessionLocal, Base, get_db
+│   └── models.py           # ORM (Usuario, Partida, Retransmision) +
+│                           # Schemas Pydantic (validación entrada/salida)
+│                           # unificados en un solo módulo
+│
+├── routers/                # Capa de presentación (endpoints HTTP + WebSocket)
 │   ├── auth.py             # POST /login, POST /refresh, GET /whoami
-│   ├── usuarios.py         # POST /register
-│   ├── partidas.py         # CRUD /partidas/
-│   ├── engine.py           # GET /status, POST /move (Stockfish)
+│   ├── usuarios.py         # POST /register (bcrypt + email bienvenida inline)
+│   ├── partidas.py         # CRUD /partidas/ con filtrado PI/PR (inline)
+│   ├── engine.py           # GET /status, POST /move → delega en services/engine
 │   ├── vision.py           # POST /recognize-board, /classify, /detect-move
 │   ├── retransmision.py    # WS host/viewer, PATCH, POST host
-│   └── dataset.py          # Capture, save, train, stats, WS progreso
-├── services/               # Capa de lógica de negocio
-│   ├── auth.py             # Login, refresh, whoami
-│   ├── usuarios.py         # Registro con bcrypt + email bienvenida
-│   ├── partidas.py         # CRUD con filtrado por tipo
-│   ├── vision.py           # Pipeline: detección → rectificar → ocupación
-│   ├── classifier.py       # ChessClassifier (MobileNetV2, thread-safe)
-│   ├── move_detector.py    # ML vs FEN → movimiento legal
-│   ├── engine.py           # StockfishService (subprocess UCI)
-│   └── email.py            # Resend (welcome email asíncrono)
-├── utils/
-│   └── chess_utils.py      # label_to_piece(), board_state_to_fen_board()
+│   └── dataset.py          # Capture, save, stats, train, WS progreso
+│
+├── services/               # Capa de lógica compleja
+│   ├── vision.py           # Pipeline OpenCV + helpers chess (label_to_piece, board_state_to_fen_board)
+│   ├── classifier.py       # ChessClassifier: MobileNetV2, thread-safe, recarga caliente
+│   ├── move_detector.py    # Comparación ML vs FEN → movimiento legal python-chess
+│   ├── engine.py           # StockfishService: subprocess UCI, ELO, timeout
+│   ├── training.py         # Pipeline entrenamiento MobileNetV2 + broadcast WS
+│   └── email.py            # Resend API: email de bienvenida asíncrono
+│
 └── static/                 # Favicon, dataset.html, opencv.html
 ```
+
+> **Nota de transparencia al frontend:** esta reorganización conceptual no modifica ningún endpoint ni contrato de la API. Las rutas, métodos HTTP, parámetros y respuestas son idénticos. El frontend no requiere ningún cambio.
 
 ---
 
@@ -320,7 +326,7 @@ Imagen (cámara / archivo)
 ## Instalación y Ejecución Local
 
 ```bash
-# 1. Clonar el repositorio e instalar dependencias
+# 1. Instalar dependencias
 pip install -r requirements.txt
 
 # 2. Configurar variables de entorno (.env)

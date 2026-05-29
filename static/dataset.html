@@ -4,103 +4,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chess Rekognition · Dataset</title>
+    <title>Chess Rekognition | Dataset</title>
     <style>
-        :root {
-            --primary: #2563eb;
-            --success: #16a34a;
-            --bg: #f8fafc;
-            --text: #1e293b;
-            --border: #e2e8f0;
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            margin: 0;
-            padding: 20px;
-            line-height: 1.5;
+            font-family: system-ui, sans-serif;
+            font-size: 14px;
+            background: #f1f5f9;
+            color: #1e293b;
+            padding: 24px;
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 960px;
             margin: 0 auto;
         }
 
+        /* ── Cabecera ── */
         header {
-            margin-bottom: 30px;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
         }
 
-        h1 {
-            font-size: 24px;
-            margin: 0;
+        header h1 {
+            font-size: 18px;
+            font-weight: 600;
         }
 
-        p {
+        header p {
+            font-size: 12px;
             color: #64748b;
-            font-size: 14px;
-            margin-top: 5px;
+            margin-top: 2px;
         }
 
+        /* ── Tarjetas ── */
+        .card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card+.card {
+            margin-top: 16px;
+        }
+
+        .card h2 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        /* ── Layout principal ── */
         .layout {
             display: grid;
-            grid-template-columns: 1fr 300px;
-            gap: 20px;
+            grid-template-columns: 1fr 260px;
+            gap: 16px;
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 720px) {
             .layout {
                 grid-template-columns: 1fr;
             }
         }
 
-        .card {
-            background: white;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        /* --- LOGIN --- */
+        /* ── Login ── */
         #loginCard {
-            max-width: 400px;
-            margin: 100px auto;
+            max-width: 340px;
+            margin: 80px auto;
         }
 
-        .input-group {
-            margin-bottom: 15px;
-        }
-
-        label {
+        #loginCard label {
             display: block;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
+            margin-top: 12px;
         }
 
-        input {
+        #loginCard input {
             width: 100%;
-            padding: 10px;
-            border: 1px solid var(--border);
+            padding: 8px 10px;
+            border: 1px solid #e2e8f0;
             border-radius: 6px;
-            box-sizing: border-box;
+            font-size: 14px;
         }
 
-        .section-title {
-            font-weight: 600;
-            margin-bottom: 15px;
-            display: block;
-            border-bottom: 1px solid #f1f5f9;
-            padding-bottom: 8px;
+        /* ── Botones ── */
+        button {
+            padding: 8px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: #fff;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background .15s;
         }
 
-        /* --- CÁMARA --- */
-        .camera-box {
+        button:hover {
+            background: #f8fafc;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-success {
+            background: #16a34a;
+            color: #fff;
+            border-color: #16a34a;
             width: 100%;
+            margin-top: 14px;
+            padding: 10px;
+        }
+
+        .btn-success:hover {
+            background: #15803d;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+            color: #fff;
+            border-color: #dc2626;
+            font-size: 12px;
+            padding: 6px 12px;
+        }
+
+        /* ── Cámara ── */
+        .camera-wrap {
             background: #000;
             border-radius: 6px;
             overflow: hidden;
@@ -111,62 +163,30 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            display: block;
         }
 
-        .btn-group {
-            margin-top: 15px;
+        .btn-row {
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            margin-top: 12px;
         }
 
-        button {
-            padding: 10px 20px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: white;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-
-        button:hover {
-            background: #f1f5f9;
-        }
-
-        .btn-main {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
-        }
-
-        .btn-main:hover {
-            background: #1d4ed8;
-        }
-
-        .btn-save {
-            background: var(--success);
-            color: white;
-            border-color: var(--success);
-            width: 100%;
-            margin-top: 20px;
-            padding: 15px;
-        }
-
-        /* --- REJILLA --- */
-        .grid-container {
+        /* ── Rejilla de casillas ── */
+        .board-grid {
             display: grid;
             grid-template-columns: repeat(8, 1fr);
             gap: 2px;
             background: #cbd5e1;
             padding: 2px;
-            margin-top: 15px;
+            margin-top: 12px;
         }
 
         .cell {
-            background: white;
             aspect-ratio: 1;
             position: relative;
             cursor: pointer;
+            background: #fff;
         }
 
         .cell img {
@@ -175,75 +195,83 @@
             display: block;
         }
 
-        .cell.active {
-            outline: 3px solid var(--primary);
-            z-index: 10;
-        }
-
-        .cell.empty {
-            border: 2px solid #bbf7d0;
-        }
-
-        .cell.piece {
-            border: 2px solid #fed7aa;
-        }
-
         .cell-id {
             position: absolute;
-            top: 2px;
-            left: 2px;
-            font-size: 8px;
-            background: rgba(255, 255, 255, 0.8);
-            padding: 1px 3px;
+            top: 1px;
+            left: 1px;
+            font-size: 7px;
+            background: rgba(255, 255, 255, .75);
+            padding: 1px 2px;
             border-radius: 2px;
+            line-height: 1;
         }
 
-        /* --- SELECCIÓN --- */
-        .piece-selector {
+        .cell.selected {
+            outline: 3px solid #2563eb;
+            z-index: 5;
+        }
+
+        .cell.is-empty {
+            border: 2px solid #86efac;
+        }
+
+        .cell.is-piece {
+            border: 2px solid #fdba74;
+        }
+
+        /* ── Selector de etiqueta ── */
+        .piece-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
-            gap: 5px;
+            grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+            gap: 4px;
             margin-top: 10px;
         }
 
-        .piece-opt {
-            border: 1px solid var(--border);
-            padding: 5px;
-            text-align: center;
+        .piece-btn {
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 4px 2px;
             font-size: 11px;
-            border-radius: 4px;
+            text-align: center;
             cursor: pointer;
+            background: #fff;
+            transition: background .1s;
         }
 
-        .piece-opt.active {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
+        .piece-btn:hover {
+            background: #f1f5f9;
         }
 
-        /* --- LOGS --- */
-        #log {
-            font-family: monospace;
-            font-size: 12px;
-            height: 150px;
-            overflow-y: auto;
-            background: #1e293b;
-            color: #f8fafc;
-            padding: 10px;
-            border-radius: 4px;
-            margin-top: 15px;
+        .piece-btn.active {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
         }
 
-        .stat-row {
+        /* ── Estadísticas ── */
+        .stat {
             display: flex;
             justify-content: space-between;
-            font-size: 14px;
-            margin-bottom: 5px;
+            padding: 4px 0;
+            border-bottom: 1px solid #f1f5f9;
         }
 
-        .stat-val {
+        .stat span:last-child {
             font-weight: 700;
-            color: var(--primary);
+            color: #2563eb;
+        }
+
+        /* ── Consola ── */
+        #log {
+            font-family: monospace;
+            font-size: 11px;
+            height: 130px;
+            overflow-y: auto;
+            background: #0f172a;
+            color: #94a3b8;
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 12px;
         }
 
         .hidden {
@@ -253,290 +281,511 @@
 </head>
 
 <body>
-
     <div class="container">
-        <!-- Pantalla de Login -->
+
+        <!-- LOGIN -->
         <div id="loginCard" class="card">
-            <span class="section-title">Identificación</span>
-            <p>Inicia sesión para poder subir imágenes al dataset.</p>
-            <div class="input-group">
-                <label>Usuario</label>
-                <input type="text" id="user" placeholder="Tu username" value="chess_test01">
-            </div>
-            <div class="input-group">
-                <label>Contraseña</label>
-                <input type="password" id="pass" placeholder="••••••••" value="chess_test01">
-            </div>
-            <button class="btn-main" style="width: 100%; margin-top: 10px;" onclick="doLogin()">Entrar</button>
+            <h2>Identificación</h2>
+            <label>Usuario</label>
+            <input type="text" id="inputUser" placeholder="username">
+            <label>Contraseña</label>
+            <input type="password" id="inputPass" placeholder="••••••••">
+            <button class="btn-primary" style="width:100%; margin-top:14px;" onclick="doLogin()">Entrar</button>
         </div>
 
-        <!-- Pantalla Principal -->
+        <!-- INTERFAZ PRINCIPAL -->
         <div id="mainUI" class="hidden">
             <header>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <h1>Dataset de Ajedrez</h1>
-                        <p>Captura imágenes del tablero real para entrenar el sistema.</p>
-                    </div>
-                    <button onclick="logout()" style="font-size: 12px;">Cerrar Sesión</button>
+                <div>
+                    <h1>Dataset | Chess Rekognition</h1>
+                    <p>Captura y etiqueta casillas del tablero para entrenar el clasificador.</p>
                 </div>
+                <button class="btn-danger" onclick="doLogout()">Cerrar sesión</button>
             </header>
 
             <div class="layout">
-                <div class="main">
+
+                <!-- ── Columna izquierda: cámara + tablero ── -->
+                <div>
                     <div class="card">
-                        <span class="section-title">Cámara en vivo</span>
-                        <div class="camera-box">
+                        <h2>Cámara en vivo</h2>
+                        <div class="camera-wrap">
                             <video id="cam" autoplay playsinline muted></video>
                         </div>
-                        <div class="btn-group">
-                            <button onclick="initCam()">Reiniciar Cámara</button>
-                            <button class="btn-main" id="btnCapture" onclick="capturar()">Capturar Tablero</button>
+                        <div class="btn-row">
+                            <button onclick="iniciarCamara()">Reiniciar cámara</button>
+                            <button class="btn-primary" onclick="capturar()">Capturar tablero</button>
                         </div>
                     </div>
 
-                    <div class="card hidden" id="gridCard" style="margin-top: 20px;">
-                        <span class="section-title">Etiquetar casillas</span>
-                        <p>Haz clic en una casilla y elige qué pieza hay. Las vacías se marcan solas.</p>
-                        <div class="grid-container" id="grid"></div>
+                    <!-- Tablero + selector de etiqueta (visible tras captura) -->
+                    <div id="tableroCard" class="card hidden">
+                        <h2>Etiquetar casillas</h2>
+                        <p style="color:#64748b; font-size:12px;">Haz clic en una casilla y asígnale la pieza correcta.
+                        </p>
+                        <div class="board-grid" id="boardGrid"></div>
 
-                        <div id="selectorArea" class="hidden">
-                            <p style="margin-top: 15px; font-weight: 600;">Casilla <span id="targetSq">--</span>:</p>
-                            <div class="piece-selector" id="selector"></div>
+                        <div id="selectorArea" class="hidden" style="margin-top:14px;">
+                            <p style="font-size:12px; font-weight:600; margin-bottom:4px;">
+                                Casilla seleccionada: <span id="labelSqId" style="color:#2563eb;">--</span>
+                            </p>
+                            <div class="piece-grid" id="pieceSelector"></div>
                         </div>
 
-                        <button class="btn-save" onclick="guardar()">Guardar estas 64 muestras</button>
+                        <button class="btn-success" onclick="guardar()">Guardar 64 muestras</button>
                     </div>
                 </div>
 
-                <div class="sidebar">
+                <!-- ── Columna derecha: stats + entrenamiento ── -->
+                <div>
                     <div class="card">
-                        <span class="section-title">Estado del entrenamiento</span>
-                        <div class="stat-row">
-                            <span>Total imágenes:</span>
-                            <span class="stat-val" id="statTotal">0</span>
-                        </div>
-                        <div class="stat-row">
-                            <span>Clases completas:</span>
-                            <span class="stat-val" id="statClasses">0/13</span>
-                        </div>
-
-                        <button style="width: 100%; margin-top: 15px;" onclick="entrenar()">Entrenar Modelo
-                            (CNN)</button>
-
-                        <div id="log">--- Consola de estado ---</div>
+                        <h2>Dataset</h2>
+                        <div class="stat"><span>Total imágenes</span><span id="statTotal">0</span></div>
+                        <div class="stat"><span>Clases ≥ 100 imgs</span><span id="statClases">0 / 13</span></div>
+                        <button style="width:100%; margin-top:14px;" onclick="entrenar()">Entrenar modelo</button>
+                        <div id="log">--- consola ---</div>
                     </div>
 
-                    <div class="card" style="margin-top: 20px; font-size: 13px;">
-                        <span class="section-title">Consejos rápidos</span>
-                        <ul style="padding-left: 18px; margin: 0;">
-                            <li>Pon el tablero plano bajo la cámara.</li>
-                            <li>Evita sombras fuertes que crucen las casillas.</li>
-                            <li>Captura varias posiciones con las mismas piezas.</li>
+                    <div class="card" style="margin-top:16px; font-size:12px; color:#475569;">
+                        <h2>Consejos</h2>
+                        <ul style="padding-left:16px; line-height:2;">
+                            <li>Tablero plano bajo la cámara.</li>
+                            <li>Sin sombras que crucen casillas.</li>
+                            <li>Captura varias posiciones distintas.</li>
                         </ul>
                     </div>
                 </div>
+
             </div>
         </div>
     </div>
 
-    <canvas id="snap" style="display:none"></canvas>
+    <!-- Canvas oculto para convertir el fotograma del vídeo a imagen JPEG -->
+    <canvas id="snap" class="hidden"></canvas>
 
     <script>
-        const CLASSES = ["empty", "w_P", "w_N", "w_B", "w_R", "w_Q", "w_K", "b_P", "b_N", "b_B", "b_R", "b_Q", "b_K"];
-        const NAMES = {
-            empty: "Vacía", w_P: "Peón B", w_N: "Caballo B", w_B: "Alfil B", w_R: "Torre B", w_Q: "Dama B", w_K: "Rey B",
-            b_P: "Peón N", b_N: "Caballo N", b_B: "Alfil N", b_R: "Torre N", b_Q: "Dama N", b_K: "Rey N"
+        // ═══════════════════════════════════════════════════════════
+        // CONSTANTES DEL DOMINIO
+        // ═══════════════════════════════════════════════════════════
+
+        // Lista de etiquetas válidas que maneja el clasificador ML
+        const CLASES = [
+            "empty",
+            "w_P", "w_N", "w_B", "w_R", "w_Q", "w_K",
+            "b_P", "b_N", "b_B", "b_R", "b_Q", "b_K"
+        ];
+
+        // Nombres legibles en español para mostrar en la interfaz
+        const NOMBRES = {
+            empty: "Vacía",
+            w_P: "Peón B", w_N: "Caballo B", w_B: "Alfil B",
+            w_R: "Torre B", w_Q: "Dama B", w_K: "Rey B",
+            b_P: "Peón N", b_N: "Caballo N", b_B: "Alfil N",
+            b_R: "Torre N", b_Q: "Dama N", b_K: "Rey N"
         };
 
-        let squares = [];
-        let selectedIdx = null;
+        // ═══════════════════════════════════════════════════════════
+        // ESTADO GLOBAL DE LA APLICACIÓN
+        // ═══════════════════════════════════════════════════════════
+
+        // Array con los datos de las 64 casillas tras la última captura.
+        // Cada elemento: { id, row, col, image (base64), label (etiqueta asignada) }
+        let casillas = [];
+
+        // Índice de la casilla actualmente seleccionada en la rejilla (null = ninguna)
+        let idxSeleccionado = null;
+
+        // Token JWT de acceso. Se guarda en localStorage para sobrevivir recargas.
         let token = localStorage.getItem("token");
 
-        // Lógica de Login
+
+        // ═══════════════════════════════════════════════════════════
+        // AUTENTICACIÓN
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Envía las credenciales al endpoint POST /auth/login.
+         * Si son correctas, guarda el access token en localStorage y muestra la UI principal.
+         */
         async function doLogin() {
-            const username = document.getElementById('user').value;
-            const password = document.getElementById('pass').value;
+            const username = document.getElementById("inputUser").value.trim();
+            const password = document.getElementById("inputPass").value;
 
             try {
-                const res = await fetch('/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                const res = await fetch("/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ username, password })
                 });
                 const data = await res.json();
+
                 if (res.ok) {
+                    // Guardamos el token y mostramos la interfaz principal
                     token = data.access_token;
                     localStorage.setItem("token", token);
-                    checkAuth();
+                    mostrarUI();
                 } else {
                     alert("Error: " + (data.detail || "Credenciales incorrectas"));
                 }
-            } catch (e) {
-                alert("Error al conectar con el servidor.");
+            } catch {
+                alert("No se pudo conectar con el servidor.");
             }
         }
 
-        function logout() {
+        /**
+         * Elimina el token y vuelve a la pantalla de login.
+         */
+        function doLogout() {
             localStorage.removeItem("token");
             token = null;
-            checkAuth();
+            document.getElementById("loginCard").classList.remove("hidden");
+            document.getElementById("mainUI").classList.add("hidden");
         }
 
-        function checkAuth() {
+        /**
+         * Decide qué pantalla mostrar según si existe token.
+         * Si hay token: muestra la UI principal e inicia cámara y stats.
+         * Si no hay token: muestra el login.
+         */
+        function mostrarUI() {
             if (token) {
-                document.getElementById('loginCard').classList.add('hidden');
-                document.getElementById('mainUI').classList.remove('hidden');
-                initCam();
-                updateStats();
+                document.getElementById("loginCard").classList.add("hidden");
+                document.getElementById("mainUI").classList.remove("hidden");
+                iniciarCamara();
+                actualizarStats();
             } else {
-                document.getElementById('loginCard').classList.remove('hidden');
-                document.getElementById('mainUI').classList.add('hidden');
+                document.getElementById("loginCard").classList.remove("hidden");
+                document.getElementById("mainUI").classList.add("hidden");
             }
         }
 
+        /**
+         * Envuelve fetch() añadiendo el header Authorization con el token JWT.
+         * Si el servidor devuelve 401 (token caducado), cierra la sesión automáticamente.
+         *
+         * @param {string} url     - Ruta del endpoint
+         * @param {object} options - Opciones de fetch (method, body, headers…)
+         * @returns {Promise<Response>}
+         */
         async function apiFetch(url, options = {}) {
-            const response = await fetch(url, {
+            const res = await fetch(url, {
                 ...options,
-                headers: { ...options.headers, 'Authorization': `Bearer ${token}` }
+                headers: { ...options.headers, "Authorization": `Bearer ${token}` }
             });
-            if (response.status === 401) {
-                addLog("¡Sesión expirada!");
-                logout();
+
+            if (res.status === 401) {
+                // El token ha expirado o es inválido → forzar logout
+                log("Sesión expirada. Inicia sesión de nuevo.");
+                doLogout();
             }
-            return response;
+
+            return res;
         }
 
-        async function initCam() {
+
+        // ═══════════════════════════════════════════════════════════
+        // CÁMARA
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Solicita acceso a la cámara trasera del dispositivo (o la disponible)
+         * y conecta el stream al elemento <video>.
+         */
+        async function iniciarCamara() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment', width: 1280, height: 720 }
+                    video: { facingMode: "environment", width: 1280, height: 720 }
                 });
-                document.getElementById('cam').srcObject = stream;
+                document.getElementById("cam").srcObject = stream;
             } catch (e) {
-                addLog("Error de cámara: " + e.message);
+                log("Error al acceder a la cámara: " + e.message);
             }
         }
 
+
+        // ═══════════════════════════════════════════════════════════
+        // CAPTURA Y DETECCIÓN DEL TABLERO
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Congela el fotograma actual del vídeo, lo convierte a JPEG mediante
+         * un <canvas> oculto y lo envía al endpoint POST /dataset/capture.
+         *
+         * El backend detecta el tablero con OpenCV, lo rectifica y devuelve
+         * las 64 casillas recortadas con una sugerencia de etiqueta inicial.
+         */
         async function capturar() {
-            const video = document.getElementById('cam');
-            const canvas = document.getElementById('snap');
-            if (!video.videoWidth) return;
+            const video = document.getElementById("cam");
+            const canvas = document.getElementById("snap");
 
-            addLog("Detectando tablero...");
-            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
+            // Verificamos que el vídeo esté reproduciendo y tenga dimensiones
+            if (!video.videoWidth) {
+                log("La cámara aún no está lista.");
+                return;
+            }
 
-            const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
-            const fd = new FormData(); fd.append('file', blob);
+            log("Enviando imagen al servidor...");
+
+            // Dibujamos el fotograma en el canvas para poder exportarlo a JPEG
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext("2d").drawImage(video, 0, 0);
+
+            // Convertimos el canvas a Blob JPEG con calidad 90%
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.9));
+
+            // Construimos el FormData para enviar el archivo al endpoint
+            const fd = new FormData();
+            fd.append("file", blob, "frame.jpg");
 
             try {
-                const res = await apiFetch('/dataset/capture', { method: 'POST', body: fd });
+                const res = await apiFetch("/dataset/capture", { method: "POST", body: fd });
                 const data = await res.json();
 
                 if (data.success) {
-                    squares = data.squares.map(s => ({ ...s, label: s.suggested_label === 'empty' ? 'empty' : 'w_P' }));
-                    renderGrid();
-                    document.getElementById('gridCard').classList.remove('hidden');
-                    addLog("Tablero listo para etiquetar.");
+                    // Guardamos las casillas. La etiqueta inicial: 'empty' si la heurística
+                    // detectó casilla vacía, o 'w_P' como placeholder para piezas sin clasificar.
+                    casillas = data.squares.map(s => ({
+                        ...s,
+                        label: s.suggested_label === "empty" ? "empty" : "w_P"
+                    }));
+                    renderizarTablero();
+                    document.getElementById("tableroCard").classList.remove("hidden");
+                    log("Tablero detectado. Revisa y corrige las etiquetas.");
                 } else {
-                    addLog("Error: " + data.error);
+                    log("Error: " + data.error);
                 }
-            } catch (e) { addLog("Error de conexión."); }
+            } catch {
+                log("Error de conexión al capturar.");
+            }
         }
 
-        function renderGrid() {
-            const grid = document.getElementById('grid');
-            grid.innerHTML = squares.map((s, i) => `
-            <div class="cell ${s.label === 'empty' ? 'empty' : 'piece'}" id="sq-${i}" onclick="selectCell(${i})">
-                <img src="${s.image}">
+
+        // ═══════════════════════════════════════════════════════════
+        // REJILLA DE CASILLAS Y SELECTOR DE ETIQUETA
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Construye la rejilla 8×8 con las imágenes de las 64 casillas capturadas.
+         * Cada celda muestra la foto recortada y el id algebraico (ej: e4).
+         * El borde verde indica casilla vacía; naranja indica pieza.
+         */
+        function renderizarTablero() {
+            const grid = document.getElementById("boardGrid");
+
+            grid.innerHTML = casillas.map((s, i) => `
+            <div class="cell ${s.label === 'empty' ? 'is-empty' : 'is-piece'}"
+                 id="sq-${i}" onclick="seleccionarCasilla(${i})">
+                <img src="${s.image}" alt="${s.id}">
                 <div class="cell-id">${s.id}</div>
             </div>
-        `).join('');
-            initSelector();
+        `).join("");
+
+            // Construimos los botones del selector de etiqueta (se hace una sola vez)
+            const selector = document.getElementById("pieceSelector");
+            selector.innerHTML = CLASES.map(cls => `
+            <div class="piece-btn" id="opt-${cls}" onclick="asignarEtiqueta('${cls}')">
+                ${NOMBRES[cls]}
+            </div>
+        `).join("");
+
+            document.getElementById("selectorArea").classList.remove("hidden");
         }
 
-        function initSelector() {
-            const sel = document.getElementById('selector');
-            sel.innerHTML = CLASSES.map(cls => `<div class="piece-opt" id="opt-${cls}" onclick="applyLabel('${cls}')">${NAMES[cls]}</div>`).join('');
-            document.getElementById('selectorArea').classList.remove('hidden');
+        /**
+         * Marca visualmente la casilla pulsada como seleccionada y resalta
+         * el botón correspondiente a su etiqueta actual en el selector.
+         *
+         * @param {number} idx - Índice de la casilla en el array `casillas`
+         */
+        function seleccionarCasilla(idx) {
+            // Quitamos el resaltado de la casilla anteriormente seleccionada
+            if (idxSeleccionado !== null) {
+                document.getElementById(`sq-${idxSeleccionado}`).classList.remove("selected");
+            }
+
+            idxSeleccionado = idx;
+            document.getElementById(`sq-${idx}`).classList.add("selected");
+            document.getElementById("labelSqId").textContent = casillas[idx].id;
+
+            // Actualizamos qué botón del selector aparece activo
+            document.querySelectorAll(".piece-btn").forEach(el => el.classList.remove("active"));
+            document.getElementById(`opt-${casillas[idx].label}`).classList.add("active");
         }
 
-        function selectCell(idx) {
-            if (selectedIdx !== null) document.getElementById(`sq-${selectedIdx}`).classList.remove('active');
-            selectedIdx = idx;
-            document.getElementById(`sq-${idx}`).classList.add('active');
-            document.getElementById('targetSq').textContent = squares[idx].id;
+        /**
+         * Asigna una etiqueta a la casilla seleccionada y actualiza su borde de color.
+         *
+         * @param {string} label - Etiqueta de la pieza (ej: 'w_P', 'b_K', 'empty')
+         */
+        function asignarEtiqueta(label) {
+            if (idxSeleccionado === null) return;
 
-            document.querySelectorAll('.piece-opt').forEach(el => el.classList.remove('active'));
-            document.getElementById(`opt-${squares[idx].label}`).classList.add('active');
+            // Actualizamos el array de estado
+            casillas[idxSeleccionado].label = label;
+
+            // Actualizamos el borde de la celda: verde = vacía, naranja = pieza
+            const celda = document.getElementById(`sq-${idxSeleccionado}`);
+            celda.className = `cell selected ${label === "empty" ? "is-empty" : "is-piece"}`;
+
+            // Resaltamos el botón recién pulsado en el selector
+            document.querySelectorAll(".piece-btn").forEach(el => el.classList.remove("active"));
+            document.getElementById(`opt-${label}`).classList.add("active");
         }
 
-        function applyLabel(label) {
-            if (selectedIdx === null) return;
-            squares[selectedIdx].label = label;
-            const cell = document.getElementById(`sq-${selectedIdx}`);
-            cell.className = `cell active ${label === 'empty' ? 'empty' : 'piece'}`;
-            document.querySelectorAll('.piece-opt').forEach(el => el.classList.remove('active'));
-            document.getElementById(`opt-${label}`).classList.add('active');
-        }
 
+        // ═══════════════════════════════════════════════════════════
+        // GUARDADO EN EL DATASET
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Envía las 64 casillas etiquetadas al endpoint POST /dataset/save.
+         * El backend guarda cada imagen en el directorio de su clase con nombre UUID.
+         * Tras guardar, actualiza las estadísticas y oculta el tablero.
+         */
         async function guardar() {
-            addLog("Guardando...");
+            log("Guardando muestras...");
+
             try {
-                const res = await apiFetch('/dataset/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ squares: squares })
+                const res = await apiFetch("/dataset/save", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ squares: casillas })
                 });
                 const data = await res.json();
+
                 if (data.success) {
-                    addLog(`Guardadas ${data.saved} imágenes.`);
-                    updateStats();
-                    document.getElementById('gridCard').classList.add('hidden');
+                    log(`Guardadas ${data.saved} imágenes correctamente.`);
+                    actualizarStats();
+                    // Ocultamos el tablero hasta la próxima captura
+                    document.getElementById("tableroCard").classList.add("hidden");
+                    casillas = [];
+                    idxSeleccionado = null;
+                } else {
+                    log("Error al guardar: " + (data.error || "desconocido"));
                 }
-            } catch (e) { addLog("Error al guardar."); }
+            } catch {
+                log("Error de conexión al guardar.");
+            }
         }
 
-        async function updateStats() {
+
+        // ═══════════════════════════════════════════════════════════
+        // ESTADÍSTICAS DEL DATASET
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Consulta GET /dataset/stats y actualiza los contadores del sidebar.
+         * Considera una clase "completa" si tiene ≥ 100 imágenes.
+         */
+        async function actualizarStats() {
             if (!token) return;
+
             try {
-                const res = await apiFetch('/dataset/stats');
+                const res = await apiFetch("/dataset/stats");
                 const data = await res.json();
-                document.getElementById('statTotal').textContent = data.total;
-                const ok = Object.values(data.classes).filter(v => v >= 100).length;
-                document.getElementById('statClasses').textContent = `${ok}/13`;
-            } catch (e) { }
+
+                document.getElementById("statTotal").textContent = data.total;
+                const clasesSuficientes = Object.values(data.classes).filter(n => n >= 100).length;
+                document.getElementById("statClases").textContent = `${clasesSuficientes} / 13`;
+            } catch { /* silencioso: no interrumpe el flujo */ }
         }
 
-        function addLog(msg) {
-            const log = document.getElementById('log');
-            log.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}<br>` + log.innerHTML;
-        }
 
+        // ═══════════════════════════════════════════════════════════
+        // ENTRENAMIENTO DEL MODELO
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Lanza el entrenamiento en el servidor (POST /dataset/train) y abre
+         * un WebSocket para recibir el progreso época a época en tiempo real.
+         */
         async function entrenar() {
-            if (!confirm("¿Empezar entrenamiento?")) return;
+            if (!confirm("¿Iniciar el entrenamiento del modelo? El proceso puede tardar varios minutos.")) return;
+
             try {
-                const res = await apiFetch('/dataset/train', { method: 'POST' });
+                const res = await apiFetch("/dataset/train", { method: "POST" });
                 const data = await res.json();
-                addLog(data.message || data.error);
-                if (data.success) initTrainingWS();
-            } catch (e) { addLog("Error al iniciar."); }
+
+                log(data.message || data.error);
+
+                // Si el servidor aceptó el inicio, abrimos el canal WebSocket de progreso
+                if (data.success) abrirWSEntrenamiento();
+
+            } catch {
+                log("Error al iniciar el entrenamiento.");
+            }
         }
 
-        function initTrainingWS() {
-            const ws = new WebSocket(`${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/dataset/train/ws?token=${token}`);
-            ws.onmessage = (e) => {
-                const d = JSON.parse(e.data);
-                if (d.status === "training") addLog(`Época ${d.epoch}: Acc=${d.accuracy}`);
-                else if (d.status === "done") addLog("✅ ¡Listo!");
-                else if (d.status === "error") addLog("❌ Error: " + d.message);
+        /**
+         * Abre un WebSocket al endpoint /dataset/train/ws para recibir
+         * actualizaciones del entrenamiento en tiempo real.
+         *
+         * El servidor emite un JSON por época con: epoch, accuracy, val_accuracy,
+         * loss, val_loss y status (loading | building | training | done | error).
+         */
+        function abrirWSEntrenamiento() {
+            // Construimos la URL WebSocket respetando el protocolo actual (ws / wss)
+            const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const ws = new WebSocket(`${proto}//${window.location.host}/dataset/train/ws?token=${token}`);
+
+            ws.onopen = () => log("WebSocket de entrenamiento conectado.");
+
+            ws.onmessage = (evento) => {
+                const d = JSON.parse(evento.data);
+
+                if (d.status === "loading") {
+                    log("Cargando dataset...");
+
+                } else if (d.status === "building") {
+                    log("Construyendo modelo MobileNetV2...");
+
+                } else if (d.status === "training") {
+                    // Mostramos progreso por época: número, accuracy y val_accuracy
+                    log(`Época ${d.epoch}/${d.total_epochs} — acc: ${d.accuracy} | val_acc: ${d.val_accuracy}`);
+
+                } else if (d.status === "done") {
+                    log("Entrenamiento completado. Modelo guardado.");
+                    ws.close();
+                    actualizarStats();
+
+                } else if (d.status === "error") {
+                    log("Error en entrenamiento: " + d.message);
+                    ws.close();
+                }
             };
+
+            ws.onerror = () => log("Error en la conexión WebSocket.");
+            ws.onclose = () => log("WebSocket de entrenamiento cerrado.");
         }
 
-        // Al cargar la página, verificamos si ya estamos logueados
-        checkAuth();
-        setInterval(updateStats, 10000);
+
+        // ═══════════════════════════════════════════════════════════
+        // CONSOLA DE LOG
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Añade un mensaje con marca de tiempo a la consola de estado.
+         * Los mensajes nuevos aparecen al principio (scroll inverso).
+         *
+         * @param {string} msg - Texto a mostrar
+         */
+        function log(msg) {
+            const consola = document.getElementById("log");
+            const hora = new Date().toLocaleTimeString("es-ES");
+            consola.innerHTML = `<span style="color:#475569">[${hora}]</span> ${msg}<br>` + consola.innerHTML;
+        }
+
+
+        // ═══════════════════════════════════════════════════════════
+        // ARRANQUE DE LA APLICACIÓN
+        // ═══════════════════════════════════════════════════════════
+
+        // Al cargar la página comprobamos si ya hay sesión activa en localStorage
+        mostrarUI();
+
+        // Actualizamos las estadísticas del dataset cada 15 segundos en segundo plano
+        setInterval(actualizarStats, 15000);
     </script>
 </body>
 

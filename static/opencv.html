@@ -1,214 +1,534 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chess Rekognition</title>
+    <title>Chess Rekognition | Visión</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
-        h1 { font-size: 20px; margin-bottom: 10px; }
-        video { width: 100%; max-width: 600px; border: 1px solid #ccc; display: block; }
-        button { margin: 5px; padding: 8px 16px; cursor: pointer; }
-        img { max-width: 280px; border: 1px solid #ccc; margin: 5px; }
-        #logs { background: #fff; border: 1px solid #ccc; padding: 8px; font-size: 11px; max-height: 80px; overflow-y: auto; margin-top: 10px; }
-        table { border-collapse: collapse; font-size: 12px; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 5px 10px; }
-        .ocupada { background: #fdd; }
-        #estado { font-weight: bold; }
-    </style>
-</head>
-<body>
-
-    <h1>Chess Rekognition</h1>
-
-    <!-- Cámara -->
-    <video id="webcam" autoplay playsinline></video>
-    <canvas id="canvas" style="display:none;"></canvas>
-
-    <div>
-        <button id="btnCapturar">Capturar</button>
-        <button id="btnAuto">Auto: OFF</button>
-        <button id="btnReporte" disabled>Descargar Reporte</button>
-        <span id="estado">{estado}</span>
-    </div>
-
-    <!-- Imágenes resultado -->
-    <div>
-        <div>
-            <p>Vista aérea (real)</p>
-            <img id="imgReal" alt="Sin imagen">
-        </div>
-        <div>
-            <p>Vista diagnóstico (2D)</p>
-            <img id="img2D" alt="Sin imagen">
-        </div>
-        <div>
-            <p>Tablero detectado</p>
-            <img id="imgDebug" alt="Sin imagen">
-        </div>
-    </div>
-
-    <!-- Stats básicos -->
-    <p>Casillas ocupadas: <strong id="ocupadas">—</strong> | Latencia: <strong id="latencia">—</strong> ms</p>
-
-    <!-- Tabla de diagnóstico -->
-    <table>
-        <thead>
-            <tr>
-                <th>Casilla</th>
-                <th>Estado</th>
-                <th>STD</th>
-                <th>Edges</th>
-            </tr>
-        </thead>
-        <tbody id="tablaDiag"></tbody>
-    </table>
-
-    <!-- Log de eventos -->
-    <div id="logs">Esperando cámara...</div>
-
-    <script>
-        // Referencias a los elementos del DOM
-        const video      = document.getElementById('webcam');
-        const canvas     = document.getElementById('canvas');
-        const btnCap     = document.getElementById('btnCapturar');
-        const btnAuto    = document.getElementById('btnAuto');
-        const btnRep     = document.getElementById('btnReporte');
-        const estado     = document.getElementById('estado');
-        const imgReal    = document.getElementById('imgReal');
-        const img2D      = document.getElementById('img2D');
-        const imgDebug   = document.getElementById('imgDebug');
-        const ocupadas   = document.getElementById('ocupadas');
-        const latencia   = document.getElementById('latencia');
-        const tablaDiag  = document.getElementById('tablaDiag');
-        const logs       = document.getElementById('logs');
-
-        let modoAuto    = false;   // controla si está en captura automática
-        let procesando  = false;   // evita llamadas simultáneas a la API
-        let ultimoB64   = null;    // guarda la última imagen de reporte
-
-        // Escribe una línea en el panel de logs con la hora actual
-        function log(msg) {
-            const hora = new Date().toLocaleTimeString();
-            logs.innerHTML = `[${hora}] ${msg}<br>` + logs.innerHTML;
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
-        // Inicia la cámara (preferiblemente la trasera en móvil)
-        async function initCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' }
-                });
-                video.srcObject = stream;
-                log("Cámara iniciada");
-            } catch (err) {
-                log("Error al iniciar cámara: " + err);
+        body {
+            font-family: system-ui, sans-serif;
+            font-size: 14px;
+            background: #f1f5f9;
+            color: #1e293b;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        /* ── Cabecera ── */
+        header {
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        header p {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        /* ── Tarjetas ── */
+        .card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card h2 {
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 12px;
+        }
+
+        /* ── Layout ── */
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 700px) {
+            .layout {
+                grid-template-columns: 1fr;
             }
         }
 
-        // Captura un frame, lo envía a la API y actualiza la UI con la respuesta
+        /* ── Cámara ── */
+        .camera-wrap {
+            background: #000;
+            border-radius: 6px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* ── Botones ── */
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background .15s;
+        }
+
+        button:hover {
+            background: #f8fafc;
+        }
+
+        button:disabled {
+            opacity: .4;
+            cursor: default;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-auto-on {
+            background: #16a34a;
+            color: #fff;
+            border-color: #16a34a;
+        }
+
+        /* ── Imágenes resultado ── */
+        .imgs-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .img-box p {
+            font-size: 11px;
+            color: #64748b;
+            margin-bottom: 4px;
+        }
+
+        .img-box img {
+            width: 100%;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+            display: block;
+        }
+
+        /* ── Métricas ── */
+        .metrics {
+            display: flex;
+            gap: 24px;
+            margin-top: 14px;
+        }
+
+        .metric span:first-child {
+            font-size: 11px;
+            color: #64748b;
+            display: block;
+        }
+
+        .metric strong {
+            font-size: 18px;
+            font-weight: 700;
+            color: #2563eb;
+        }
+
+        /* ── Tabla diagnóstico ── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 12px;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #475569;
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        tr.ocupada td {
+            background: #fff1f2;
+        }
+
+        /* ── Consola ── */
+        #log {
+            font-family: monospace;
+            font-size: 11px;
+            height: 90px;
+            overflow-y: auto;
+            background: #0f172a;
+            color: #94a3b8;
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 12px;
+        }
+
+        #estadoLabel {
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+
+        <header>
+            <h1>Visión por Computador · Chess Rekognition</h1>
+            <p>Detecta y rectifica el tablero en tiempo real mediante OpenCV.</p>
+        </header>
+
+        <div class="layout">
+
+            <!-- ── Columna izquierda: cámara + controles ── -->
+            <div>
+                <div class="card">
+                    <h2>Cámara en vivo</h2>
+                    <div class="camera-wrap">
+                        <video id="cam" autoplay playsinline muted></video>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn-primary" id="btnCapturar">Capturar</button>
+                        <button id="btnAuto">Auto: OFF</button>
+                        <button id="btnReporte" disabled>Descargar reporte</button>
+                    </div>
+                    <p style="margin-top:10px;">Estado: <span id="estadoLabel">—</span></p>
+                    <div id="log">--- consola ---</div>
+                </div>
+            </div>
+
+            <!-- ── Columna derecha: métricas + tabla ── -->
+            <div>
+                <div class="card">
+                    <h2>Métricas</h2>
+                    <div class="metrics">
+                        <div class="metric">
+                            <span>Casillas ocupadas</span>
+                            <strong id="metOcupadas">—</strong>
+                        </div>
+                        <div class="metric">
+                            <span>Latencia</span>
+                            <strong id="metLatencia">—</strong>
+                            <span style="font-size:11px; color:#64748b;">ms</span>
+                        </div>
+                    </div>
+
+                    <h2 style="margin-top:16px;">Top casillas por STD</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Casilla</th>
+                                <th>Estado</th>
+                                <th>STD</th>
+                                <th>Edges</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaDiag"></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ── Imágenes resultado (aparecen tras la primera captura) ── -->
+        <div class="card" style="margin-top:16px;">
+            <h2>Resultado del análisis</h2>
+            <div class="imgs-grid">
+                <div class="img-box">
+                    <p>Vista cenital real</p>
+                    <img id="imgReal" alt="Sin imagen">
+                </div>
+                <div class="img-box">
+                    <p>Vista diagnóstico 2D</p>
+                    <img id="img2D" alt="Sin imagen">
+                </div>
+                <div class="img-box">
+                    <p>Debug — esquinas detectadas</p>
+                    <img id="imgDebug" alt="Sin imagen">
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Canvas oculto para congelar el frame del vídeo antes de enviarlo -->
+    <canvas id="snap" style="display:none"></canvas>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════
+        // REFERENCIAS AL DOM
+        // ═══════════════════════════════════════════════════════════
+
+        const video = document.getElementById("cam");
+        const canvas = document.getElementById("snap");
+        const btnCap = document.getElementById("btnCapturar");
+        const btnAuto = document.getElementById("btnAuto");
+        const btnRep = document.getElementById("btnReporte");
+        const estadoLbl = document.getElementById("estadoLabel");
+        const imgReal = document.getElementById("imgReal");
+        const img2D = document.getElementById("img2D");
+        const imgDebug = document.getElementById("imgDebug");
+        const metOcup = document.getElementById("metOcupadas");
+        const metLat = document.getElementById("metLatencia");
+        const tablaDiag = document.getElementById("tablaDiag");
+        const logPanel = document.getElementById("log");
+
+
+        // ═══════════════════════════════════════════════════════════
+        // ESTADO GLOBAL
+        // ═══════════════════════════════════════════════════════════
+
+        // true cuando el modo automático está activo (dispara capturas en bucle)
+        let modoAuto = false;
+
+        // true mientras hay una petición en curso (evita llamadas simultáneas)
+        let procesando = false;
+
+        // Guarda la última imagen de reporte en base64 para permitir su descarga
+        let ultimoB64 = null;
+
+
+        // ═══════════════════════════════════════════════════════════
+        // CONSOLA DE LOG
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Añade un mensaje con marca de tiempo al panel de consola.
+         * Los mensajes más recientes aparecen al principio.
+         *
+         * @param {string} msg - Texto del mensaje a mostrar
+         */
+        function log(msg) {
+            const hora = new Date().toLocaleTimeString("es-ES");
+            logPanel.innerHTML = `<span style="color:#475569">[${hora}]</span> ${msg}<br>` + logPanel.innerHTML;
+        }
+
+
+        // ═══════════════════════════════════════════════════════════
+        // CÁMARA
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Solicita acceso a la cámara del dispositivo (prefiere la trasera en móvil)
+         * y conecta el stream al elemento <video>.
+         */
+        async function iniciarCamara() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment", width: 1280, height: 720 }
+                });
+                video.srcObject = stream;
+                log("Cámara iniciada.");
+            } catch (err) {
+                log("Error al acceder a la cámara: " + err.message);
+            }
+        }
+
+
+        // ═══════════════════════════════════════════════════════════
+        // PROCESADO DE FRAME
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Captura el fotograma actual del vídeo, lo convierte a JPEG y lo envía
+         * al endpoint POST /vision/recognize-board.
+         *
+         * El backend (OpenCV) detecta el tablero, lo rectifica y devuelve:
+         *   - rectified_real  → vista cenital con overlay de ocupación
+         *   - rectified_2d    → vista sintética de diagnóstico
+         *   - debug_image     → imagen original con esquinas marcadas
+         *   - export_image    → collage completo descargable
+         *   - squares         → array con datos de las 64 casillas
+         *   - occupied_count  → número de casillas con pieza
+         */
         async function procesarFrame() {
+            // Evitamos lanzar otra petición si ya hay una en curso
             if (procesando) return;
             procesando = true;
 
-            const inicio = performance.now();
+            // Marcamos el tiempo de inicio para calcular la latencia total
+            const tInicio = performance.now();
 
-            // Dibuja el frame actual del vídeo en el canvas oculto
-            canvas.width  = video.videoWidth;
+            // Dibujamos el frame actual del vídeo en el canvas oculto
+            canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
+            canvas.getContext("2d").drawImage(video, 0, 0);
 
-            estado.innerText = "Procesando...";
+            estadoLbl.textContent = "Procesando...";
 
-            // Convierte el canvas a Blob JPEG y lo manda como FormData
-            canvas.toBlob(async (blob) => {
-                const fd = new FormData();
-                fd.append('file', blob);
+            // Exportamos el canvas como Blob JPEG (calidad 80%) para enviarlo
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.8));
 
-                try {
-                    const res  = await fetch('/vision/recognize-board', { method: 'POST', body: fd });
-                    const data = await res.json();
+            const fd = new FormData();
+            fd.append("file", blob, "frame.jpg");
 
-                    // Actualiza la latencia
-                    latencia.innerText = Math.round(performance.now() - inicio);
+            try {
+                const res = await fetch("/vision/recognize-board", { method: "POST", body: fd });
+                const data = await res.json();
 
-                    if (data.success) {
-                        // Muestra las imágenes devueltas por el backend
-                        imgReal.src  = data.rectified_real;
-                        img2D.src    = data.rectified_2d;
-                        imgDebug.src = data.debug_image;
+                // Calculamos la latencia total de la operación
+                metLat.textContent = Math.round(performance.now() - tInicio);
 
-                        // Actualiza el contador de casillas ocupadas
-                        ocupadas.innerText = `${data.occupied_count} / ${data.num_squares}`;
+                if (data.success) {
+                    // Actualizamos las tres imágenes de resultado
+                    imgReal.src = data.rectified_real;
+                    img2D.src = data.rectified_2d;
+                    imgDebug.src = data.debug_image;
 
-                        estado.innerText = data.status || "OK";
+                    // Actualizamos el contador de casillas ocupadas
+                    metOcup.textContent = `${data.occupied_count} / ${data.num_squares}`;
 
-                        // Si el backend devuelve imagen de reporte, la guardamos para descarga
-                        if (data.export_image) {
-                            ultimoB64       = data.export_image;
-                            btnRep.disabled = false;
-                        }
+                    estadoLbl.textContent = "OK";
 
-                        // Rellena la tabla de diagnóstico con las 15 casillas de mayor STD
-                        actualizarTabla(data.squares);
-
-                    } else {
-                        estado.innerText = "Error: " + data.error;
-                        log("Error API: " + data.error);
+                    // Guardamos la imagen de reporte para posible descarga
+                    if (data.export_image) {
+                        ultimoB64 = data.export_image;
+                        btnRep.disabled = false;
                     }
 
-                } catch (e) {
-                    log("Fallo en fetch: " + e);
-                } finally {
-                    procesando = false;
-                    // Si sigue en modo auto, lanza otro ciclo tras 180ms
-                    if (modoAuto) setTimeout(procesarFrame, 180);
+                    // Actualizamos la tabla de diagnóstico con el top de casillas por STD
+                    actualizarTabla(data.squares);
+
+                } else {
+                    estadoLbl.textContent = "Sin tablero";
+                    log("Error: " + data.error);
                 }
-            }, 'image/jpeg', 0.8);
+
+            } catch (e) {
+                log("Error de conexión: " + e.message);
+            } finally {
+                procesando = false;
+
+                // Si el modo auto sigue activo, encadenamos otra captura tras 200 ms
+                if (modoAuto) setTimeout(procesarFrame, 200);
+            }
         }
 
-        // Ordena las casillas por STD descendente y pinta las 15 primeras en la tabla
+
+        // ═══════════════════════════════════════════════════════════
+        // TABLA DE DIAGNÓSTICO
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Ordena las 64 casillas por desviación estándar (STD) de forma descendente
+         * y pinta las 15 con mayor valor en la tabla de diagnóstico.
+         * Las casillas marcadas como ocupadas se resaltan en rojo claro.
+         *
+         * @param {Array} casillas - Array de objetos casilla devuelto por el backend
+         */
         function actualizarTabla(casillas) {
-            const top15 = casillas
+            const top15 = [...casillas]
                 .sort((a, b) => b.std - a.std)
                 .slice(0, 15);
 
             tablaDiag.innerHTML = top15.map(c => `
-                <tr class="${c.occupied ? 'ocupada' : ''}">
-                    <td>${c.id}</td>
-                    <td>${c.occupied ? 'Ocupada' : 'Vacía'}</td>
-                    <td>${c.std}</td>
-                    <td>${c.edges}</td>
-                </tr>
-            `).join('');
+            <tr class="${c.occupied ? "ocupada" : ""}">
+                <td>${c.id}</td>
+                <td>${c.occupied ? "Ocupada" : "Vacía"}</td>
+                <td>${c.std}</td>
+                <td>${c.edges}</td>
+            </tr>
+        `).join("");
         }
 
-        // Botón captura manual: desactiva el auto y lanza un ciclo
+
+        // ═══════════════════════════════════════════════════════════
+        // EVENTOS DE BOTONES
+        // ═══════════════════════════════════════════════════════════
+
+        /**
+         * Captura manual: desactiva el modo auto y lanza una sola captura.
+         */
         btnCap.onclick = () => {
             modoAuto = false;
-            btnAuto.innerText = "Auto: OFF";
+            btnAuto.textContent = "Auto: OFF";
+            btnAuto.classList.remove("btn-auto-on");
             procesarFrame();
         };
 
-        // Botón auto: alterna entre ON y OFF
+        /**
+         * Modo automático: alterna entre ON y OFF.
+         * En modo ON lanza capturas encadenadas cada ~200 ms.
+         */
         btnAuto.onclick = () => {
             modoAuto = !modoAuto;
-            btnAuto.innerText = `Auto: ${modoAuto ? 'ON' : 'OFF'}`;
+            btnAuto.textContent = `Auto: ${modoAuto ? "ON" : "OFF"}`;
+            btnAuto.classList.toggle("btn-auto-on", modoAuto);
             if (modoAuto) procesarFrame();
         };
 
-        // Botón reporte: descarga la última imagen de reporte como JPG
+        /**
+         * Descarga la última imagen de reporte (collage completo) como JPEG.
+         * El botón está deshabilitado hasta que se realiza al menos una captura exitosa.
+         */
         btnRep.onclick = () => {
             if (!ultimoB64) return;
-            const a      = document.createElement('a');
-            a.href       = ultimoB64;
-            a.download   = `reporte_${Date.now()}.jpg`;
+            const a = document.createElement("a");
+            a.href = ultimoB64;
+            a.download = `reporte_${Date.now()}.jpg`;
             a.click();
-            log("Reporte descargado");
+            log("Reporte descargado.");
         };
 
-        // Arranca la cámara al cargar la página
-        initCamera();
+
+        // ═══════════════════════════════════════════════════════════
+        // ARRANQUE
+        // ═══════════════════════════════════════════════════════════
+
+        // Iniciamos la cámara al cargar la página
+        iniciarCamara();
     </script>
 </body>
+
 </html>

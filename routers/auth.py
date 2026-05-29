@@ -1,45 +1,52 @@
-"""Módulo de autenticación del sistema.
-
-Proporciona los endpoints necesarios para el inicio de sesión,
-la renovación de tokens JWT y la obtención de la información
-del usuario autenticado.
 """
-
+Endpoints de autenticación: login, refresh de token y datos del usuario.
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from core.database import get_db
 from core.dependencies import get_current_user
-from db.database import get_db
-from models.usuarios import Usuario
-from schemas.usuarios import LoginRequest, RefreshRequest, TokenResponse, UsuarioResponse
-from services import auth as auth_service
+from core.models import Usuario, LoginRequest, RefreshRequest, TokenResponse, UsuarioResponse
+from core.security import verify_password, create_access_token, create_refresh_token, decode_token
 
+# Router para los endpoints de autenticación.
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
+# Endpoint para iniciar sesión en el sistema.
 @router.post(
-    "/login",
-    response_model=TokenResponse,
-    summary="Iniciar sesión en el sistema",
+    "/login", 
+    response_model=TokenResponse, 
+    summary="Iniciar sesión en el sistema"
 )
-def login(login_data: LoginRequest, db: Session = Depends(get_db)):
-    """Autentica al usuario con sus credenciales y genera tokens JWT.
+def login(body: LoginRequest, db: Session = Depends(get_db)):
+    """
+    Autentica con username + password y devuelve access token (30 min) y refresh token (7 días).
+    """
+    usuario = db.query(Usuario).filter(Usuario.username == body.username).first()
+    if not usuario or not verify_password(body.password, usuario.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales incorrectas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return {
+        "access_token":  create_access_token(usuario.username),
+        "refresh_token": create_refresh_token(usuario.username),
+        "token_type":    "bearer",
+    }
 
-    Verifica el nombre de usuario y la contraseña contra la base de datos.
-    Si las credenciales son válidas, devuelve un access_token (30 min)
-    y un refresh_token (7 días) para mantener la sesión.
-
-    Args:
-        login_data: Credenciales de acceso (username y password).
-        db: Sesión de base de datos.
-
-    Returns:
-        TokenResponse con access_token, refresh_token y datos del usuario.
-
-    Raises:
-        HTTPException 401: Si las credenciales son incorrectas.
+# Endpoint para renovar el token de acceso.
+@router.post(
+    "/refresh", 
+    response_model=TokenResponse, 
+    summary="Renovar el token de acceso"
+)
+def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
+    """
+    Emite un nuevo access token a partir de un refresh token válido.
     """
     try:
-        return auth_service.login(login_data.username, login_data.password, db)
+        username = decode_token(body.refresh_token, expected_type="refresh")
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -47,53 +54,23 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-@router.post(
-    "/refresh",
-    response_model=TokenResponse,
-    summary="Renovar el token de acceso",
-)
-def refresh(token_in: RefreshRequest, db: Session = Depends(get_db)):
-    """Renueva el token de acceso mediante un refresh_token válido.
+    # Comprueba que el usuario exista en la base de datos.
+    usuario = db.query(Usuario).filter(Usuario.username == username).first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
 
-    Permite al usuario obtener un nuevo access_token sin necesidad
-    de volver a introducir sus credenciales, facilitando sesiones
-    prolongadas de forma segura.
+    return {
+        "access_token":  create_access_token(usuario.username),
+        "refresh_token": body.refresh_token,
+        "token_type":    "bearer",
+    }
 
-    Args:
-        token_in: Objeto que contiene el refresh_token.
-        db: Sesión de base de datos.
-
-    Returns:
-        TokenResponse con el nuevo access_token y refresh_token.
-
-    Raises:
-        HTTPException 401: Si el refresh_token no es válido o ha expirado.
-    """
-    try:
-        return auth_service.refresh(token_in.refresh_token, db)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
+# Endpoint para obtener los datos del usuario autenticado.
 @router.get(
-    "/whoami",
-    response_model=UsuarioResponse,
-    summary="Datos del usuario actual",
+    "/whoami", 
+    response_model=UsuarioResponse, 
+    summary="Datos del usuario autenticado"
 )
 def whoami(usuario_actual: Usuario = Depends(get_current_user)):
-    """Obtiene los datos del usuario autenticado.
-
-    Endpoint de utilidad para que el frontend conozca la identidad
-    del usuario actualmente logueado, permitiendo mostrar su perfil
-    o personalizar la interfaz.
-
-    Args:
-        usuario_actual: Usuario autenticado extraído del token JWT.
-
-    Returns:
-        UsuarioResponse con los datos del usuario (username, email, etc.).
-    """
-    return auth_service.whoami(usuario_actual)
+    """Devuelve los datos del usuario identificado por el access token."""
+    return usuario_actual
