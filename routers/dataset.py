@@ -34,6 +34,7 @@ _ensure_dirs()
 async def capture(
     file: UploadFile = File(...), 
     coords: Optional[str] = Form(None),
+    rotation: int = Form(0),
     user=Depends(get_current_user)
 ):
     """
@@ -55,6 +56,18 @@ async def capture(
 
         # Rectifica la imagen.
         warped = _rectificar(frame, exterior)
+
+        # Aplicar rotación si es necesario
+        try:
+            rot_val = int(rotation) if rotation else 0
+        except (ValueError, TypeError):
+            rot_val = 0
+        if rot_val == 90:
+            warped = cv2.rotate(warped, cv2.ROTATE_90_CLOCKWISE)
+        elif rot_val == 180:
+            warped = cv2.rotate(warped, cv2.ROTATE_180)
+        elif rot_val == 270:
+            warped = cv2.rotate(warped, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
         # Convierte la imagen a escala de grises.
         gray   = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)

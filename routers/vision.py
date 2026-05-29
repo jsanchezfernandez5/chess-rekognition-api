@@ -25,7 +25,8 @@ router = APIRouter(
 )
 async def recognize_board(
     file: UploadFile = File(...),
-    coords: Optional[str] = Form(None)
+    coords: Optional[str] = Form(None),
+    rotation: int = Form(0)
 ):
     """
     Reconoce y rectifica un tablero de ajedrez desde una imagen.
@@ -34,6 +35,7 @@ async def recognize_board(
     Args:
         file: Imagen subida en formato JPEG/PNG.
         coords: Coordenadas manuales del tablero en formato 'x1,y1,x2,y2,x3,y3,x4,y4'.
+        rotation: Rotación del tablero (0, 90, 180, 270 grados).
 
     Returns:
         Dict con el resultado de la detección y el tablero rectificado.
@@ -45,7 +47,7 @@ async def recognize_board(
         if frame is None:
             return {"success": False, "error": "No se pudo decodificar la imagen recibida"}
 
-        result = VisionService.detect_and_rectify(contents, coords)
+        result = VisionService.detect_and_rectify(contents, coords, rotation)
         return result
 
     except Exception as e:
@@ -76,7 +78,8 @@ def vision_status():
 )
 async def classify_board(
     file: UploadFile = File(...),
-    coords: Optional[str] = Form(None)
+    coords: Optional[str] = Form(None),
+    rotation: int = Form(0)
 ):
     """
     Clasifica las 64 casillas del tablero de ajedrez mediante ML.
@@ -95,6 +98,7 @@ async def classify_board(
     Args:
         file: Imagen subida con el tablero a clasificar.
         coords: Coordenadas manuales del tablero en formato 'x1,y1,x2,y2,x3,y3,x4,y4'.
+        rotation: Rotación del tablero (0, 90, 180, 270 grados).
 
     Returns:
         Dict con el estado de cada casilla, el FEN generado y flag de éxito.
@@ -118,6 +122,19 @@ async def classify_board(
             
         # Rectificamos la imagen para obtener una vista cenital del tablero.
         warped = _rectificar(frame, exterior)
+
+        # Aplicamos la rotación si corresponde
+        try:
+            rot_val = int(rotation) if rotation else 0
+        except (ValueError, TypeError):
+            rot_val = 0
+        if rot_val == 90:
+            warped = cv2.rotate(warped, cv2.ROTATE_90_CLOCKWISE)
+        elif rot_val == 180:
+            warped = cv2.rotate(warped, cv2.ROTATE_180)
+        elif rot_val == 270:
+            warped = cv2.rotate(warped, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
         # Clasificamos las 64 casillas del tablero.
         board_state = classifier.classify_board(warped)
         # Generamos el FEN completo del estado del tablero.
@@ -156,7 +173,8 @@ def reload_model():
 async def detect_move_endpoint(
     file: UploadFile = File(...),
     prev_fen: str = Form(...),
-    coords: Optional[str] = Form(None)
+    coords: Optional[str] = Form(None),
+    rotation: int = Form(0)
 ):
     """
     Detecta el movimiento de ajedrez entre dos estados del tablero.
@@ -168,6 +186,7 @@ async def detect_move_endpoint(
         file: Imagen actual del tablero.
         prev_fen: FEN completo del estado anterior del tablero.
         coords: Coordenadas manuales del tablero en formato 'x1,y1,x2,y2,x3,y3,x4,y4'.
+        rotation: Rotación del tablero (0, 90, 180, 270 grados).
 
     Returns:
         Dict con el movimiento detectado (origen, destino, pieza) y éxito.
@@ -194,6 +213,18 @@ async def detect_move_endpoint(
         # Rectificamos la imagen para obtener una vista cenital
         warped   = _rectificar(frame, exterior)
         
+        # Aplicamos la rotación si corresponde
+        try:
+            rot_val = int(rotation) if rotation else 0
+        except (ValueError, TypeError):
+            rot_val = 0
+        if rot_val == 90:
+            warped = cv2.rotate(warped, cv2.ROTATE_90_CLOCKWISE)
+        elif rot_val == 180:
+            warped = cv2.rotate(warped, cv2.ROTATE_180)
+        elif rot_val == 270:
+            warped = cv2.rotate(warped, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
         # Detectamos el movimiento
         result = _detect_move(warped, prev_fen, classifier)
         return {"success": True, **result}

@@ -105,7 +105,7 @@
         }
 
         /* ── Botones ── */
-        button {
+        button, select {
             padding: 8px 16px;
             border: 1px solid #e2e8f0;
             border-radius: 6px;
@@ -116,7 +116,7 @@
             transition: background .15s;
         }
 
-        button:hover {
+        button:hover, select:hover {
             background: #f8fafc;
         }
 
@@ -328,6 +328,12 @@
                             <button onclick="iniciarCamara()">Reiniciar cámara</button>
                             <button class="btn-primary" onclick="capturar()">Capturar tablero</button>
                             <button id="btnLimpiarCoords">Limpiar Esquinas</button>
+                            <select id="selectRotacion">
+                                <option value="0">Normal (0°)</option>
+                                <option value="90">Lateral Derecha (90° Horario)</option>
+                                <option value="270">Lateral Izquierda (90° Antihorario)</option>
+                                <option value="180">Invertido (180°)</option>
+                            </select>
                         </div>
                     </div>
 
@@ -656,6 +662,7 @@
             // Construimos el FormData para enviar el archivo al endpoint
             const fd = new FormData();
             fd.append("file", blob, "frame.jpg");
+            fd.append("rotation", document.getElementById("selectRotacion").value);
             if (manualPoints.length === 4) {
                 const coordsStr = manualPoints.map(p => `${p.x},${p.y}`).join(",");
                 fd.append("coords", coordsStr);

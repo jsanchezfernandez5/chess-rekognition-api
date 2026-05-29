@@ -596,7 +596,7 @@ class VisionService:
         return True, exterior, corners
 
     @staticmethod
-    def detect_and_rectify(image_bytes: bytes, coords: str = None) -> dict:
+    def detect_and_rectify(image_bytes: bytes, coords: str = None, rotation: int = 0) -> dict:
         """
         Ejecuta el pipeline completo de detección y rectificación del tablero de ajedrez.
 
@@ -605,12 +605,14 @@ class VisionService:
         2. Detectar el tablero mediante findChessboardCornersSB o usando coordenadas manuales.
         3. Calcular las esquinas exteriores del tablero.
         4. Rectificar la perspectiva mediante homografía.
-        5. Analizar las 64 casillas para determinar ocupación.
-        6. Generar las imágenes de respuesta (vista real, vista 2D, depuración, collage).
+        5. Aplicar rotación a la imagen rectificada si es necesario.
+        6. Analizar las 64 casillas para determinar ocupación.
+        7. Generar las imágenes de respuesta (vista real, vista 2D, depuración, collage).
 
         Args:
             image_bytes: Datos binarios de la imagen de entrada.
             coords: Coordenadas manuales en formato 'x1,y1,x2,y2,x3,y3,x4,y4' (porcentajes).
+            rotation: Rotación de la cámara (0, 90, 180, 270 grados).
 
         Returns:
             Diccionario con los resultados del pipeline. Incluye las claves:
@@ -636,6 +638,19 @@ class VisionService:
 
             # 4. Rectificar
             warped = _rectificar(frame, exterior)
+
+            # Aplicar rotación si es necesario
+            try:
+                rot_val = int(rotation) if rotation else 0
+            except (ValueError, TypeError):
+                rot_val = 0
+
+            if rot_val == 90:
+                warped = cv2.rotate(warped, cv2.ROTATE_90_CLOCKWISE)
+            elif rot_val == 180:
+                warped = cv2.rotate(warped, cv2.ROTATE_180)
+            elif rot_val == 270:
+                warped = cv2.rotate(warped, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
             # 5. Analizar casillas
             squares, std_thresh_auto, edge_thresh_auto = _analizar_casillas(warped)

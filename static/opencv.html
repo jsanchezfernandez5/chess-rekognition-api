@@ -109,7 +109,7 @@
             flex-wrap: wrap;
         }
 
-        button {
+        button, select {
             padding: 8px 16px;
             border-radius: 6px;
             border: 1px solid #e2e8f0;
@@ -120,7 +120,7 @@
             transition: background .15s;
         }
 
-        button:hover {
+        button:hover, select:hover {
             background: #f8fafc;
         }
 
@@ -255,6 +255,12 @@
                         <button id="btnAuto">Auto: OFF</button>
                         <button id="btnReporte" disabled>Descargar reporte</button>
                         <button id="btnLimpiarCoords">Limpiar Esquinas</button>
+                        <select id="selectRotacion">
+                            <option value="0">Normal (0°)</option>
+                            <option value="90">Lateral Derecha (90° Horario)</option>
+                            <option value="270">Lateral Izquierda (90° Antihorario)</option>
+                            <option value="180">Invertido (180°)</option>
+                        </select>
                     </div>
                     <p style="margin-top:10px;">Estado: <span id="estadoLabel">—</span></p>
                     <div id="log">--- consola ---</div>
@@ -330,6 +336,7 @@
         const btnAuto = document.getElementById("btnAuto");
         const btnRep = document.getElementById("btnReporte");
         const btnLimpiar = document.getElementById("btnLimpiarCoords");
+        const selectRot = document.getElementById("selectRotacion");
         const estadoLbl = document.getElementById("estadoLabel");
         const imgReal = document.getElementById("imgReal");
         const img2D = document.getElementById("img2D");
@@ -427,6 +434,7 @@
 
             const fd = new FormData();
             fd.append("file", blob, "frame.jpg");
+            fd.append("rotation", selectRot.value);
             if (manualPoints.length === 4) {
                 const coordsStr = manualPoints.map(p => `${p.x},${p.y}`).join(",");
                 fd.append("coords", coordsStr);
