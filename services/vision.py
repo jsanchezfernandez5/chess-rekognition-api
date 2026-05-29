@@ -566,13 +566,43 @@ def board_state_to_fen_board(board_state: dict) -> chess.Board:
 class VisionService:
 
     @staticmethod
-    def detect_and_rectify(image_bytes: bytes) -> dict:
+    def obtener_exterior_y_corners(frame: np.ndarray, coords: str = None) -> tuple:
+        """
+        Obtiene las esquinas exteriores y los puntos de depuración (corners),
+        ya sea a partir de coordenadas manuales en formato 'x1,y1,x2,y2,x3,y3,x4,y4'
+        (escaladas como porcentajes 0.0-1.0 de las dimensiones del frame) o mediante
+        el pipeline automático de detección.
+        """
+        if coords:
+            try:
+                parts = [float(x) for x in coords.split(",")]
+                if len(parts) == 8:
+                    h, w = frame.shape[:2]
+                    pts = np.array([
+                        [parts[0] * w, parts[1] * h],
+                        [parts[2] * w, parts[3] * h],
+                        [parts[4] * w, parts[5] * h],
+                        [parts[6] * w, parts[7] * h]
+                    ], dtype=np.float32)
+                    exterior = _ordenar_puntos(pts)
+                    return True, exterior, exterior
+            except Exception:
+                pass
+        
+        found, corners = _detectar_tablero(frame)
+        if not found:
+            return False, None, None
+        exterior = _calcular_esquinas_exteriores(corners)
+        return True, exterior, corners
+
+    @staticmethod
+    def detect_and_rectify(image_bytes: bytes, coords: str = None) -> dict:
         """
         Ejecuta el pipeline completo de detección y rectificación del tablero de ajedrez.
 
         El flujo de procesamiento incluye:
         1. Decodificar la imagen desde bytes.
-        2. Detectar el tablero mediante findChessboardCornersSB.
+        2. Detectar el tablero mediante findChessboardCornersSB o usando coordenadas manuales.
         3. Calcular las esquinas exteriores del tablero.
         4. Rectificar la perspectiva mediante homografía.
         5. Analizar las 64 casillas para determinar ocupación.
@@ -580,6 +610,7 @@ class VisionService:
 
         Args:
             image_bytes: Datos binarios de la imagen de entrada.
+            coords: Coordenadas manuales en formato 'x1,y1,x2,y2,x3,y3,x4,y4' (porcentajes).
 
         Returns:
             Diccionario con los resultados del pipeline. Incluye las claves:
@@ -596,15 +627,12 @@ class VisionService:
                 return {"success": False,
                         "error": "No se pudo decodificar la imagen"}
 
-            # 2. Detectar tablero
-            found, corners = _detectar_tablero(frame)
+            # 2 y 3. Obtener esquinas exteriores del tablero
+            found, exterior, corners = VisionService.obtener_exterior_y_corners(frame, coords)
             if not found:
                 return {"success": False,
                         "error": "Tablero no detectado. Asegúrate de que "
                                  "el tablero esté bien encuadrado y con buena luz."}
-
-            # 3. Esquinas exteriores
-            exterior = _calcular_esquinas_exteriores(corners)
 
             # 4. Rectificar
             warped = _rectificar(frame, exterior)

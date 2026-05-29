@@ -1,22 +1,19 @@
-"""
-Endpoints para captura de imágenes, gestión del dataset y entrenamiento del modelo ML.
-"""
-
 import asyncio
 import base64
 import os
 import traceback
 import uuid
+from typing import Optional
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, Depends, File, Query, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, WebSocket, WebSocketDisconnect
 
 from core.config import settings
 from core.dependencies import get_current_user
 from core.security import decode_token
 from services import training
-from services.vision import _calcular_esquinas_exteriores, _detectar_tablero, _rectificar
+from services.vision import VisionService, _rectificar
 
 # Router para los endpoints del dataset.
 router = APIRouter(prefix="/dataset", tags=["Dataset"])
@@ -36,10 +33,11 @@ _ensure_dirs()
 )
 async def capture(
     file: UploadFile = File(...), 
+    coords: Optional[str] = Form(None),
     user=Depends(get_current_user)
 ):
     """
-    Detecta el tablero en la imagen y devuelve las 64 casillas recortadas con sugerencia de etiqueta.
+    Detecta el tablero en la imagen y devuelve las 64 casillas recortadas con sugerencia de etiqueta Heurística.
     """
     try:
         # Lee el archivo de imagen.
@@ -51,12 +49,12 @@ async def capture(
             return {"success": False, "error": "No se pudo decodificar la imagen"}
 
         # Detecta el tablero en la imagen.
-        found, corners = _detectar_tablero(frame)
+        found, exterior, corners = VisionService.obtener_exterior_y_corners(frame, coords)
         if not found:
-            return {"success": False, "error": "Tablero no detectado. Asegúrate de que los bordes interiores (7×7) sean visibles."}
+            return {"success": False, "error": "Tablero no detectado. Asegúrate de que los bordes interiores (7×7) sean visibles o usa calibración manual."}
 
         # Rectifica la imagen.
-        warped = _rectificar(frame, _calcular_esquinas_exteriores(corners))
+        warped = _rectificar(frame, exterior)
 
         # Convierte la imagen a escala de grises.
         gray   = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)

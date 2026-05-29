@@ -1,12 +1,13 @@
 """
 Módulo de visión por computador.
 """
+from typing import Optional
 import cv2
 import numpy as np
 import traceback
 from fastapi import APIRouter, UploadFile, File, Form
 
-from services.vision import VisionService, _detectar_tablero, _calcular_esquinas_exteriores, _rectificar, board_state_to_fen_board
+from services.vision import VisionService, _rectificar, board_state_to_fen_board
 from services.classifier import classifier
 from services.move_detector import detect_move as _detect_move
 
@@ -22,13 +23,17 @@ router = APIRouter(
     "/recognize-board", 
     summary="Reconoce y rectifica un tablero de ajedrez"
 )
-async def recognize_board(file: UploadFile = File(...)):
+async def recognize_board(
+    file: UploadFile = File(...),
+    coords: Optional[str] = Form(None)
+):
     """
     Reconoce y rectifica un tablero de ajedrez desde una imagen.
     Devuelve una vista rectificada en perspectiva cenital (400x400).
 
     Args:
         file: Imagen subida en formato JPEG/PNG.
+        coords: Coordenadas manuales del tablero en formato 'x1,y1,x2,y2,x3,y3,x4,y4'.
 
     Returns:
         Dict con el resultado de la detección y el tablero rectificado.
@@ -40,7 +45,7 @@ async def recognize_board(file: UploadFile = File(...)):
         if frame is None:
             return {"success": False, "error": "No se pudo decodificar la imagen recibida"}
 
-        result = VisionService.detect_and_rectify(contents)
+        result = VisionService.detect_and_rectify(contents, coords)
         return result
 
     except Exception as e:
@@ -69,7 +74,10 @@ def vision_status():
     "/classify", 
     summary="Clasifica las 64 casillas del tablero"
 )
-async def classify_board(file: UploadFile = File(...)):
+async def classify_board(
+    file: UploadFile = File(...),
+    coords: Optional[str] = Form(None)
+):
     """
     Clasifica las 64 casillas del tablero de ajedrez mediante ML.
 
@@ -86,6 +94,7 @@ async def classify_board(file: UploadFile = File(...)):
 
     Args:
         file: Imagen subida con el tablero a clasificar.
+        coords: Coordenadas manuales del tablero en formato 'x1,y1,x2,y2,x3,y3,x4,y4'.
 
     Returns:
         Dict con el estado de cada casilla, el FEN generado y flag de éxito.
@@ -103,12 +112,10 @@ async def classify_board(file: UploadFile = File(...)):
         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         
         # Detectamos el tablero en la imagen con OpenCV.
-        found, corners = _detectar_tablero(frame)
+        found, exterior, corners = VisionService.obtener_exterior_y_corners(frame, coords)
         if not found:
             return {"success": False, "error": "Tablero no detectado"}
             
-        # Calculamos las esquinas exteriores del tablero.
-        exterior = _calcular_esquinas_exteriores(corners)
         # Rectificamos la imagen para obtener una vista cenital del tablero.
         warped = _rectificar(frame, exterior)
         # Clasificamos las 64 casillas del tablero.
@@ -148,7 +155,8 @@ def reload_model():
     summary="Detecta el movimiento entre dos posiciones")
 async def detect_move_endpoint(
     file: UploadFile = File(...),
-    prev_fen: str = Form(...)
+    prev_fen: str = Form(...),
+    coords: Optional[str] = Form(None)
 ):
     """
     Detecta el movimiento de ajedrez entre dos estados del tablero.
@@ -159,6 +167,7 @@ async def detect_move_endpoint(
     Args:
         file: Imagen actual del tablero.
         prev_fen: FEN completo del estado anterior del tablero.
+        coords: Coordenadas manuales del tablero en formato 'x1,y1,x2,y2,x3,y3,x4,y4'.
 
     Returns:
         Dict con el movimiento detectado (origen, destino, pieza) y éxito.
@@ -178,12 +187,10 @@ async def detect_move_endpoint(
             return {"success": False, "error": "Imagen no decodificable"}
 
         # Detectamos el tablero en la imagen
-        found, corners = _detectar_tablero(frame)
+        found, exterior, corners = VisionService.obtener_exterior_y_corners(frame, coords)
         if not found:
             return {"success": False, "error": "Tablero no detectado"}
 
-        # Calculamos las esquinas exteriores
-        exterior = _calcular_esquinas_exteriores(corners)
         # Rectificamos la imagen para obtener una vista cenital
         warped   = _rectificar(frame, exterior)
         

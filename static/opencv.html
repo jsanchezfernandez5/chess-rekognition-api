@@ -81,6 +81,7 @@
             border-radius: 6px;
             overflow: hidden;
             aspect-ratio: 16/9;
+            position: relative;
         }
 
         video {
@@ -88,6 +89,16 @@
             height: 100%;
             object-fit: cover;
             display: block;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            cursor: crosshair;
         }
 
         /* ── Botones ── */
@@ -237,11 +248,13 @@
                     <h2>Cámara en vivo</h2>
                     <div class="camera-wrap">
                         <video id="cam" autoplay playsinline muted></video>
+                        <canvas id="overlay"></canvas>
                     </div>
                     <div class="btn-row">
                         <button class="btn-primary" id="btnCapturar">Capturar</button>
                         <button id="btnAuto">Auto: OFF</button>
                         <button id="btnReporte" disabled>Descargar reporte</button>
+                        <button id="btnLimpiarCoords">Limpiar Esquinas</button>
                     </div>
                     <p style="margin-top:10px;">Estado: <span id="estadoLabel">—</span></p>
                     <div id="log">--- consola ---</div>
@@ -312,9 +325,11 @@
 
         const video = document.getElementById("cam");
         const canvas = document.getElementById("snap");
+        const overlay = document.getElementById("overlay");
         const btnCap = document.getElementById("btnCapturar");
         const btnAuto = document.getElementById("btnAuto");
         const btnRep = document.getElementById("btnReporte");
+        const btnLimpiar = document.getElementById("btnLimpiarCoords");
         const estadoLbl = document.getElementById("estadoLabel");
         const imgReal = document.getElementById("imgReal");
         const img2D = document.getElementById("img2D");
@@ -337,6 +352,9 @@
 
         // Guarda la última imagen de reporte en base64 para permitir su descarga
         let ultimoB64 = null;
+
+        // Puntos manuales (coordenadas x,y en rango 0.0 - 1.0)
+        let manualPoints = [];
 
 
         // ═══════════════════════════════════════════════════════════
@@ -369,6 +387,11 @@
                     video: { facingMode: "environment", width: 1280, height: 720 }
                 });
                 video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    const aspect = video.videoWidth / video.videoHeight;
+                    document.querySelector(".camera-wrap").style.aspectRatio = aspect;
+                    drawOverlay();
+                };
                 log("Cámara iniciada.");
             } catch (err) {
                 log("Error al acceder a la cámara: " + err.message);
@@ -383,14 +406,6 @@
         /**
          * Captura el fotograma actual del vídeo, lo convierte a JPEG y lo envía
          * al endpoint POST /vision/recognize-board.
-         *
-         * El backend (OpenCV) detecta el tablero, lo rectifica y devuelve:
-         *   - rectified_real  → vista cenital con overlay de ocupación
-         *   - rectified_2d    → vista sintética de diagnóstico
-         *   - debug_image     → imagen original con esquinas marcadas
-         *   - export_image    → collage completo descargable
-         *   - squares         → array con datos de las 64 casillas
-         *   - occupied_count  → número de casillas con pieza
          */
         async function procesarFrame() {
             // Evitamos lanzar otra petición si ya hay una en curso
@@ -412,6 +427,10 @@
 
             const fd = new FormData();
             fd.append("file", blob, "frame.jpg");
+            if (manualPoints.length === 4) {
+                const coordsStr = manualPoints.map(p => `${p.x},${p.y}`).join(",");
+                fd.append("coords", coordsStr);
+            }
 
             try {
                 const res = await fetch("/vision/recognize-board", { method: "POST", body: fd });
@@ -484,8 +503,68 @@
 
 
         // ═══════════════════════════════════════════════════════════
-        // EVENTOS DE BOTONES
+        // DIBUJAR PUNTOS Y LÍNEAS DE CALIBRACIÓN
         // ═══════════════════════════════════════════════════════════
+
+        function drawOverlay() {
+            const ctx = overlay.getContext("2d");
+            overlay.width = overlay.clientWidth;
+            overlay.height = overlay.clientHeight;
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+            if (manualPoints.length > 0) {
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = "#10b981"; // verde esmeralda
+                ctx.fillStyle = "#ef4444"; // rojo
+
+                ctx.beginPath();
+                ctx.moveTo(manualPoints[0].x * overlay.width, manualPoints[0].y * overlay.height);
+                for (let i = 1; i < manualPoints.length; i++) {
+                    ctx.lineTo(manualPoints[i].x * overlay.width, manualPoints[i].y * overlay.height);
+                }
+                if (manualPoints.length === 4) {
+                    ctx.closePath();
+                }
+                ctx.stroke();
+
+                manualPoints.forEach((pt, index) => {
+                    const px = pt.x * overlay.width;
+                    const py = pt.y * overlay.height;
+                    ctx.beginPath();
+                    ctx.arc(px, py, 6, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.fillStyle = "#ffffff";
+                    ctx.font = "10px sans-serif";
+                    ctx.fillText(index + 1, px - 3, py + 3);
+                    ctx.fillStyle = "#ef4444";
+                });
+            }
+        }
+
+
+        // ═══════════════════════════════════════════════════════════
+        // EVENTOS DE BOTONES Y CLICK CANVAS
+        // ═══════════════════════════════════════════════════════════
+
+        overlay.addEventListener("click", (e) => {
+            const rect = overlay.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width;
+            const y = (e.clientY - rect.top) / rect.height;
+
+            if (manualPoints.length >= 4) {
+                manualPoints = [];
+            } else {
+                manualPoints.push({ x, y });
+            }
+            drawOverlay();
+        });
+
+        btnLimpiar.onclick = () => {
+            manualPoints = [];
+            drawOverlay();
+        };
+
+        window.addEventListener("resize", drawOverlay);
 
         /**
          * Captura manual: desactiva el modo auto y lanza una sola captura.

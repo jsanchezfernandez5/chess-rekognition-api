@@ -157,6 +157,7 @@
             border-radius: 6px;
             overflow: hidden;
             aspect-ratio: 16/9;
+            position: relative;
         }
 
         video {
@@ -164,6 +165,16 @@
             height: 100%;
             object-fit: cover;
             display: block;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            cursor: crosshair;
         }
 
         .btn-row {
@@ -311,10 +322,12 @@
                         <h2>Cámara en vivo</h2>
                         <div class="camera-wrap">
                             <video id="cam" autoplay playsinline muted></video>
+                            <canvas id="overlay"></canvas>
                         </div>
                         <div class="btn-row">
                             <button onclick="iniciarCamara()">Reiniciar cámara</button>
                             <button class="btn-primary" onclick="capturar()">Capturar tablero</button>
+                            <button id="btnLimpiarCoords">Limpiar Esquinas</button>
                         </div>
                     </div>
 
@@ -513,6 +526,77 @@
 
 
         // ═══════════════════════════════════════════════════════════
+        // ESTADO DE CALIBRACIÓN MANUAL
+        // ═══════════════════════════════════════════════════════════
+        let manualPoints = [];
+
+        function drawOverlay() {
+            const overlay = document.getElementById("overlay");
+            if (!overlay) return;
+            const ctx = overlay.getContext("2d");
+            overlay.width = overlay.clientWidth;
+            overlay.height = overlay.clientHeight;
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+            if (manualPoints.length > 0) {
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = "#10b981"; // verde esmeralda
+                ctx.fillStyle = "#ef4444"; // rojo
+
+                ctx.beginPath();
+                ctx.moveTo(manualPoints[0].x * overlay.width, manualPoints[0].y * overlay.height);
+                for (let i = 1; i < manualPoints.length; i++) {
+                    ctx.lineTo(manualPoints[i].x * overlay.width, manualPoints[i].y * overlay.height);
+                }
+                if (manualPoints.length === 4) {
+                    ctx.closePath();
+                }
+                ctx.stroke();
+
+                manualPoints.forEach((pt, index) => {
+                    const px = pt.x * overlay.width;
+                    const py = pt.y * overlay.height;
+                    ctx.beginPath();
+                    ctx.arc(px, py, 6, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.fillStyle = "#ffffff";
+                    ctx.font = "10px sans-serif";
+                    ctx.fillText(index + 1, px - 3, py + 3);
+                    ctx.fillStyle = "#ef4444";
+                });
+            }
+        }
+
+        // Agregar listeners para el overlay una vez cargado
+        document.addEventListener("DOMContentLoaded", () => {
+            const overlay = document.getElementById("overlay");
+            if (overlay) {
+                overlay.addEventListener("click", (e) => {
+                    const rect = overlay.getBoundingClientRect();
+                    const x = (e.clientX - rect.left) / rect.width;
+                    const y = (e.clientY - rect.top) / rect.height;
+
+                    if (manualPoints.length >= 4) {
+                        manualPoints = [];
+                    } else {
+                        manualPoints.push({ x, y });
+                    }
+                    drawOverlay();
+                });
+            }
+
+            const btnLimpiar = document.getElementById("btnLimpiarCoords");
+            if (btnLimpiar) {
+                btnLimpiar.addEventListener("click", () => {
+                    manualPoints = [];
+                    drawOverlay();
+                });
+            }
+
+            window.addEventListener("resize", drawOverlay);
+        });
+
+        // ═══════════════════════════════════════════════════════════
         // CÁMARA
         // ═══════════════════════════════════════════════════════════
 
@@ -522,10 +606,16 @@
          */
         async function iniciarCamara() {
             try {
+                const video = document.getElementById("cam");
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: "environment", width: 1280, height: 720 }
                 });
-                document.getElementById("cam").srcObject = stream;
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    const aspect = video.videoWidth / video.videoHeight;
+                    document.querySelector(".camera-wrap").style.aspectRatio = aspect;
+                    drawOverlay();
+                };
             } catch (e) {
                 log("Error al acceder a la cámara: " + e.message);
             }
@@ -566,6 +656,10 @@
             // Construimos el FormData para enviar el archivo al endpoint
             const fd = new FormData();
             fd.append("file", blob, "frame.jpg");
+            if (manualPoints.length === 4) {
+                const coordsStr = manualPoints.map(p => `${p.x},${p.y}`).join(",");
+                fd.append("coords", coordsStr);
+            }
 
             try {
                 const res = await apiFetch("/dataset/capture", { method: "POST", body: fd });
