@@ -235,13 +235,22 @@ def _rectificar(frame: np.ndarray, exterior: np.ndarray) -> np.ndarray:
 
 # Función para calibrar umbrales de detección
 def _calibrar_umbrales(warped: np.ndarray) -> tuple:
-    gray_raw = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
-    gray = clahe.apply(gray_raw)
+    """
+    Calcula umbrales de detección de forma dinámica según la iluminación del tablero rectificado.
+
+    Args:
+        warped: Imagen del tablero rectificado en vista cenital.
+
+    Returns:
+        Tupla (std_thresh, edge_thresh) con los umbrales calculados para desviación estándar y detección de bordes.
+    """
+    gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
     stds = []
 
+    # Recorre cada casilla del tablero
     for row in range(8):
         for col in range(8):
+            # Calcula la posición y extrae el 65% central de cada casilla
             x, y = col * CELL_SIZE, row * CELL_SIZE
             cell = gray[y:y+CELL_SIZE, x:x+CELL_SIZE]
             h, w = cell.shape
@@ -249,17 +258,21 @@ def _calibrar_umbrales(warped: np.ndarray) -> tuple:
             yo, xo = (h - ch) // 2, (w - cw) // 2
             stds.append(float(np.std(cell[yo:yo+ch, xo:xo+cw])))
 
+    # Estadísticos robustos (percentiles) para separar ocupadas de vacías
     stds_arr = np.array(stds)
     p25  = float(np.percentile(stds_arr, 25))
     p75  = float(np.percentile(stds_arr, 75))
     spread = p75 - p25
 
     if spread < 10:
+        # Tablero uniforme: umbral conservador basado en mediana + margen
         std_thresh = float(np.median(stds_arr)) + max(spread * 1.5, 15)
     else:
+        # Con variación: punto de corte entre percentil 25 y el grupo alto
         std_thresh = p25 + spread * 0.8
 
-    std_thresh = float(np.clip(std_thresh, 25, 100))
+    # Acotación segura para evitar falsos positivos/negativos extremos
+    std_thresh = float(np.clip(std_thresh, 45, 120))
     edge_thresh = std_thresh * 18
 
     return std_thresh, edge_thresh
@@ -278,14 +291,14 @@ def _analizar_casillas(warped: np.ndarray) -> tuple:
         (id, fila, columna, ocupada, std, bordes, es_clara) y
         - y los dos umbrales calculados.
     """
+    # Calibra los umbrales de detección de forma dinámica
     std_thresh, edge_thresh = _calibrar_umbrales(warped)
 
-    gray_raw = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
-    gray = clahe.apply(gray_raw)
+    # Convierte la imagen a escala de grises
+    gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
 
-    otsu_thresh, _ = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    edges = cv2.Canny(gray, otsu_thresh * 0.4, otsu_thresh)
+    # Detecta los bordes de las piezas
+    edges = cv2.Canny(gray, 50, 150)
 
     # Inicializa la lista de casillas
     squares = []
