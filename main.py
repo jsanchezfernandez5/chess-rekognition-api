@@ -1,4 +1,4 @@
-﻿"""
+"""
 Punto de entrada del servidor FastAPI.
 
 Centraliza la configuración de la API, el registro de rutas, la documentación técnica y los endpoints auxiliares.
@@ -47,7 +47,12 @@ tags_metadata = [
 # Inicialización de la API con Swagger UI personalizado
 app = FastAPI(
     title="Chess Rekognition API",
-    description="### Reconocimiento visual de jugadas en partidas de ajedrez presencial.",
+    description=(
+        "### Reconocimiento visual de jugadas en partidas de ajedrez presencial.\n\n"
+        "**Herramientas web integradas:**\n"
+        "* **Diagnóstico OpenCV:** [/opencv](/opencv)\n"
+        "* **Módulo de Dataset:** [/dataset](/dataset)"
+    ),
     version="1.0.0",
     openapi_tags=tags_metadata,
     contact={
@@ -119,5 +124,10 @@ def root():
     """Comprueba que el servidor está operativo y devuelve su estado actual."""
     return {
         "status": "online",
-        "message": "Servidor Chess Rekognition operando correctamente."
+        "message": "Servidor Chess Rekognition operando correctamente.",
+        "urls": {
+            "opencv": "/opencv",
+            "dataset": "/dataset",
+            "docs": "/docs"
+        }
     }
