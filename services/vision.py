@@ -40,22 +40,92 @@ def _encode_image(img: np.ndarray) -> str:
     _, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
     return "data:image/jpeg;base64," + base64.b64encode(buffer).decode("utf-8")
 
+# Ordena los cuatro puntos en el orden estándar: top-left, top-right, bottom-right, bottom-left
+def _ordenar_puntos(pts: np.ndarray) -> np.ndarray:
+    # Ordenamos los puntos por su coordenada X
+    x_sorted = pts[np.argsort(pts[:, 0]), :]
+    # Los dos puntos de la izquierda y los dos de la derecha
+    left_pts = x_sorted[:2, :]
+    right_pts = x_sorted[2:, :]
+    
+    # Ordenamos los de la izquierda por la coordenada Y para obtener tl y bl
+    left_sorted = left_pts[np.argsort(left_pts[:, 1]), :]
+    tl = left_sorted[0]
+    bl = left_sorted[1]
+    
+    # Ordenamos los de la derecha por la coordenada Y para obtener tr y br
+    right_sorted = right_pts[np.argsort(right_pts[:, 1]), :]
+    tr = right_sorted[0]
+    br = right_sorted[1]
+    
+    return np.array([tl, tr, br, bl], dtype=np.float32)
+
+# Detecta el contorno del tablero de ajedrez mediante detección de bordes
+def _detectar_tablero_contorno(frame: np.ndarray) -> np.ndarray | None:
+    # Convertir a escala de grises y suavizar
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    h, w = frame.shape[:2]
+    min_area = (h * w) * 0.15
+
+    # Intento 1: Canny + Dilatación para conectar contornos
+    edges = cv2.Canny(blurred, 30, 120)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    dilated = cv2.dilate(edges, kernel, iterations=1)
+    contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
+    
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area < min_area:
+            break
+        peri = cv2.arcLength(cnt, True)
+        approx = cv2.approxPolyDP(cnt, 0.025 * peri, True)
+        if len(approx) == 4:
+            return _ordenar_puntos(approx.reshape(4, 2).astype(np.float32))
+
+    # Intento 2: Umbralizado adaptativo
+    thresh = cv2.adaptiveThreshold(
+        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+        cv2.THRESH_BINARY, 11, 2
+    )
+    contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
+    
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area < min_area:
+            break
+        peri = cv2.arcLength(cnt, True)
+        approx = cv2.approxPolyDP(cnt, 0.025 * peri, True)
+        if len(approx) == 4:
+            return _ordenar_puntos(approx.reshape(4, 2).astype(np.float32))
+
+    return None
+
+# Calcula un encuadre por defecto en el centro de la imagen
+def _obtener_tablero_defecto(frame: np.ndarray) -> np.ndarray:
+    h, w = frame.shape[:2]
+    # Usamos el 82% de la dimensión menor para centrar el recuadro
+    size = int(min(h, w) * 0.82)
+    cx, cy = w // 2, h // 2
+    half = size // 2
+    
+    tl = np.array([cx - half, cy - half], dtype=np.float32)
+    tr = np.array([cx + half, cy - half], dtype=np.float32)
+    br = np.array([cx + half, cy + half], dtype=np.float32)
+    bl = np.array([cx - half, cy + half], dtype=np.float32)
+    
+    return np.array([tl, tr, br, bl], dtype=np.float32)
+
 # Método para detectar el tablero de ajedrez en una imagen
 def _detectar_tablero(frame: np.ndarray):
     """
-    Detecta el tablero de ajedrez en una imagen y obtiene las 49 esquinas internas (7x7).
+    Detecta el tablero de ajedrez en una imagen y obtiene las coordenadas del mismo.
 
-    - Utiliza findChessboardCornersSB como método principal por su robustez ante perspectiva y desenfoque. 
-    - Si falla, recurre a findChessboardCorners clásico. 
-    - Las esquinas detectadas se refinan a nivel subpíxel para mayor precisión.
-
-    Args:
-        frame: Imagen BGR de entrada.
-
-    Returns:
-        Tupla (found, corners). 
-        Si se detecta el tablero, found es True y corners contiene las 49 coordenadas de las esquinas internas. 
-        En caso contrario, (False, None).
+    1. Intenta detectar las 49 esquinas internas mediante findChessboardCornersSB o findChessboardCorners.
+    2. Si falla, intenta detectar el contorno cuadrangular externo más grande mediante OpenCV.
+    3. Si ambos fallan, recurre a un encuadre por defecto (rectángulo centrado).
     """
     # Convertir la imagen a escala de grises
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -84,27 +154,36 @@ def _detectar_tablero(frame: np.ndarray):
             cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE | cv2.CALIB_CB_FILTER_QUADS
         )
 
-    if not found:
-        return False, None
+    if found:
+        corners = corners / scale
+        # Refinamiento a nivel subpíxel para mayor precisión en la homografía
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+        corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
+        return True, corners
 
-    corners = corners / scale
+    # Si falla la detección geométrica de esquinas, recurrimos a detectar el contorno exterior
+    exterior_contour = _detectar_tablero_contorno(frame)
+    if exterior_contour is not None:
+        return True, exterior_contour
 
-    # Refinamiento a nivel subpíxel para mayor precisión en la homografía
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-    corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
-
-    return True, corners
+    # Si todo falla, generamos el encuadre por defecto (rectángulo centrado)
+    default_exterior = _obtener_tablero_defecto(frame)
+    return True, default_exterior
 
 def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
     """
-    Calcula las cuatro esquinas exteriores del tablero a partir de las 49 esquinas internas.
+    Calcula las cuatro esquinas exteriores del tablero a partir de las 49 esquinas internas o las devuelve directamente.
 
     Args:
-        corners: Array de 49 coordenadas de esquinas internas (salida de _detectar_tablero).
+        corners: Array de coordenadas.
 
     Returns:
         Array numpy con las cuatro esquinas exteriores en orden: tl, tr, br, bl.
     """
+    # Si ya se calcularon las 4 esquinas exteriores directamente, las devolvemos sin alterar
+    if len(corners) == 4:
+        return corners
+
     # Extraemos las 4 esquinas internas de las 49 detectadas (7x7)
     tl = corners[0][0];   tr = corners[6][0]
     bl = corners[42][0];  br = corners[48][0]
@@ -392,10 +471,15 @@ def _generar_debug(frame: np.ndarray, corners: np.ndarray,
     pts = exterior.reshape((-1, 1, 2)).astype(np.int32)
     cv2.polylines(debug, [pts], True, (0, 220, 80), 3)
 
-    # 49 esquinas internas en rojo
-    for pt in corners:
-        cx, cy = int(pt[0][0]), int(pt[0][1])
-        cv2.circle(debug, (cx, cy), 4, (0, 0, 220), -1)
+    # 49 esquinas internas en rojo (si están disponibles)
+    if corners is not None and len(corners) == 49:
+        for pt in corners:
+            cx, cy = int(pt[0][0]), int(pt[0][1])
+            cv2.circle(debug, (cx, cy), 4, (0, 0, 220), -1)
+    elif corners is not None and len(corners) == 4:
+        for pt in corners:
+            cx, cy = int(pt[0]), int(pt[1])
+            cv2.circle(debug, (cx, cy), 6, (0, 0, 220), -1)
 
     return debug
 
