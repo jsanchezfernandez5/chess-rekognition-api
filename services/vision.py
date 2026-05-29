@@ -21,8 +21,8 @@ BOARD_SIZE = 400
 CELL_SIZE = BOARD_SIZE // 8
 COLS = "abcdefgh"
 
-# Porcentaje del centro de cada casilla que se utiliza para el análisis (el 65% central)
-INNER_CROP_PCT = 0.65
+# Porcentaje del centro de cada casilla que se utiliza para el análisis (el 45% central)
+INNER_CROP_PCT = 0.45
 
 # Método auxiliar para codificar imágenes en formato base64 para el frontend
 def _encode_image(img: np.ndarray) -> str:
