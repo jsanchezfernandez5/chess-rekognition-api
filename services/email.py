@@ -28,13 +28,12 @@ async def send_welcome_email(nombre: str, mail: str) -> None:
         Exception: Si la API de Resend devuelve un error. La excepción se propaga
                    para que el llamador pueda manejar el fallo adecuadamente.
     """
-    <html>
+    html_body = f"""<html>
       <body style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
         <h2 style="color: #2c3e50;">¡Bienvenido a Chess Rekognition, {nombre}!</h2>
         <p>Tu cuenta ha sido creada correctamente. Ya puedes iniciar sesión y comenzar a registrar tus partidas.</p>
       </body>
-    </html>
-    """
+    </html>"""
     # asyncio.to_thread ejecuta la función síncrona en un thread del pool,
     # liberando el event loop mientras espera la respuesta HTTP de Resend.
     await asyncio.to_thread(
