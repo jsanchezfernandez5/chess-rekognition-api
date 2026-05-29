@@ -322,12 +322,16 @@
                         <h2>Cámara en vivo</h2>
                         <div class="camera-wrap">
                             <video id="cam" autoplay playsinline muted></video>
+                            <img id="imgSource" style="display:none; width:100%; height:100%; object-fit:cover;" alt="Imagen cargada">
                             <canvas id="overlay"></canvas>
                         </div>
                         <div class="btn-row">
-                            <button onclick="iniciarCamara()">Reiniciar cámara</button>
+                            <button id="btnReiniciarCam" onclick="iniciarCamara()">Reiniciar cámara</button>
                             <button class="btn-primary" onclick="capturar()">Capturar tablero</button>
                             <button id="btnLimpiarCoords">Limpiar Esquinas</button>
+                            <button id="btnCargarFoto" onclick="document.getElementById('inputFile').click()">Cargar Foto</button>
+                            <button id="btnUsarCamara" style="display:none;" onclick="usarCamaraOriginal()">Usar Cámara</button>
+                            <input type="file" id="inputFile" accept="image/*" style="display:none" onchange="cargarFotoLocal(event)">
                             <select id="selectRotacion">
                                 <option value="0">De frente - Blancas pegado a la cámara (Debajo 0º)</option>
                                 <option value="90">Lateral Blancas a la derecha (90º)</option>
@@ -535,6 +539,48 @@
         // ESTADO DE CALIBRACIÓN MANUAL
         // ═══════════════════════════════════════════════════════════
         let manualPoints = [];
+        let modoImagen = false;
+
+        function cargarFotoLocal(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const video = document.getElementById("cam");
+                    const imgSource = document.getElementById("imgSource");
+                    const btnUsarCam = document.getElementById("btnUsarCamara");
+                    const btnReiniciarCam = document.getElementById("btnReiniciarCam");
+
+                    if (video.srcObject) {
+                        video.srcObject.getTracks().forEach(t => t.stop());
+                        video.srcObject = null;
+                    }
+
+                    imgSource.src = e.target.result;
+                    video.style.display = "none";
+                    imgSource.style.display = "block";
+                    btnUsarCam.style.display = "inline-block";
+                    btnReiniciarCam.style.display = "none";
+                    modoImagen = true;
+
+                    imgSource.onload = () => {
+                        const aspect = imgSource.naturalWidth / imgSource.naturalHeight;
+                        document.querySelector(".camera-wrap").style.aspectRatio = aspect;
+                        drawOverlay();
+                    };
+                    log("Imagen local cargada.");
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function usarCamaraOriginal() {
+            const btnUsarCam = document.getElementById("btnUsarCamara");
+            const btnReiniciarCam = document.getElementById("btnReiniciarCam");
+            btnUsarCam.style.display = "none";
+            btnReiniciarCam.style.display = "inline-block";
+            iniciarCamara();
+        }
 
         function drawOverlay() {
             const overlay = document.getElementById("overlay");
@@ -613,10 +659,14 @@
         async function iniciarCamara() {
             try {
                 const video = document.getElementById("cam");
+                const imgSource = document.getElementById("imgSource");
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: "environment", width: 1280, height: 720 }
                 });
                 video.srcObject = stream;
+                video.style.display = "block";
+                imgSource.style.display = "none";
+                modoImagen = false;
                 video.onloadedmetadata = () => {
                     const aspect = video.videoWidth / video.videoHeight;
                     document.querySelector(".camera-wrap").style.aspectRatio = aspect;
@@ -633,7 +683,7 @@
         // ═══════════════════════════════════════════════════════════
 
         /**
-         * Congela el fotograma actual del vídeo, lo convierte a JPEG mediante
+         * Congela el fotograma actual del vídeo o de la foto cargada, lo convierte a JPEG mediante
          * un <canvas> oculto y lo envía al endpoint POST /dataset/capture.
          *
          * El backend detecta el tablero con OpenCV, lo rectifica y devuelve
@@ -641,20 +691,25 @@
          */
         async function capturar() {
             const video = document.getElementById("cam");
+            const imgSource = document.getElementById("imgSource");
             const canvas = document.getElementById("snap");
 
-            // Verificamos que el vídeo esté reproduciendo y tenga dimensiones
-            if (!video.videoWidth) {
-                log("La cámara aún no está lista.");
-                return;
+            if (modoImagen) {
+                canvas.width = imgSource.naturalWidth;
+                canvas.height = imgSource.naturalHeight;
+                canvas.getContext("2d").drawImage(imgSource, 0, 0);
+            } else {
+                // Verificamos que el vídeo esté reproduciendo y tenga dimensiones
+                if (!video.videoWidth) {
+                    log("La cámara aún no está lista.");
+                    return;
+                }
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext("2d").drawImage(video, 0, 0);
             }
 
             log("Enviando imagen al servidor...");
-
-            // Dibujamos el fotograma en el canvas para poder exportarlo a JPEG
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext("2d").drawImage(video, 0, 0);
 
             // Convertimos el canvas a Blob JPEG con calidad 90%
             const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.9));

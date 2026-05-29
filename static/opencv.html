@@ -248,6 +248,7 @@
                     <h2>Cámara en vivo</h2>
                     <div class="camera-wrap">
                         <video id="cam" autoplay playsinline muted></video>
+                        <img id="imgSource" style="display:none; width:100%; height:100%; object-fit:cover;" alt="Imagen cargada">
                         <canvas id="overlay"></canvas>
                     </div>
                     <div class="btn-row">
@@ -255,6 +256,9 @@
                         <button id="btnAuto">Auto: OFF</button>
                         <button id="btnReporte" disabled>Descargar reporte</button>
                         <button id="btnLimpiarCoords">Limpiar Esquinas</button>
+                        <button id="btnCargarFoto">Cargar Foto</button>
+                        <button id="btnUsarCamara" style="display:none;">Usar Cámara</button>
+                        <input type="file" id="inputFile" accept="image/*" style="display:none">
                         <select id="selectRotacion">
                             <option value="0">De frente - Blancas pegado a la cámara (Debajo 0º)</option>
                             <option value="90">Lateral Blancas a la derecha (90º)</option>
@@ -346,6 +350,11 @@
         const tablaDiag = document.getElementById("tablaDiag");
         const logPanel = document.getElementById("log");
 
+        const imgSource = document.getElementById("imgSource");
+        const inputFile = document.getElementById("inputFile");
+        const btnCargar = document.getElementById("btnCargarFoto");
+        const btnUsarCam = document.getElementById("btnUsarCamara");
+
 
         // ═══════════════════════════════════════════════════════════
         // ESTADO GLOBAL
@@ -362,6 +371,9 @@
 
         // Puntos manuales (coordenadas x,y en rango 0.0 - 1.0)
         let manualPoints = [];
+
+        // true si trabajamos con una imagen subida manualmente en vez de la webcam
+        let modoImagen = false;
 
 
         // ═══════════════════════════════════════════════════════════
@@ -394,6 +406,9 @@
                     video: { facingMode: "environment", width: 1280, height: 720 }
                 });
                 video.srcObject = stream;
+                video.style.display = "block";
+                imgSource.style.display = "none";
+                modoImagen = false;
                 video.onloadedmetadata = () => {
                     const aspect = video.videoWidth / video.videoHeight;
                     document.querySelector(".camera-wrap").style.aspectRatio = aspect;
@@ -411,7 +426,7 @@
         // ═══════════════════════════════════════════════════════════
 
         /**
-         * Captura el fotograma actual del vídeo, lo convierte a JPEG y lo envía
+         * Captura el fotograma actual del vídeo o de la foto cargada, lo convierte a JPEG y lo envía
          * al endpoint POST /vision/recognize-board.
          */
         async function procesarFrame() {
@@ -422,10 +437,20 @@
             // Marcamos el tiempo de inicio para calcular la latencia total
             const tInicio = performance.now();
 
-            // Dibujamos el frame actual del vídeo en el canvas oculto
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext("2d").drawImage(video, 0, 0);
+            if (modoImagen) {
+                canvas.width = imgSource.naturalWidth;
+                canvas.height = imgSource.naturalHeight;
+                canvas.getContext("2d").drawImage(imgSource, 0, 0);
+            } else {
+                if (!video.videoWidth) {
+                    log("La cámara no está lista.");
+                    procesando = false;
+                    return;
+                }
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext("2d").drawImage(video, 0, 0);
+            }
 
             estadoLbl.textContent = "Procesando...";
 
@@ -572,6 +597,44 @@
             drawOverlay();
         };
 
+        btnCargar.onclick = () => inputFile.click();
+
+        inputFile.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    modoAuto = false;
+                    btnAuto.textContent = "Auto: OFF";
+                    btnAuto.classList.remove("btn-auto-on");
+                    
+                    if (video.srcObject) {
+                        video.srcObject.getTracks().forEach(t => t.stop());
+                        video.srcObject = null;
+                    }
+                    
+                    imgSource.src = event.target.result;
+                    video.style.display = "none";
+                    imgSource.style.display = "block";
+                    btnUsarCam.style.display = "inline-block";
+                    modoImagen = true;
+                    
+                    imgSource.onload = () => {
+                        const aspect = imgSource.naturalWidth / imgSource.naturalHeight;
+                        document.querySelector(".camera-wrap").style.aspectRatio = aspect;
+                        drawOverlay();
+                    };
+                    log("Imagen local cargada.");
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+
+        btnUsarCam.onclick = () => {
+            btnUsarCam.style.display = "none";
+            iniciarCamara();
+        };
+
         window.addEventListener("resize", drawOverlay);
 
         /**
@@ -589,6 +652,10 @@
          * En modo ON lanza capturas encadenadas cada ~200 ms.
          */
         btnAuto.onclick = () => {
+            if (modoImagen) {
+                log("El modo automático no está disponible en modo imagen.");
+                return;
+            }
             modoAuto = !modoAuto;
             btnAuto.textContent = `Auto: ${modoAuto ? "ON" : "OFF"}`;
             btnAuto.classList.toggle("btn-auto-on", modoAuto);
