@@ -13,7 +13,7 @@ from core.config import settings
 from core.dependencies import get_current_user
 from core.security import decode_token
 from services import training
-from services.vision import VisionService, _rectificar
+from services.vision import VisionService, _rectificar, _calibrar_umbrales
 
 # Router para los endpoints del dataset.
 router = APIRouter(prefix="/dataset", tags=["Dataset"])
@@ -69,8 +69,13 @@ async def capture(
         elif rot_val == 270:
             warped = cv2.rotate(warped, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
-        # Convierte la imagen a escala de grises.
-        gray   = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+        # Aplica CLAHE al tablero rectificado para normalizar el contraste.
+        gray_raw  = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+        gray  = clahe.apply(gray_raw)
+
+        # Umbral dinámico calculado sobre el tablero normalizado.
+        std_thresh, _ = _calibrar_umbrales(warped)
 
         # Itera sobre las 64 casillas del tablero.
         squares = []
@@ -87,7 +92,7 @@ async def capture(
                 # Calcula la desviación estándar de la parte central de la casilla.
                 std_inner = float(np.std(cell_g[yo:yo + ch, xo:xo + cw]))
 
-                # Convierte la casilla a base64.
+                # Convierte la casilla a base64 (siempre de la imagen original en color).
                 _, buf = cv2.imencode(".jpg", cell, [cv2.IMWRITE_JPEG_QUALITY, 92])
                 b64 = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
 
@@ -98,7 +103,7 @@ async def capture(
                     "col":             col,
                     "image":           b64,
                     "std":             round(std_inner, 2),
-                    "suggested_label": "empty" if std_inner < 45 else "?",
+                    "suggested_label": "empty" if std_inner < std_thresh else "?",
                 })
 
         return {"success": True, "squares": squares}
