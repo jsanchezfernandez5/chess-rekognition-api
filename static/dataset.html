@@ -397,6 +397,7 @@
 
         // Token JWT de acceso. Se guarda en localStorage para sobrevivir recargas.
         let token = localStorage.getItem("token");
+        let refreshToken = localStorage.getItem("refresh_token");
 
 
         // ═══════════════════════════════════════════════════════════
@@ -422,7 +423,9 @@
                 if (res.ok) {
                     // Guardamos el token y mostramos la interfaz principal
                     token = data.access_token;
+                    refreshToken = data.refresh_token;
                     localStorage.setItem("token", token);
+                    localStorage.setItem("refresh_token", refreshToken);
                     mostrarUI();
                 } else {
                     alert("Error: " + (data.detail || "Credenciales incorrectas"));
@@ -437,7 +440,9 @@
          */
         function doLogout() {
             localStorage.removeItem("token");
+            localStorage.removeItem("refresh_token");
             token = null;
+            refreshToken = null;
             document.getElementById("loginCard").classList.remove("hidden");
             document.getElementById("mainUI").classList.add("hidden");
         }
@@ -468,13 +473,37 @@
          * @returns {Promise<Response>}
          */
         async function apiFetch(url, options = {}) {
-            const res = await fetch(url, {
+            let res = await fetch(url, {
                 ...options,
                 headers: { ...options.headers, "Authorization": `Bearer ${token}` }
             });
 
-            if (res.status === 401) {
-                // El token ha expirado o es inválido → forzar logout
+            if (res.status === 401 && refreshToken) {
+                log("Token expirado. Renovando...");
+                try {
+                    const refRes = await fetch("/auth/refresh", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ refresh_token: refreshToken })
+                    });
+                    if (refRes.ok) {
+                        const refData = await refRes.json();
+                        token = refData.access_token;
+                        localStorage.setItem("token", token);
+                        log("Token renovado.");
+                        res = await fetch(url, {
+                            ...options,
+                            headers: { ...options.headers, "Authorization": `Bearer ${token}` }
+                        });
+                    } else {
+                        log("Sesión expirada. Inicia sesión de nuevo.");
+                        doLogout();
+                    }
+                } catch {
+                    log("Error al renovar el token.");
+                    doLogout();
+                }
+            } else if (res.status === 401) {
                 log("Sesión expirada. Inicia sesión de nuevo.");
                 doLogout();
             }

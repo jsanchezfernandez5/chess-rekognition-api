@@ -60,21 +60,34 @@ def _detectar_tablero(frame: np.ndarray):
     # Convertir la imagen a escala de grises
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    gray = clahe.apply(gray)
+
     # Intento principal con findChessboardCornersSB (más robusto ante perspectiva y desenfoque)
+    h, w = gray.shape
+    scale = 640 / max(h, w)
+    if scale < 1:
+        small = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
+    else:
+        small = gray
+        scale = 1
+
     found, corners = cv2.findChessboardCornersSB(
-        gray, (7, 7),
-        cv2.CALIB_CB_NORMALIZE_IMAGE | cv2.CALIB_CB_EXHAUSTIVE
+        small, (7, 7),
+        cv2.CALIB_CB_NORMALIZE_IMAGE
     )
 
     if not found:
         # Fallback al método clásico para tableros con poco contraste
         found, corners = cv2.findChessboardCorners(
-            gray, (7, 7),
-            cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE
+            small, (7, 7),
+            cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE | cv2.CALIB_CB_FILTER_QUADS
         )
 
     if not found:
         return False, None
+
+    corners = corners / scale
 
     # Refinamiento a nivel subpíxel para mayor precisión en la homografía
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
