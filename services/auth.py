@@ -93,3 +93,4 @@ def whoami(usuario: Usuario) -> Usuario:
     Returns:
         El mismo objeto Usuario con todos sus datos.
     """
+    return usuario

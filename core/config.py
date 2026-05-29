@@ -70,5 +70,5 @@ def get_settings() -> Settings:
     """
     return Settings()
 
-
+# Carga la configuración al importar el módulo, garantizando que esté disponible globalmente.
 settings = get_settings()

@@ -1,6 +1,3 @@
-# routers/usuarios.py
-# Endpoints de gestión de usuarios
-
 """Módulo de gestión de usuarios del sistema.
 
 Proporciona los endpoints para el registro de nuevas cuentas
@@ -14,11 +11,8 @@ from db.database import get_db
 from schemas.usuarios import UsuarioCreate, UsuarioResponse
 from services import usuarios
 
-# Router de usuarios
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
-# Endpoint de registro de nuevos usuarios
-# POST /usuarios/register
 @router.post(
     "/register",
     response_model=UsuarioResponse,
@@ -35,7 +29,6 @@ router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
         422: {"description": "Datos de entrada no válidos (validación Pydantic)."},
     },
 )
-# La función del endpoint llama al servicio de usuario para manejar la lógica de negocio.
 async def register(body: UsuarioCreate, db: Session = Depends(get_db)):
     """Registra un nuevo usuario en el sistema.
 

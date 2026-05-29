@@ -1,10 +1,12 @@
 # services/usuarios.py
 # Lógica de negocio para gestión de usuarios
-"""Módulo de gestión de usuarios.
+"""
+Módulo de gestión de usuarios.
 
 Proporciona la función de registro de nuevos usuarios con validación de
 unicidad de username y email, hash de contraseña con bcrypt, y envío de
-correo de bienvenida mediante el servicio de email."""
+correo de bienvenida mediante el servicio de email.
+"""
 from sqlalchemy.orm import Session
 from core.security import hash_password
 from models.usuarios import Usuario

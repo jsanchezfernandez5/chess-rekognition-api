@@ -27,98 +27,81 @@ class ChessClassifier:
         self._load()
 
     def _load(self):
-        """Carga el modelo TensorFlow y el archivo de nombres de clase desde el directorio de modelos.
+        """Carga el modelo TensorFlow y nombres de clase desde MODELS_DIR.
 
-        Busca los archivos chess_model.h5 y class_names.json en MODELS_DIR.
-        Si no existen, el clasificador queda en estado no listo. Utiliza el candado
-        _lock para garantizar que no se realicen predicciones durante la carga.
-
-        Raises:
-            Exception: Si el archivo del modelo existe pero no puede cargarse correctamente.
-                       El error se captura y se muestra en consola sin propagarse.
+        Si los archivos no existen, el clasificador queda en estado no listo.
+        Usa _lock para evitar inferencias durante la recarga.
         """
         model_path = os.path.join(settings.MODELS_DIR, "chess_model.h5")
         names_path = os.path.join(settings.MODELS_DIR, "class_names.json")
-        
-        with self._lock: # Asegura que nadie está prediciendo mientras cargamos
+
+        with self._lock:
             if os.path.exists(model_path) and os.path.exists(names_path):
                 try:
                     self.model = tf.keras.models.load_model(model_path)
                     with open(names_path, "r") as f:
                         self.class_names = json.load(f)
-                    print(f"Modelo cargado correctamente desde {model_path}")
+                    print(f"Modelo cargado desde {model_path}")
                 except Exception as e:
                     print(f"Error cargando el modelo: {e}")
             else:
-                print("No se encontró un modelo entrenado. Por favor, entrena el modelo primero.")
+                print("No hay modelo entrenado. Usa el endpoint /dataset/train primero.")
 
     def reload(self):
-        """Recarga el modelo y los nombres de clase desde el disco sin necesidad de reiniciar el servidor.
-
-        Útil para actualizar el modelo tras un reentrenamiento en caliente.
-        """
+        """Recarga el modelo desde disco en caliente (sin reiniciar servidor)."""
         self._load()
 
     def is_ready(self) -> bool:
-        """Verifica si el modelo y los nombres de clase están cargados y listos para inferencia.
-
-        Returns:
-            True si el modelo no es None y la lista de nombres de clase no está vacía.
-            False en caso contrario.
-        """
+        """Verifica si el modelo está cargado y listo para inferencia."""
         with self._lock:
             return self.model is not None and len(self.class_names) > 0
 
     def classify_board(self, warped: np.ndarray) -> dict:
-        """Clasifica las 64 casillas de un tablero rectificado usando el modelo MobileNetV2.
+        """Clasifica las 64 casillas de un tablero rectificado usando MobileNetV2.
 
-        Procesa todas las casillas en un solo batch para maximizar el rendimiento.
-        Cada casilla se redimensiona a IMG_SIZE y se convierte a RGB antes de la
-        inferencia. Los resultados incluyen la etiqueta y la confianza para cada
-        casilla identificada por su notación algebraica.
+        Procesa todas las casillas en un solo batch para máximo rendimiento.
 
         Args:
-            warped: Imagen del tablero rectificado en vista cenital (400x400).
+            warped: Tablero rectificado 400x400 en vista cenital.
 
         Returns:
-            Diccionario con una entrada por cada casilla. La clave es la notación
-            algebraica (ej: "e4") y el valor es otro diccionario con las claves
-            "label" (str) y "confidence" (float entre 0 y 1).
+            Dict con 64 entradas: clave = notación algebraica (ej: "e4"),
+            valor = {"label": str, "confidence": float}.
 
         Raises:
-            RuntimeError: Si el clasificador no está listo (modelo no cargado).
+            RuntimeError: Si el modelo no está cargado.
         """
-        with self._lock: # Bloquea el acceso al modelo durante la predicción
+        with self._lock:
             if not self.is_ready():
-                raise RuntimeError("El clasificador no está listo. Asegúrate de que el modelo esté entrenado.")
+                raise RuntimeError("El clasificador no está listo. Entrena el modelo primero.")
 
             batch = []
             sq_ids = []
-            
+
             for row in range(8):
                 for col in range(8):
+                    # Extraer cada casilla de 50x50 del tablero rectificado
                     x, y = col * settings.CELL_SIZE, row * settings.CELL_SIZE
-                    cell = warped[y:y+settings.CELL_SIZE, x:x+settings.CELL_SIZE]
-                    
+                    cell = warped[y:y + settings.CELL_SIZE, x:x + settings.CELL_SIZE]
+
+                    # Redimensionar a 96x96 (input esperado por MobileNetV2) y convertir a RGB
                     cell_resized = cv2.resize(cell, settings.IMG_SIZE)
                     cell_rgb = cv2.cvtColor(cell_resized, cv2.COLOR_BGR2RGB)
-                    
+
                     batch.append(cell_rgb)
                     sq_ids.append(f"{settings.COLS[col]}{8 - row}")
 
+            # Inferencia por lotes: el modelo procesa las 64 casillas simultáneamente
             preds = self.model.predict(np.array(batch, dtype=np.float32), verbose=0)
-            
+
             result = {}
             for i, sq_id in enumerate(sq_ids):
                 idx = int(np.argmax(preds[i]))
-                label = self.class_names[idx]
-                confidence = float(preds[i][idx])
-                
                 result[sq_id] = {
-                    "label": label,
-                    "confidence": round(confidence, 3)
+                    "label": self.class_names[idx],
+                    "confidence": round(float(preds[i][idx]), 3)
                 }
-                
+
             return result
 
 # Instancia global del clasificador

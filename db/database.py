@@ -5,14 +5,15 @@ y la clase base declarativa para los modelos ORM.
 """
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
-
 from core.config import settings
 
+# Configuración de la conexión a la base de datos usando SQLAlchemy.
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True, echo=False)
 
+# Fábrica de sesiones para crear conexiones a la base de datos.
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
-
+# Clase base para los modelos ORM que se mapearán a las tablas de la base de datos.
 class Base(DeclarativeBase):
     """Clase base para todos los modelos ORM.
 
@@ -20,6 +21,7 @@ class Base(DeclarativeBase):
     """
     pass
 
+# Generador de sesiones de base de datos para inyectar con Depends() en FastAPI.
 def get_db():
     """Generador de sesiones de base de datos para inyectar con Depends().
 

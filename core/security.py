@@ -14,17 +14,18 @@ from core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-
+# Funciones para hashing de contraseñas y generación/validación de tokens JWT. 
+# Se utilizan en los endpoints de autenticación y en la dependencia de seguridad para proteger rutas.
 def hash_password(plain_password: str) -> str:
     """Genera el hash bcrypt de una contraseña en texto plano."""
     return pwd_context.hash(plain_password)
 
-
+# Función para verificar que una contraseña en texto plano coincide con su hash almacenado.
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifica que una contraseña en texto plano coincida con su hash almacenado."""
     return pwd_context.verify(plain_password, hashed_password)
 
-
+# Función interna para crear un token JWT con el payload y la expiración indicados.
 def _create_token(
     subject: str,
     token_type: Literal["access", "refresh"],
@@ -47,7 +48,7 @@ def _create_token(
     }
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
-
+# Funciones para crear tokens de acceso y refresh, y para decodificar y validar tokens JWT.
 def create_access_token(username: str) -> str:
     """Crea un access token JWT de vida corta (por defecto 30 minutos).
 
@@ -59,7 +60,7 @@ def create_access_token(username: str) -> str:
         expires_delta=timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 
-
+# Función para crear un refresh token JWT de vida larga (por defecto 7 días).
 def create_refresh_token(username: str) -> str:
     """Crea un refresh token JWT de vida larga (por defecto 7 días).
 
@@ -71,7 +72,7 @@ def create_refresh_token(username: str) -> str:
         expires_delta=timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS),
     )
 
-
+# Función para decodificar y validar un token JWT, retornando el username (sub) si es válido.
 def decode_token(token: str, expected_type: Literal["access", "refresh"]) -> str:
     """Decodifica y valida un token JWT, retornando el username (sub) si es válido.
 

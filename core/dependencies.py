@@ -13,7 +13,7 @@ from models.usuarios import Usuario
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
-
+# Dependencia para obtener el usuario autenticado a partir del token JWT en el header Authorization.
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),

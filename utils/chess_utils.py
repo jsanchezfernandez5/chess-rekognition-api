@@ -4,6 +4,7 @@ estados de tablero y objetos de la librería chess.py.
 """
 import chess
 
+# Función para convertir una etiqueta del clasificador a un objeto chess.Piece
 def label_to_piece(label: str) -> chess.Piece | None:
     """
     Convierte una etiqueta del clasificador de piezas a un objeto chess.Piece.
@@ -28,7 +29,7 @@ def label_to_piece(label: str) -> chess.Piece | None:
     fen_symbol = symbol if color == chess.WHITE else symbol.lower()
     return chess.Piece.from_symbol(fen_symbol)
 
-
+# Función para convertir un estado de tablero representado como un diccionario a un objeto chess.Board
 def board_state_to_fen_board(board_state: dict) -> chess.Board:
     """
     Convierte un diccionario con el estado del tablero a un objeto chess.Board.

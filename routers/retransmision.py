@@ -1,6 +1,3 @@
-# routers/retransmision.py
-# Gestión de retransmisiones en tiempo real
-
 """Módulo de retransmisión de partidas en tiempo real.
 
 Proporciona endpoints HTTP y WebSocket para gestionar
@@ -22,7 +19,6 @@ from core.dependencies import get_current_user
 from schemas.retransmisiones import RetransmisionCreate, RetransmisionResponse
 from models.retransmisiones import Retransmision
 
-# Creación del Router de Retransmisiones
 router = APIRouter(
     prefix="/retransmision",
     tags=["Retransmisión en tiempo real"],
@@ -44,7 +40,6 @@ def generate_token(length=8):
     chars = string.ascii_lowercase + string.digits
     return ''.join(random.choice(chars) for _ in range(length))
 
-# Estado de la Retransmisión
 class RetransmisionStatus(BaseModel):
     token: str
     active: bool
@@ -170,11 +165,8 @@ class ConnectionManager:
             for dead in dead_connections:
                 self.disconnect_viewer(dead, token)
 
-# Instancia del Gestor de Conexiones
 manager = ConnectionManager()
 
-# Endpoint para crear retransmisión
-# POST /retransmision/host
 @router.post(
     "/host", 
     response_model=RetransmisionResponse, 
@@ -200,7 +192,7 @@ def init_retransmision(
         RetransmisionResponse con los datos de la retransmisión creada.
     """
     token = generate_token()
-    # Asegurarnos de que no hay colisión de token
+    # Bucle de seguridad anti-colisión: regenera si el token ya existe en BD
     while db.query(Retransmision).filter(Retransmision.token == token).first():
         token = generate_token()
 
@@ -214,7 +206,7 @@ def init_retransmision(
         ronda=datos.ronda,
         tablero=datos.tablero,
         lugar=datos.lugar,
-        is_activa=True  # Se marca como activa desde el inicio
+        is_activa=True
     )
 
     db.add(nueva_retransmision)
@@ -223,8 +215,6 @@ def init_retransmision(
 
     return nueva_retransmision
 
-# Endpoint para obtener estado de la retransmisión
-# GET /retransmision/status/{token}
 @router.get("/status/{token}", summary="Obtener el estado de una retransmisión por token")
 async def get_retransmision_status(token: str):
     """Obtiene el estado actual de una retransmisión por su token.
@@ -251,8 +241,6 @@ async def get_retransmision_status(token: str):
         }
     }
 
-# Endpoint para actualizar retransmisión (ej. finalizar)
-# PATCH /retransmision/{id_retransmision}
 @router.patch(
     "/{id_retransmision}",
     summary="Actualizar retransmisión (ej. finalizar)",
@@ -282,8 +270,6 @@ def update_retransmision(
     db.refresh(retransmision)
     return retransmision
 
-# WebSocket para el emisor de la retransmisión
-# WS /retransmision/ws/host/{token}
 @router.websocket("/ws/host/{token}")
 async def websocket_host(websocket: WebSocket, token: str, db: Session = Depends(get_db)):
     """WebSocket para el emisor (host) de la retransmisión.
@@ -307,8 +293,6 @@ async def websocket_host(websocket: WebSocket, token: str, db: Session = Depends
     except WebSocketDisconnect:
         await manager.disconnect_host(token, db)
 
-# WebSocket para los espectadores de la retransmisión
-# WS /retransmision/ws/viewer/{token}
 @router.websocket("/ws/viewer/{token}")
 async def websocket_viewer(websocket: WebSocket, token: str):
     """WebSocket público para los espectadores de una retransmisión.

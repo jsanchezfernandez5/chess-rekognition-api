@@ -24,16 +24,13 @@ from core.dependencies import get_current_user
 from core.security import decode_token
 from services.vision import _detectar_tablero, _calcular_esquinas_exteriores, _rectificar
 
-# Variable global para capturar el loop de eventos del servidor
 _main_loop: asyncio.AbstractEventLoop | None = None
 
-# Router sin dependencia global para permitir WebSockets por query param
 router = APIRouter(
     prefix="/dataset", 
     tags=["Dataset"]
 )
 
-# Estado global del entrenamiento
 training_state = {
     "running": False,
     "epoch": 0,
@@ -46,7 +43,6 @@ training_state = {
     "message": ""
 }
 
-# Clientes WebSocket conectados
 ws_clients: list[WebSocket] = []
 
 def ensure_dataset_dirs():
@@ -98,23 +94,21 @@ async def capture(file: UploadFile = File(...), user=Depends(get_current_user)):
         for row in range(8):
             for col in range(8):
                 x, y = col * settings.CELL_SIZE, row * settings.CELL_SIZE
-                cell = warped[y:y+settings.CELL_SIZE, x:x+settings.CELL_SIZE]
-                cell_g = gray[y:y+settings.CELL_SIZE, x:x+settings.CELL_SIZE]
+                cell = warped[y:y + settings.CELL_SIZE, x:x + settings.CELL_SIZE]
+                cell_g = gray[y:y + settings.CELL_SIZE, x:x + settings.CELL_SIZE]
 
-                # Heurística para sugerencia de "vacía" (STD bajo)
+                # Heurística: si la desviación típica del centro de la casilla es baja → vacía
                 h, w = cell_g.shape
                 ch, cw = int(h * 0.65), int(w * 0.65)
                 yo, xo = (h - ch) // 2, (w - cw) // 2
-                std_inner = float(np.std(cell_g[yo:yo+ch, xo:xo+cw]))
+                std_inner = float(np.std(cell_g[yo:yo + ch, xo:xo + cw]))
 
-                # Codificar recorte a base64
                 _, buf = cv2.imencode(".jpg", cell, [cv2.IMWRITE_JPEG_QUALITY, 92])
                 b64 = "data:image/jpeg;base64," + base64.b64encode(buf).decode()
 
                 squares.append({
                     "id": f"{settings.COLS[col]}{8 - row}",
-                    "row": row,
-                    "col": col,
+                    "row": row, "col": col,
                     "image": b64,
                     "std": round(std_inner, 2),
                     "suggested_label": "empty" if std_inner < 45 else "?"
@@ -209,12 +203,10 @@ async def start_training(user=Depends(get_current_user)):
     """
     if training_state["running"]:
         return {"success": False, "error": "Ya hay un entrenamiento en curso."}
-    
-    # Capturamos el loop del hilo principal antes de lanzar el worker
+
     global _main_loop
-    _main_loop = asyncio.get_running_loop()
-    
-    # Iniciar en background
+    _main_loop = asyncio.get_running_loop()  # Captura el loop principal para broadcasting
+
     thread = threading.Thread(target=_run_training_wrapper, daemon=True)
     thread.start()
     
@@ -249,10 +241,10 @@ async def train_websocket(websocket: WebSocket, token: str = Query(...)):
         token: Token JWT de acceso para autenticación.
     """
     try:
-        # Validamos el token por query param (los WebSockets en navegador no soportan headers)
+        # WebSockets nativos no envían headers→el token se pasa como query param
         decode_token(token, expected_type="access")
     except ValueError:
-        await websocket.close(code=1008) # Policy Violation
+        await websocket.close(code=1008)
         return
 
     await websocket.accept()
@@ -266,30 +258,19 @@ async def train_websocket(websocket: WebSocket, token: str = Query(...)):
             ws_clients.remove(websocket)
 
 def _broadcast_training_update(data: dict):
-    """Envía una actualización a todos los clientes WebSocket conectados.
+    """Envía progreso del entrenamiento a todos los WebSocket conectados.
 
-    Función segura para usar desde hilos secundarios. Utiliza el
-    event loop capturado del hilo principal para programar el envío
-    de datos JSON a cada cliente WebSocket activo.
-
-    Args:
-        data: Diccionario con los datos de progreso del entrenamiento.
+    Seguro para hilos secundarios: programa el envío en el event loop principal.
     """
     if _main_loop is None:
         return
-        
+
     msg = json.dumps(data)
     for client in ws_clients[:]:
-        # Usamos el loop capturado globalmente
         asyncio.run_coroutine_threadsafe(client.send_text(msg), _main_loop)
 
 def _run_training_wrapper():
-    """Wrapper que ejecuta la lógica de entrenamiento y captura errores.
-
-    Llama a la lógica principal de entrenamiento y, si ocurre
-    cualquier excepción, actualiza el estado global a 'error'
-    y notifica a los clientes WebSocket.
-    """
+    """Wrapper que captura errores del entrenamiento y notifica por WebSocket."""
     try:
         _run_training_logic()
     except Exception as e:
@@ -302,44 +283,22 @@ def _run_training_wrapper():
         _broadcast_training_update(training_state.copy())
 
 def _run_training_logic():
-    """Ejecuta el pipeline completo de entrenamiento del modelo.
-
-    Realiza las siguientes etapas:
-    1. Carga y partición del dataset (80% entrenamiento, 20% validación).
-    2. Construcción del modelo MobileNetV2 con transfer learning.
-    3. Entrenamiento con data augmentation, early stopping y reducción de LR.
-    4. Guardado del modelo entrenado en el sistema de archivos.
-    5. Limpieza de memoria (TensorFlow session y garbage collector).
-
-    Durante todo el proceso, actualiza el estado global y notifica
-    a los clientes WebSocket conectados.
-    """
+    """Pipeline completo de entrenamiento MobileNetV2 con transfer learning."""
     training_state.update({
-        "running": True,
-        "status": "loading",
-        "epoch": 0,
-        "message": "Preparando dataset..."
+        "running": True, "status": "loading",
+        "epoch": 0, "message": "Preparando dataset..."
     })
     _broadcast_training_update(training_state.copy())
 
-    # 1. Cargar datasets
+    # Carga con split 80/20 desde directorio estructurado por clases
     train_ds = tf.keras.utils.image_dataset_from_directory(
-        settings.DATASET_DIR,
-        validation_split=0.2,
-        subset="training",
-        seed=42,
-        image_size=settings.IMG_SIZE,
-        batch_size=32,
+        settings.DATASET_DIR, validation_split=0.2, subset="training",
+        seed=42, image_size=settings.IMG_SIZE, batch_size=32,
         label_mode="categorical"
     )
-    
     val_ds = tf.keras.utils.image_dataset_from_directory(
-        settings.DATASET_DIR,
-        validation_split=0.2,
-        subset="validation",
-        seed=42,
-        image_size=settings.IMG_SIZE,
-        batch_size=32,
+        settings.DATASET_DIR, validation_split=0.2, subset="validation",
+        seed=42, image_size=settings.IMG_SIZE, batch_size=32,
         label_mode="categorical"
     )
 
@@ -347,7 +306,7 @@ def _run_training_logic():
     with open(os.path.join(settings.MODELS_DIR, "class_names.json"), "w") as f:
         json.dump(class_names, f)
 
-    # Optimización de pipeline
+    # Prefetch para solapar preprocessing y entrenamiento
     AUTOTUNE = tf.data.AUTOTUNE
     train_ds = train_ds.prefetch(buffer_size=AUTOTUNE)
     val_ds = val_ds.prefetch(buffer_size=AUTOTUNE)
@@ -356,23 +315,20 @@ def _run_training_logic():
     training_state["message"] = "Construyendo modelo MobileNetV2..."
     _broadcast_training_update(training_state.copy())
 
-    # 2. Definir modelo (Transfer Learning)
+    # Transfer Learning: MobileNetV2 con pesos ImageNet, base congelada
     base_model = tf.keras.applications.MobileNetV2(
         input_shape=(*settings.IMG_SIZE, 3),
-        include_top=False,
-        weights="imagenet"
+        include_top=False, weights="imagenet"
     )
-    base_model.trainable = False # Congelar base
+    base_model.trainable = False
 
     model = tf.keras.Sequential([
-        # Data Augmentation integrado
+        # Data augmentation para generalización
         tf.keras.layers.RandomFlip("horizontal"),
         tf.keras.layers.RandomRotation(0.05),
         tf.keras.layers.RandomZoom(0.1),
-        
-        # Preprocesamiento MobileNetV2: escala de [0, 255] a [-1, 1]
-        tf.keras.layers.Rescaling(1./127.5, offset=-1),
-        
+        # MobileNetV2 espera entrada en [-1, 1]
+        tf.keras.layers.Rescaling(1. / 127.5, offset=-1),
         base_model,
         tf.keras.layers.GlobalAveragePooling2D(),
         tf.keras.layers.Dropout(0.3),
@@ -381,26 +337,18 @@ def _run_training_logic():
 
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-        loss="categorical_crossentropy",
-        metrics=["accuracy"]
+        loss="categorical_crossentropy", metrics=["accuracy"]
     )
 
     EPOCHS = 20
     training_state.update({
-        "status": "training",
-        "total_epochs": EPOCHS,
+        "status": "training", "total_epochs": EPOCHS,
         "message": "Entrenando..."
     })
     _broadcast_training_update(training_state.copy())
 
     class WSUpdateCallback(tf.keras.callbacks.Callback):
-        """Callback de Keras que notifica el progreso por WebSocket.
-
-        Al finalizar cada época de entrenamiento, actualiza el
-        estado global con las métricas obtenidas (pérdida, precisión,
-        pérdida de validación, precisión de validación) y las
-        difunde a todos los clientes WebSocket conectados.
-        """
+        """Callback que transmite pérdida y precisión por WebSocket tras cada época."""
         def on_epoch_end(self, epoch, logs=None):
             training_state.update({
                 "epoch": epoch + 1,
@@ -411,29 +359,25 @@ def _run_training_logic():
             })
             _broadcast_training_update(training_state.copy())
 
-    # 3. Fit
     model.fit(
-        train_ds,
-        validation_data=val_ds,
-        epochs=EPOCHS,
+        train_ds, validation_data=val_ds, epochs=EPOCHS,
         callbacks=[
             WSUpdateCallback(),
+            # Early stopping con tolerancia 4 épocas sin mejora significativa
             tf.keras.callbacks.EarlyStopping(patience=4, restore_best_weights=True, min_delta=0.005),
+            # Reduce LR a la mitad si 3 épocas sin mejora
             tf.keras.callbacks.ReduceLROnPlateau(factor=0.5, patience=3)
         ]
     )
 
-    # 4. Guardar
     model_path = os.path.join(settings.MODELS_DIR, "chess_model.h5")
     model.save(model_path)
 
     training_state.update({
-        "running": False,
-        "status": "done",
+        "running": False, "status": "done",
         "message": "Entrenamiento completado y modelo guardado."
     })
     _broadcast_training_update(training_state.copy())
 
-    # Limpieza agresiva de memoria
     tf.keras.backend.clear_session()
     gc.collect()

@@ -1,6 +1,3 @@
-# routers/auth.py - Gestión de acceso y seguridad
-# Login, renovación de tokens e identificación del usuario
-
 """Módulo de autenticación del sistema.
 
 Proporciona los endpoints necesarios para el inicio de sesión,
@@ -17,11 +14,8 @@ from models.usuarios import Usuario
 from schemas.usuarios import LoginRequest, RefreshRequest, TokenResponse, UsuarioResponse
 from services import auth as auth_service
 
-# Creación del Router de Autenticación
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
-# Endpoint de Login
-# POST /auth/login
 @router.post(
     "/login",
     response_model=TokenResponse,
@@ -53,8 +47,6 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-# Endpoint de Refresh
-# POST /auth/refresh
 @router.post(
     "/refresh",
     response_model=TokenResponse,
@@ -86,8 +78,6 @@ def refresh(token_in: RefreshRequest, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-# Endpoint de Información del Usuario Actual
-# GET /auth/whoami
 @router.get(
     "/whoami",
     response_model=UsuarioResponse,

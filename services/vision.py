@@ -10,15 +10,11 @@ import numpy as np
 import base64
 import traceback
 
-# Constantes de configuración para el procesamiento de imágenes.
 BOARD_SIZE = 400
 CELL_SIZE = BOARD_SIZE // 8
 COLS = "abcdefgh"
-# Usar solo el 65% central de la casilla.
 INNER_CROP_PCT = 0.65
 
-# Función auxiliar para convertir una imagen numpy a base64.
-# Se usa para enviar la imagen al frontend.
 def _encode_image(img: np.ndarray) -> str:
     """Convierte una imagen en formato numpy array a una cadena base64 para su envío al frontend.
 
@@ -33,8 +29,6 @@ def _encode_image(img: np.ndarray) -> str:
     _, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
     return "data:image/jpeg;base64," + base64.b64encode(buffer).decode("utf-8")
 
-# Función para detectar el tablero de ajedrez en una imagen.
-# Usa findChessboardCornersSB para detectar las 49 esquinas internas.
 def _detectar_tablero(frame: np.ndarray):
     """Detecta el tablero de ajedrez en una imagen y obtiene las 49 esquinas internas (7x7).
 
@@ -51,14 +45,14 @@ def _detectar_tablero(frame: np.ndarray):
     """
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    # Intento principal (más robusto)
+    # Intento principal con findChessboardCornersSB (más robusto ante perspectiva y desenfoque)
     found, corners = cv2.findChessboardCornersSB(
         gray, (7, 7),
         cv2.CALIB_CB_NORMALIZE_IMAGE | cv2.CALIB_CB_EXHAUSTIVE
     )
 
     if not found:
-        # intento clásico
+        # Fallback al método clásico para tableros con poco contraste
         found, corners = cv2.findChessboardCorners(
             gray, (7, 7),
             cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE
@@ -68,13 +62,12 @@ def _detectar_tablero(frame: np.ndarray):
         return False, None
 
     # Refinar a subpíxel
+    # Refinamiento a nivel subpíxel para mayor precisión en la homografía
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
 
     return True, corners
 
-# Función para calcular las 4 esquinas exteriores del tablero a partir de las 49 esquinas internas.
-# Usa vectores locales por esquina para mayor precisión cuando el tablero está en perspectiva.
 def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
     """Calcula las cuatro esquinas exteriores del tablero a partir de las 49 esquinas internas.
 
@@ -88,33 +81,27 @@ def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
     Returns:
         Array numpy con las cuatro esquinas exteriores en orden: tl, tr, br, bl.
     """
-    tl = corners[0][0]   # fila 0, col 0
-    tr = corners[6][0]   # fila 0, col 6
-    bl = corners[42][0]  # fila 6, col 0
-    br = corners[48][0]  # fila 6, col 6
+    # Extraemos las 4 esquinas internas de las 49 detectadas (7x7)
+    tl = corners[0][0];   tr = corners[6][0]
+    bl = corners[42][0];  br = corners[48][0]
 
-    # Vector de una casilla en cada dirección local
-    # (las 7 esquinas cubren 6 intervalos → dividir entre 6)
-    step_h_top    = (tr - tl) / 6.0   # horizontal arriba
-    step_h_bottom = (br - bl) / 6.0   # horizontal abajo
-    step_v_left   = (bl - tl) / 6.0   # vertical izquierda
-    step_v_right  = (br - tr) / 6.0   # vertical derecha
+    # Vector unitario por lado: 7 esquinas = 6 intervalos
+    step_h_top    = (tr - tl) / 6.0
+    step_h_bottom = (br - bl) / 6.0
+    step_v_left   = (bl - tl) / 6.0
+    step_v_right  = (br - tr) / 6.0
 
-    # Extrapolar una casilla hacia afuera desde cada esquina
-    # usando los vectores locales de esa esquina concreta
+    # Extrapolación vectorial con margen 1.12 para cubrir el borde exterior del tablero
     MARGIN = 1.12
     board_tl = tl - step_h_top    * MARGIN - step_v_left   * MARGIN
     board_tr = tr + step_h_top    * MARGIN - step_v_right  * MARGIN
     board_bl = bl - step_h_bottom * MARGIN + step_v_left   * MARGIN
     board_br = br + step_h_bottom * MARGIN + step_v_right  * MARGIN
-
-    # Devuelve las 4 esquinas exteriores del tablero en formato numpy array.
     return np.array(
         [board_tl, board_tr, board_br, board_bl],
         dtype=np.float32
     )
 
-# Función para aplicar la homografía y obtener la vista cenital del tablero.
 def _rectificar(frame: np.ndarray, exterior: np.ndarray) -> np.ndarray:
     """Aplica una transformación de perspectiva (homografía) para obtener la vista cenital del tablero.
 
@@ -134,14 +121,11 @@ def _rectificar(frame: np.ndarray, exterior: np.ndarray) -> np.ndarray:
         [0, BOARD_SIZE]
     ], dtype=np.float32)
 
-    # Calcula la matriz de transformación afín
+    # Matriz de homografía que mapea la perspectiva original a cenital
     M = cv2.getPerspectiveTransform(exterior, dst)
-    # Aplica la transformación afín a la imagen
     warped = cv2.warpPerspective(frame, M, (BOARD_SIZE, BOARD_SIZE))
     return warped
 
-# Función para calibrar los umbrales de detección de piezas.
-# Calcula umbrales dinámicamente a partir del tablero rectificado.
 def _calibrar_umbrales(warped: np.ndarray) -> tuple:
     """Calcula umbrales de detección de forma dinámica según la iluminación del tablero rectificado.
 
@@ -159,38 +143,35 @@ def _calibrar_umbrales(warped: np.ndarray) -> tuple:
     gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
     stds = []
 
-    # Itera sobre cada casilla del tablero.
     for row in range(8):
         for col in range(8):
             x, y = col * CELL_SIZE, row * CELL_SIZE
             cell = gray[y:y+CELL_SIZE, x:x+CELL_SIZE]
-            # Recorte central para evitar ruido de bordes de casilla
+            # Solo el 65% central para evitar ruido en bordes de casilla
             h, w = cell.shape
             ch, cw = int(h * INNER_CROP_PCT), int(w * INNER_CROP_PCT)
             yo, xo = (h - ch) // 2, (w - cw) // 2
             stds.append(float(np.std(cell[yo:yo+ch, xo:xo+cw])))
 
+    # Estadísticos robustos (percentiles) para separar ocupadas de vacías
     stds_arr = np.array(stds)
     p25  = float(np.percentile(stds_arr, 25))
     p75  = float(np.percentile(stds_arr, 75))
     spread = p75 - p25
 
     if spread < 10:
-        # Tablero uniforme (vacío o muy poca variación)
-        # Umbral conservador: mediana + margen fijo
+        # Tablero uniforme: umbral conservador basado en mediana + margen
         std_thresh = float(np.median(stds_arr)) + max(spread * 1.5, 15)
     else:
-        # Hay variación significativa: umbral entre grupo bajo y grupo alto
+        # Con variación: punto de corte entre percentil 25 y el grupo alto
         std_thresh = p25 + spread * 0.8
 
-    # Rango razonable: nunca menor de 45 ni mayor de 120
+    # Acotación segura para evitar falsos positivos/negativos extremos
     std_thresh = float(np.clip(std_thresh, 45, 120))
     edge_thresh = std_thresh * 18
 
     return std_thresh, edge_thresh
 
-# Función para analizar las 64 casillas del tablero.
-# Autocalibra los umbrales según la iluminación actual.
 def _analizar_casillas(warped: np.ndarray) -> tuple:
     """Analiza las 64 casillas del tablero rectificado para determinar qué casillas están ocupadas.
 
@@ -239,7 +220,6 @@ def _analizar_casillas(warped: np.ndarray) -> tuple:
 
     return squares, std_thresh, edge_thresh
 
-# Función para generar la vista cenital real del tablero con overlay verde/rojo sobre las casillas.
 def _generar_vista_real(warped: np.ndarray, squares: list) -> np.ndarray:
     """Genera una vista cenital del tablero con overlay visual de ocupación sobre las casillas.
 
@@ -277,8 +257,6 @@ def _generar_vista_real(warped: np.ndarray, squares: list) -> np.ndarray:
 
     return output
 
-# Función para generar la vista 2D diagnóstica.
-# Tablero sintético con colores clásicos de casillas y marcadores de ocupación.
 def _generar_vista_2d(squares: list) -> np.ndarray:
     """Genera una vista de diagnóstico 2D con un tablero sintético de colores clásicos.
 
@@ -324,8 +302,6 @@ def _generar_vista_2d(squares: list) -> np.ndarray:
 
     return output
 
-# Función para generar imagen de debug.
-# Frame original con los 49 puntos internos en rojo y el perímetro del tablero en verde.
 def _generar_debug(frame: np.ndarray, corners: np.ndarray,
                    exterior: np.ndarray) -> np.ndarray:
     """Genera una imagen de depuración sobre el frame original con anotaciones visuales.
@@ -354,8 +330,6 @@ def _generar_debug(frame: np.ndarray, corners: np.ndarray,
 
     return debug
 
-# Función para generar un collage con las 3 vistas (debug, real, diagnóstico).
-# Incluye metadatos técnicos para diagnóstico profundo.
 def _generar_collage(debug: np.ndarray, real: np.ndarray, diag: np.ndarray, 
                      occ: int, total: int, stdt: float, edget: float) -> np.ndarray:
     """Compone un collage con las tres vistas principales del tablero y metadatos técnicos.
@@ -376,13 +350,10 @@ def _generar_collage(debug: np.ndarray, real: np.ndarray, diag: np.ndarray,
     Returns:
         Imagen BGR del collage completo con pie informativo.
     """
-    # Escalar todo a tamaños consistentes
     h_main = 450
     w_main = int(debug.shape[1] * (h_main / debug.shape[0]))
     debug_res = cv2.resize(debug, (w_main, h_main))
 
-    # Tira lateral con las dos vistas (225x225 cada una)
-    # Dejamos espacio para info técnica abajo
     real_res = cv2.resize(real, (225, 225))
     diag_res = cv2.resize(diag, (225, 225))
     side_strip = np.vstack([real_res, diag_res])
@@ -407,8 +378,6 @@ def _generar_collage(debug: np.ndarray, real: np.ndarray, diag: np.ndarray,
     
     return np.vstack([collage, footer])
 
-# Clase principal VisionService con el método público para procesar imágenes.
-# Contiene el pipeline completo de detección y rectificación del tablero.
 class VisionService:
 
     @staticmethod

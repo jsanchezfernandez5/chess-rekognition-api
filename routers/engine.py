@@ -1,6 +1,3 @@
-# routers/engine.py
-# Endpoints para interactuar con Stockfish
-
 """Módulo de interacción con el motor de ajedrez Stockfish.
 
 Proporciona endpoints para consultar el estado del motor,
@@ -13,7 +10,6 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from services.engine import engine_service
 
-# Creación del Router de Stockfish
 router = APIRouter(prefix="/engine", tags=["Motor"])
 
 class EngineRequest(BaseModel):
@@ -64,8 +60,6 @@ class EngineResponse(BaseModel):
     info: Optional[dict] = Field(None, description="Información de análisis (score, depth, pv, nodes)")
     message: Optional[str] = None
 
-# Endpoint de Estado del Motor
-# GET /engine/status
 @router.get(
     "/status",
     summary="Verificar salud y versión del motor",
@@ -82,8 +76,6 @@ def get_engine_status():
     """
     return engine_service.check_status()
 
-# Endpoint de Movimiento del Motor
-# POST /engine/move
 @router.post(
     "/move",
     response_model=EngineResponse,

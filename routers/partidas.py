@@ -1,6 +1,3 @@
-# routers/partidas.py
-# Gestión de partidas CRUD: Create, Read, Update, Delete
-
 """Módulo de gestión de partidas de ajedrez.
 
 Proporciona endpoints CRUD para crear, listar, obtener,
@@ -18,11 +15,8 @@ from models.usuarios import Usuario
 from schemas.partidas import PartidaCreate, PartidaUpdate, PartidaResponse
 from services import partidas as partidas_service
 
-# Creación del Router de Partidas
 router = APIRouter(prefix="/partidas", tags=["Partidas"])
 
-# Endpoint de Creación de Partida
-# POST /partidas/
 @router.post(
     "/",
     status_code=status.HTTP_201_CREATED,
@@ -49,8 +43,6 @@ def create_partida(
     """
     return partidas_service.create(partida_in, usuario_actual.username, db)
 
-# Endpoint de Listado de Partidas
-# GET /partidas/
 @router.get(
     "/",
     response_model=List[PartidaResponse],
@@ -76,8 +68,6 @@ def list_partidas(
     """
     return partidas_service.list_by_user(usuario_actual.username, db, tipo)
 
-# Endpoint de Obtención de Partida
-# GET /partidas/{id_partida}
 @router.get(
     "/{id_partida}",
     response_model=PartidaResponse,
@@ -112,8 +102,6 @@ def get_partida(
         )
     return partida
 
-# Endpoint de Actualización de Partida
-# PATCH /partidas/{id_partida}
 @router.patch(
     "/{id_partida}",
     response_model=PartidaResponse,
@@ -150,8 +138,6 @@ def update_partida(
         )
     return db_partida
 
-# Endpoint de Eliminación de Partida
-# DELETE /partidas/{id_partida}
 @router.delete(
     "/{id_partida}",
     status_code=status.HTTP_204_NO_CONTENT,

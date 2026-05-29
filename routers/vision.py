@@ -1,6 +1,3 @@
-# routers/vision.py
-# Visión por computador para el reconocimiento del tablero de ajedrez
-
 """Módulo de visión por computador para el reconocimiento del tablero.
 
 Proporciona endpoints para detectar y rectificar tableros de ajedrez,
@@ -13,20 +10,17 @@ import numpy as np
 import traceback
 from fastapi import APIRouter, UploadFile, File, Form
 
-# Importaciones de servicios
 from services.vision import VisionService, _detectar_tablero, _calcular_esquinas_exteriores, _rectificar
 from services.classifier import classifier
 from services.move_detector import detect_move as _detect_move
 from utils.chess_utils import board_state_to_fen_board
 
-# Router para visión por computador
 router = APIRouter(
     prefix="/vision",
     tags=["Visión"],
     responses={404: {"description": "No encontrado"}},
 )
 
-# Endpoint para reconocer el tablero
 @router.post("/recognize-board", summary="Reconoce y rectifica un tablero de ajedrez")
 async def recognize_board(file: UploadFile = File(...)):
     """Reconoce y rectifica un tablero de ajedrez desde una imagen.
@@ -54,7 +48,6 @@ async def recognize_board(file: UploadFile = File(...)):
     except Exception as e:
         return {"success": False, "error": str(e), "detail": traceback.format_exc()}
 
-# Endpoint para obtener estado del motor de visión
 @router.get("/status", summary="Estado del motor de visión")
 def vision_status():
     """Obtiene el estado del módulo de visión por computador.
@@ -71,7 +64,6 @@ def vision_status():
         "version": cv2.__version__
     }
 
-# Endpoint para clasificar las piezas del tablero
 @router.post("/classify", summary="Clasifica las 64 casillas del tablero")
 async def classify_board(file: UploadFile = File(...)):
     """Clasifica las 64 casillas del tablero de ajedrez mediante ML.
@@ -96,7 +88,6 @@ async def classify_board(file: UploadFile = File(...)):
         arr = np.frombuffer(contents, np.uint8)
         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         
-        # 1. Visión clásica para rectificar
         found, corners = _detectar_tablero(frame)
         if not found:
             return {"success": False, "error": "Tablero no detectado"}
@@ -104,10 +95,8 @@ async def classify_board(file: UploadFile = File(...)):
         exterior = _calcular_esquinas_exteriores(corners)
         warped = _rectificar(frame, exterior)
         
-        # 2. ML para clasificar
         board_state = classifier.classify_board(warped)
         
-        # 3. Formato simple para el GameState
         simple_state = {sq: v["label"] for sq, v in board_state.items()}
         
         return {
@@ -118,7 +107,6 @@ async def classify_board(file: UploadFile = File(...)):
     except Exception as e:
         return {"success": False, "error": str(e), "detail": traceback.format_exc()}
 
-# Endpoint para recargar el modelo ML desde disco
 @router.post("/classify/reload", summary="Recarga el modelo ML desde disco")
 def reload_model():
     """Recarga el modelo de clasificación desde disco en caliente.
@@ -133,8 +121,6 @@ def reload_model():
     classifier.reload()
     return {"success": True, "ready": classifier.is_ready()}
 
-# --- DETECCIÓN DE MOVIMIENTOS ---
-
 @router.post("/detect-move", summary="Detecta el movimiento entre dos posiciones")
 async def detect_move_endpoint(
     file: UploadFile = File(...),
@@ -142,17 +128,15 @@ async def detect_move_endpoint(
 ):
     """Detecta el movimiento de ajedrez entre dos estados del tablero.
 
-    Recibe un frame de la cámara y el FEN del estado anterior del
-    tablero. Clasifica las piezas del nuevo estado, compara con el
-    estado previo y determina el movimiento legal realizado, si existe.
+    Clasifica las piezas del nuevo estado mediante ML, compara con
+    el estado previo en FEN y determina el movimiento legal realizado.
 
     Args:
         file: Imagen actual del tablero.
         prev_fen: FEN completo del estado anterior del tablero.
 
     Returns:
-        Dict con el movimiento detectado (origen, destino, pieza)
-        y flag de éxito.
+        Dict con el movimiento detectado (origen, destino, pieza) y éxito.
     """
     try:
         if not classifier.is_ready():

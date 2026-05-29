@@ -26,25 +26,21 @@ def detect_move(warped: np.ndarray, prev_fen: str, classifier) -> dict:
         error descriptivo.
     """
     try:
-        # 1. Obtener el estado ML del tablero
         board_state = classifier.classify_board(warped)
-        
-        # 2. Construir el simple_state (solo etiquetas)
         simple_state = {sq: v["label"] for sq, v in board_state.items()}
-        
-        # 3. Cargar el estado anterior con python-chess
+
         try:
             prev_board = chess.Board(prev_fen)
         except ValueError:
             return {"found": False, "error": "fen_invalid"}
 
-        # 4. Buscar el movimiento legal que coincide con la nueva posición
+        # Busca entre todos los movimientos legales de la posición anterior
+        # aquel que genera una disposición de piezas igual a la clasificada por ML
         for move in prev_board.legal_moves:
             test = prev_board.copy()
             test.push(move)
-            
+
             if _positions_match(test, simple_state):
-                # Encontrado
                 move_type = _classify_move_type(prev_board, move)
                 return {
                     "found": True,
@@ -61,7 +57,6 @@ def detect_move(warped: np.ndarray, prev_fen: str, classifier) -> dict:
                     "confidence_avg": _avg_confidence(board_state)
                 }
 
-        # No se encontró ningún movimiento legal que resulte en esta posición
         return {
             "found": False,
             "error": "no_legal_move_found",
@@ -72,19 +67,7 @@ def detect_move(warped: np.ndarray, prev_fen: str, classifier) -> dict:
         return {"found": False, "error": str(e)}
 
 def _positions_match(board: chess.Board, simple_state: dict) -> bool:
-    """Compara la disposición de piezas de un objeto chess.Board con el estado clasificado por ML.
-
-    Recorre las 64 casillas del tablero y verifica que la pieza en cada casilla del
-    objeto Board coincide con la pieza devuelta por el clasificador ML, usando la
-    función auxiliar label_to_piece para la conversión.
-
-    Args:
-        board: Objeto chess.Board que representa la posición a verificar.
-        simple_state: Diccionario con etiquetas ML por cada casilla (notación algebraica).
-
-    Returns:
-        True si todas las casillas coinciden, False en caso contrario.
-    """
+    """Compara cada casilla del Board con la clasificación ML."""
     for square in chess.SQUARES:
         sq_name = chess.square_name(square)
         piece_on_board = board.piece_at(square)
@@ -98,19 +81,7 @@ def _positions_match(board: chess.Board, simple_state: dict) -> bool:
     return True
 
 def _classify_move_type(board: chess.Board, move: chess.Move) -> str:
-    """Clasifica el tipo de movimiento de ajedrez realizado.
-
-    Evalúa el movimiento sobre el tablero anterior y determina si es un enroque
-    (corto o largo), captura al paso, promoción, captura normal o movimiento simple.
-
-    Args:
-        board: Objeto chess.Board en la posición anterior al movimiento.
-        move: Objeto chess.Move que representa el movimiento realizado.
-
-    Returns:
-        Cadena con el tipo de movimiento: "castling_short", "castling_long",
-        "en_passant", "promotion", "capture" o "normal".
-    """
+    """Clasifica el tipo de movimiento: enroque, captura, promoción, etc."""
     if board.is_castling(move):
         # Diferenciar entre corto y largo
         if board.is_kingside_castling(move):
@@ -130,17 +101,7 @@ def _classify_move_type(board: chess.Board, move: chess.Move) -> str:
     return "normal"
 
 def _avg_confidence(board_state: dict) -> float:
-    """Calcula la confianza media del clasificador ML para todas las casillas del tablero.
-
-    Promedia el campo "confidence" de cada entrada del diccionario board_state.
-
-    Args:
-        board_state: Diccionario con los resultados de clasificación por casilla.
-
-    Returns:
-        Valor float con la confianza media redondeada a 3 decimales.
-        Devuelve 0.0 si el diccionario está vacío.
-    """
+    """Calcula la confianza media del clasificador ML en todas las casillas."""
     confidences = [v["confidence"] for v in board_state.values()]
     if not confidences:
         return 0.0
