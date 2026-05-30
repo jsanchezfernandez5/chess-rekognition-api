@@ -105,7 +105,8 @@
         }
 
         /* ── Botones ── */
-        button, select {
+        button,
+        select {
             padding: 8px 16px;
             border: 1px solid #e2e8f0;
             border-radius: 6px;
@@ -116,7 +117,8 @@
             transition: background .15s;
         }
 
-        button:hover, select:hover {
+        button:hover,
+        select:hover {
             background: #f8fafc;
         }
 
@@ -298,9 +300,9 @@
         <div id="loginCard" class="card">
             <h2>Identificación</h2>
             <label>Usuario</label>
-            <input type="text" id="inputUser" placeholder="username">
+            <input type="text" id="inputUser" placeholder="username" value="chess_test01">
             <label>Contraseña</label>
-            <input type="password" id="inputPass" placeholder="••••••••">
+            <input type="password" id="inputPass" placeholder="••••••••" value="chess_test01">
             <button class="btn-primary" style="width:100%; margin-top:14px;" onclick="doLogin()">Entrar</button>
         </div>
 
@@ -322,16 +324,20 @@
                         <h2>Cámara en vivo</h2>
                         <div class="camera-wrap">
                             <video id="cam" autoplay playsinline muted></video>
-                            <img id="imgSource" style="display:none; width:100%; height:100%; object-fit:cover;" alt="Imagen cargada">
+                            <img id="imgSource" style="display:none; width:100%; height:100%; object-fit:cover;"
+                                alt="Imagen cargada">
                             <canvas id="overlay"></canvas>
                         </div>
                         <div class="btn-row">
                             <button id="btnReiniciarCam" onclick="iniciarCamara()">Reiniciar cámara</button>
                             <button class="btn-primary" onclick="capturar()">Capturar tablero</button>
                             <button id="btnLimpiarCoords">Limpiar Esquinas</button>
-                            <button id="btnCargarFoto" onclick="document.getElementById('inputFile').click()">Cargar Foto</button>
-                            <button id="btnUsarCamara" style="display:none;" onclick="usarCamaraOriginal()">Usar Cámara</button>
-                            <input type="file" id="inputFile" accept="image/*" style="display:none" onchange="cargarFotoLocal(event)">
+                            <button id="btnCargarFoto" onclick="document.getElementById('inputFile').click()">Cargar
+                                Foto</button>
+                            <button id="btnUsarCamara" style="display:none;" onclick="usarCamaraOriginal()">Usar
+                                Cámara</button>
+                            <input type="file" id="inputFile" accept="image/*" style="display:none"
+                                onchange="cargarFotoLocal(event)">
                             <select id="selectRotacion">
                                 <option value="0">Blancas debajo (0º)</option>
                                 <option value="90">Blancas a la derecha (90º)</option>

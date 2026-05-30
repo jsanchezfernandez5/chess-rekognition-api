@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Rekognition | Reconocimiento</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top, #0f172a, #020617);
+            color: #f1f5f9;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        header h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 32px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #3b82f6, #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        @media (max-width: 900px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+            height: fit-content;
+        }
+
+        .card h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            color: #38bdf8;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            padding-bottom: 8px;
+        }
+
+        .camera-wrap {
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        #imgSource {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            cursor: crosshair;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        button, select {
+            font-family: 'Inter', sans-serif;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            color: #f1f5f9;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        button:hover, select:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        select option {
+            background: #0f172a;
+            color: #f1f5f9;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            border-color: #2563eb;
+            color: #fff;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            box-shadow: 0 4px 16px rgba(37, 99, 235, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            border-color: #dc2626;
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        #log {
+            font-family: monospace;
+            font-size: 11px;
+            height: 110px;
+            overflow-y: auto;
+            background: #020617;
+            color: #64748b;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .log-time {
+            color: #475569;
+            margin-right: 8px;
+        }
+
+        .log-error {
+            color: #f43f5e;
+        }
+
+        .log-success {
+            color: #10b981;
+        }
+
+        .board-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .chessboard-2d {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 360px;
+            height: 360px;
+            border: 8px solid #1e293b;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            margin-bottom: 24px;
+        }
+
+        .sq {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            user-select: none;
+            aspect-ratio: 1;
+            position: relative;
+        }
+
+        .sq.light {
+            background-color: #cbd5e1;
+        }
+
+        .sq.dark {
+            background-color: #475569;
+        }
+
+        .piece-w {
+            color: #ffffff;
+            text-shadow: 0 0 4px rgba(0,0,0,0.8), 0 0 1px rgba(0,0,0,0.5);
+            font-weight: bold;
+        }
+
+        .piece-b {
+            color: #0f172a;
+            text-shadow: 0 0 2px rgba(255,255,255,0.6);
+            font-weight: bold;
+        }
+
+        .sq-coord {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            font-size: 8px;
+            color: rgba(0, 0, 0, 0.35);
+        }
+
+        .sq.dark .sq-coord {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .fen-box {
+            width: 100%;
+            background: #020617;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .fen-text {
+            font-family: monospace;
+            font-size: 12px;
+            color: #e2e8f0;
+            overflow-x: auto;
+            white-space: nowrap;
+            flex-grow: 1;
+            padding-bottom: 4px;
+        }
+
+        .btn-copy {
+            padding: 6px 12px;
+            font-size: 11px;
+            background: #3b82f6;
+            border: none;
+        }
+
+        .btn-copy:hover {
+            background: #2563eb;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 10px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #64748b;
+            border-radius: 50%;
+        }
+
+        .status-dot.active {
+            background-color: #10b981;
+            box-shadow: 0 0 8px #10b981;
+        }
+
+        .status-dot.working {
+            background-color: #f59e0b;
+            box-shadow: 0 0 8px #f59e0b;
+        }
+
+        .status-dot.error {
+            background-color: #ef4444;
+            box-shadow: 0 0 8px #ef4444;
+        }
+
+        .placeholder-text {
+            color: #64748b;
+            font-size: 13px;
+            text-align: center;
+            padding: 60px 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Reconocimiento en Vivo | Chess Rekognition</h1>
+            <p>Clasifica la posición de tu tablero físico y genera su código FEN en tiempo real.</p>
+        </header>
+
+        <div class="layout">
+            <div class="card">
+                <h2>Origen de Imagen</h2>
+                <div class="camera-wrap">
+                    <video id="cam" autoplay playsinline muted></video>
+                    <img id="imgSource" alt="Tablero cargado">
+                    <canvas id="overlay"></canvas>
+                </div>
+                <div class="btn-row">
+                    <button class="btn-primary" id="btnClasificar">Reconocer y Clasificar</button>
+                    <button class="btn-danger" id="btnLimpiar">Limpiar Esquinas</button>
+                    <button id="btnCargar" onclick="document.getElementById('inputFile').click()">Cargar Foto</button>
+                    <button id="btnUsarCam" style="display:none;" onclick="activarCamara()">Usar Cámara</button>
+                    <input type="file" id="inputFile" accept="image/*" style="display:none" onchange="cargarArchivo(event)">
+                    <select id="selectRotacion">
+                        <option value="0">Blancas debajo (0º)</option>
+                        <option value="90">Blancas a la derecha (90º)</option>
+                        <option value="270">Blancas a la izquierda (270º)</option>
+                        <option value="180">Blancas arriba (180º)</option>
+                    </select>
+                </div>
+                <div class="status-badge">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusTxt">Cámara inactiva</span>
+                </div>
+                <div id="log">--- consola ---</div>
+            </div>
+
+            <div class="card">
+                <h2>Tablero Reconocido (2D)</h2>
+                <div class="board-container">
+                    <div class="chessboard-2d" id="board2d">
+                        <div class="placeholder-text" style="grid-column: span 8;">
+                            Captura o carga una imagen para ver la clasificación del tablero.
+                        </div>
+                    </div>
+                    <div class="fen-box">
+                        <div class="fen-text" id="fenText">rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1</div>
+                        <button class="btn-copy" onclick="copiarFEN()">Copiar FEN</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="snap" style="display:none"></canvas>
+
+    <script>
+        const UNICODE_PIECES = {
+            w_P: '♙', w_N: '♘', w_B: '♗', w_R: '♖', w_Q: '♕', w_K: '♔',
+            b_P: '♟', b_N: '♞', b_B: '♝', b_R: '♜', b_Q: '♛', b_K: '♚',
+            empty: ''
+        };
+
+        const video = document.getElementById("cam");
+        const imgSource = document.getElementById("imgSource");
+        const canvas = document.getElementById("snap");
+        const overlay = document.getElementById("overlay");
+        const selectRot = document.getElementById("selectRotacion");
+        const btnClasificar = document.getElementById("btnClasificar");
+        const btnLimpiar = document.getElementById("btnLimpiar");
+        const btnCargar = document.getElementById("btnCargar");
+        const btnUsarCam = document.getElementById("btnUsarCam");
+        const statusDot = document.getElementById("statusDot");
+        const statusTxt = document.getElementById("statusTxt");
+        const logPanel = document.getElementById("log");
+        const board2d = document.getElementById("board2d");
+        const fenText = document.getElementById("fenText");
+
+        let manualPoints = [];
+        let modoImagen = false;
+        let procesando = false;
+
+        function log(msg, type = "") {
+            const hora = new Date().toLocaleTimeString("es-ES");
+            let cls = "";
+            if (type === "error") cls = " class='log-error'";
+            if (type === "success") cls = " class='log-success'";
+            logPanel.innerHTML = `<span class="log-time">[${hora}]</span><span${cls}>${msg}</span><br>` + logPanel.innerHTML;
+        }
+
+        function setStatus(text, dotClass = "") {
+            statusTxt.textContent = text;
+            statusDot.className = "status-dot";
+            if (dotClass) statusDot.classList.add(dotClass);
+        }
+
+        async function activarCamara() {
+            try {
+                btnUsarCam.style.display = "none";
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment", width: 1280, height: 720 }
+                });
+                video.srcObject = stream;
+                video.style.display = "block";
+                imgSource.style.display = "none";
+                modoImagen = false;
+                video.onloadedmetadata = () => {
+                    const aspect = video.videoWidth / video.videoHeight;
+                    document.querySelector(".camera-wrap").style.aspectRatio = aspect;
+                    drawOverlay();
+                };
+                setStatus("Cámara en vivo", "active");
+                log("Cámara iniciada.");
+            } catch (err) {
+                setStatus("Error cámara", "error");
+                log("Error al acceder a la cámara: " + err.message, "error");
+            }
+        }
+
+        function cargarArchivo(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    if (video.srcObject) {
+                        video.srcObject.getTracks().forEach(t => t.stop());
+                        video.srcObject = null;
+                    }
+                    imgSource.src = e.target.result;
+                    video.style.display = "none";
+                    imgSource.style.display = "block";
+                    btnUsarCam.style.display = "inline-block";
+                    modoImagen = true;
+                    imgSource.onload = () => {
+                        const aspect = imgSource.naturalWidth / imgSource.naturalHeight;
+                        document.querySelector(".camera-wrap").style.aspectRatio = aspect;
+                        drawOverlay();
+                    };
+                    setStatus("Imagen cargada", "active");
+                    log("Imagen local cargada.");
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function drawOverlay() {
+            const ctx = overlay.getContext("2d");
+            overlay.width = overlay.clientWidth;
+            overlay.height = overlay.clientHeight;
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+            if (manualPoints.length > 0) {
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = "#10b981";
+                ctx.fillStyle = "#ef4444";
+
+                ctx.beginPath();
+                ctx.moveTo(manualPoints[0].x * overlay.width, manualPoints[0].y * overlay.height);
+                for (let i = 1; i < manualPoints.length; i++) {
+                    ctx.lineTo(manualPoints[i].x * overlay.width, manualPoints[i].y * overlay.height);
+                }
+                if (manualPoints.length === 4) {
+                    ctx.closePath();
+                }
+                ctx.stroke();
+
+                manualPoints.forEach((pt, index) => {
+                    const px = pt.x * overlay.width;
+                    const py = pt.y * overlay.height;
+                    ctx.beginPath();
+                    ctx.arc(px, py, 6, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.fillStyle = "#ffffff";
+                    ctx.font = "10px sans-serif";
+                    ctx.fillText(index + 1, px - 3, py + 3);
+                    ctx.fillStyle = "#ef4444";
+                });
+            }
+        }
+
+        overlay.addEventListener("click", (e) => {
+            const rect = overlay.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width;
+            const y = (e.clientY - rect.top) / rect.height;
+
+            if (manualPoints.length >= 4) {
+                manualPoints = [];
+            } else {
+                manualPoints.push({ x, y });
+            }
+            drawOverlay();
+        });
+
+        btnLimpiar.onclick = () => {
+            manualPoints = [];
+            drawOverlay();
+            log("Coordenadas de calibración reseteadas.");
+        };
+
+        window.addEventListener("resize", drawOverlay);
+
+        async function clasificarPosicion() {
+            if (procesando) return;
+            procesando = true;
+            setStatus("Clasificando...", "working");
+
+            if (modoImagen) {
+                canvas.width = imgSource.naturalWidth;
+                canvas.height = imgSource.naturalHeight;
+                canvas.getContext("2d").drawImage(imgSource, 0, 0);
+            } else {
+                if (!video.videoWidth) {
+                    log("Cámara no preparada.", "error");
+                    setStatus("Error", "error");
+                    procesando = false;
+                    return;
+                }
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext("2d").drawImage(video, 0, 0);
+            }
+
+            log("Enviando frame al clasificador...");
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.9));
+
+            const fd = new FormData();
+            fd.append("file", blob, "frame.jpg");
+            fd.append("rotation", selectRot.value);
+            if (manualPoints.length === 4) {
+                const coordsStr = manualPoints.map(p => `${p.x},${p.y}`).join(",");
+                fd.append("coords", coordsStr);
+            }
+
+            try {
+                const res = await fetch("/vision/classify", { method: "POST", body: fd });
+                const data = await res.json();
+
+                if (data.success) {
+                    renderizarTablero2D(data.board_state);
+                    fenText.textContent = data.fen;
+                    setStatus(modoImagen ? "Imagen clasificada" : "Cámara en vivo", "active");
+                    log("Clasificación exitosa.", "success");
+                } else {
+                    setStatus("Error", "error");
+                    log("Error: " + data.error, "error");
+                }
+            } catch (err) {
+                setStatus("Error de red", "error");
+                log("Error de conexión al servidor: " + err.message, "error");
+            } finally {
+                procesando = false;
+            }
+        }
+
+        function renderizarTablero2D(boardState) {
+            board2d.innerHTML = "";
+            const cols = ["a", "b", "c", "d", "e", "f", "g", "h"];
+            for (let row = 8; row >= 1; row--) {
+                for (let colIdx = 0; colIdx < 8; colIdx++) {
+                    const colName = cols[colIdx];
+                    const sqName = `${colName}${row}`;
+                    const cellInfo = boardState[sqName] || { label: "empty" };
+                    const label = cellInfo.label;
+                    const isDark = (row + colIdx) % 2 === 0;
+
+                    const sqEl = document.createElement("div");
+                    sqEl.className = `sq ${isDark ? "dark" : "light"}`;
+                    sqEl.title = `${sqName}: ${label}`;
+
+                    if (label !== "empty") {
+                        const isWhite = label.startsWith("w_");
+                        const pieceSpan = document.createElement("span");
+                        pieceSpan.className = isWhite ? "piece-w" : "piece-b";
+                        pieceSpan.textContent = UNICODE_PIECES[label] || "";
+                        sqEl.appendChild(pieceSpan);
+                    }
+
+                    const coordEl = document.createElement("div");
+                    coordEl.className = "sq-coord";
+                    coordEl.textContent = sqName;
+                    sqEl.appendChild(coordEl);
+
+                    board2d.appendChild(sqEl);
+                }
+            }
+        }
+
+        function copiarFEN() {
+            navigator.clipboard.writeText(fenText.textContent).then(() => {
+                log("FEN copiado al portapapeles.", "success");
+            }).catch(() => {
+                log("No se pudo copiar el FEN.", "error");
+            });
+        }
+
+        btnClasificar.onclick = clasificarPosicion;
+        activarCamara();
+    </script>
+</body>
+</html>

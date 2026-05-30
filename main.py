@@ -51,7 +51,8 @@ app = FastAPI(
         "### Reconocimiento visual de jugadas en partidas de ajedrez presencial.\n\n"
         "**Herramientas web integradas:**\n"
         "* **Diagnóstico OpenCV:** [/opencv](/opencv)\n"
-        "* **Módulo de Dataset:** [/dataset](/dataset)"
+        "* **Módulo de Dataset:** [/dataset](/dataset)\n"
+        "* **Reconocimiento en Vivo:** [/reconocimiento](/reconocimiento)"
     ),
     version="1.0.0",
     openapi_tags=tags_metadata,
@@ -108,6 +109,11 @@ def dataset_tool():
     """Sirve la herramienta interactiva de captura de imágenes para el dataset."""
     return FileResponse("static/dataset.html")
 
+# Endpoint herramienta de reconocimiento visual.
+@app.get("/reconocimiento", include_in_schema=False)
+def reconocimiento():
+    return FileResponse("static/reconocimiento.html")
+
 # Endpoint para servir la documentación de Swagger UI.
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui():
@@ -128,6 +134,7 @@ def root():
         "urls": {
             "opencv": "/opencv",
             "dataset": "/dataset",
+            "reconocimiento": "/reconocimiento",
             "docs": "/docs"
         }
     }
