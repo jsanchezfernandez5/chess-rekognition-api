@@ -4,91 +4,83 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chess Rekognition | Reconocimiento</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        *, *::before, *::after {
+        *,
+        *::before,
+        *::after {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
         }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background: radial-gradient(circle at top, #0f172a, #020617);
-            color: #f1f5f9;
-            min-height: 100vh;
-            padding: 40px 20px;
+            font-family: system-ui, sans-serif;
+            font-size: 14px;
+            background: #f1f5f9;
+            color: #1e293b;
+            padding: 24px;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1000px;
             margin: 0 auto;
         }
 
+        /* ── Cabecera ── */
         header {
-            text-align: center;
-            margin-bottom: 40px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
         }
 
         header h1 {
-            font-family: 'Outfit', sans-serif;
-            font-size: 32px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #3b82f6, #10b981);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 8px;
+            font-size: 18px;
+            font-weight: 600;
         }
 
         header p {
-            font-size: 14px;
-            color: #94a3b8;
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 2px;
         }
 
+        /* ── Tarjetas ── */
+        .card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card h2 {
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 12px;
+        }
+
+        /* ── Layout ── */
         .layout {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 30px;
+            gap: 16px;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 700px) {
             .layout {
                 grid-template-columns: 1fr;
             }
         }
 
-        .card {
-            background: rgba(30, 41, 59, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(12px);
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
-            height: fit-content;
-        }
-
-        .card h2 {
-            font-family: 'Outfit', sans-serif;
-            font-size: 16px;
-            font-weight: 600;
-            color: #38bdf8;
-            text-transform: uppercase;
-            letter-spacing: .08em;
-            margin-bottom: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-            padding-bottom: 8px;
-        }
-
+        /* ── Cámara ── */
         .camera-wrap {
             background: #000;
-            border-radius: 12px;
+            border-radius: 6px;
             overflow: hidden;
             aspect-ratio: 16/9;
             position: relative;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         video {
@@ -115,71 +107,67 @@
             cursor: crosshair;
         }
 
+        /* ── Botones ── */
         .btn-row {
             display: flex;
-            gap: 10px;
-            margin-top: 20px;
+            gap: 8px;
+            margin-top: 12px;
             flex-wrap: wrap;
         }
 
         button, select {
-            font-family: 'Inter', sans-serif;
-            padding: 10px 20px;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.05);
-            color: #f1f5f9;
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+            color: #1e293b;
             font-size: 13px;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: background .15s;
         }
 
         button:hover, select:hover {
-            background: rgba(255, 255, 255, 0.12);
-            border-color: rgba(255, 255, 255, 0.2);
+            background: #f8fafc;
         }
 
-        select option {
-            background: #0f172a;
-            color: #f1f5f9;
+        button:disabled {
+            opacity: .4;
+            cursor: default;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #2563eb, #1d4ed8);
-            border-color: #2563eb;
+            background: #2563eb;
             color: #fff;
-            font-weight: 600;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            border-color: #2563eb;
         }
 
         .btn-primary:hover {
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
-            box-shadow: 0 4px 16px rgba(37, 99, 235, 0.5);
-            transform: translateY(-1px);
+            background: #1d4ed8;
         }
 
         .btn-danger {
-            background: linear-gradient(135deg, #dc2626, #b91c1c);
-            border-color: #dc2626;
+            background: #dc2626;
             color: #fff;
+            border-color: #dc2626;
         }
 
         .btn-danger:hover {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
+            background: #b91c1c;
         }
 
+        /* ── Consola ── */
         #log {
             font-family: monospace;
             font-size: 11px;
             height: 110px;
             overflow-y: auto;
-            background: #020617;
-            color: #64748b;
+            background: #0f172a;
+            color: #94a3b8;
             padding: 12px;
-            border-radius: 8px;
-            margin-top: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            margin-top: 12px;
+            border: 1px solid #e2e8f0;
         }
 
         .log-time {
@@ -195,6 +183,7 @@
             color: #10b981;
         }
 
+        /* ── Tablero 2D ── */
         .board-container {
             display: flex;
             flex-direction: column;
@@ -207,10 +196,9 @@
             grid-template-rows: repeat(8, 1fr);
             width: 360px;
             height: 360px;
-            border: 8px solid #1e293b;
+            border: 8px solid #cbd5e1;
             border-radius: 8px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
         .sq {
@@ -238,7 +226,7 @@
         }
 
         .piece-b {
-            color: #0f172a;
+            color: #1e293b;
             text-shadow: 0 0 2px rgba(255,255,255,0.6);
             font-weight: bold;
         }
@@ -257,8 +245,8 @@
 
         .fen-box {
             width: 100%;
-            background: #020617;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
             border-radius: 8px;
             padding: 12px;
             display: flex;
@@ -270,7 +258,7 @@
         .fen-text {
             font-family: monospace;
             font-size: 12px;
-            color: #e2e8f0;
+            color: #1e293b;
             overflow-x: auto;
             white-space: nowrap;
             flex-grow: 1;
@@ -280,12 +268,14 @@
         .btn-copy {
             padding: 6px 12px;
             font-size: 11px;
-            background: #3b82f6;
+            background: #2563eb;
             border: none;
+            color: #fff;
+            font-weight: 500;
         }
 
         .btn-copy:hover {
-            background: #2563eb;
+            background: #1d4ed8;
         }
 
         .status-badge {
@@ -293,30 +283,27 @@
             align-items: center;
             gap: 6px;
             font-size: 13px;
-            color: #94a3b8;
+            color: #475569;
             margin-top: 10px;
         }
 
         .status-dot {
             width: 8px;
             height: 8px;
-            background-color: #64748b;
+            background-color: #94a3b8;
             border-radius: 50%;
         }
 
         .status-dot.active {
-            background-color: #10b981;
-            box-shadow: 0 0 8px #10b981;
+            background-color: #16a34a;
         }
 
         .status-dot.working {
-            background-color: #f59e0b;
-            box-shadow: 0 0 8px #f59e0b;
+            background-color: #d97706;
         }
 
         .status-dot.error {
-            background-color: #ef4444;
-            box-shadow: 0 0 8px #ef4444;
+            background-color: #dc2626;
         }
 
         .placeholder-text {
