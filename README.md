@@ -162,7 +162,10 @@ Compara el estado ML vs FEN anterior:
 
 - **Captura y dataset** (`routers/dataset.py`): extrae 64 casillas, sugiere etiqueta por heurística STD, guarda con UUID por clase
 - **Training pipeline** (`services/training.py`): `image_dataset_from_directory` → MobileNetV2 + Data Augmentation → EarlyStopping → ReduceLROnPlateau
-- **WebSocket broadcasting**: `_WSCallback` (Keras callback) notifica métricas época a época desde el hilo de entrenamiento al event loop principal
+- **Métricas del Modelo**:
+  - **Dataset**: 13.229 imágenes (10.584 entrenamiento, 2.645 validación) divididas en 13 clases.
+  - **Precisión (Accuracy)**: 97.30% en entrenamiento, 96.22% en validación.
+  - **Pérdida (Loss)**: 0.0778 en entrenamiento, 0.1187 en validación.
 
 ---
 
@@ -200,7 +203,7 @@ api/
 │   ├── training.py         # Pipeline entrenamiento MobileNetV2 + broadcast WS
 │   └── email.py            # Resend API: email de bienvenida asíncrono
 │
-└── static/                 # Favicon, dataset.html, opencv.html
+└── static/                 # Favicon, dataset.html, opencv.html, reconocimiento.html
 ```
 
 > **Nota de transparencia al frontend:** esta reorganización conceptual no modifica ningún endpoint ni contrato de la API. Las rutas, métodos HTTP, parámetros y respuestas son idénticos. El frontend no requiere ningún cambio.
@@ -263,6 +266,13 @@ api/
 | POST | `/dataset/train` | ✅ | Iniciar entrenamiento del modelo |
 | GET | `/dataset/train/status` | ✅ | Estado del entrenamiento (polling) |
 | WS | `/dataset/train/ws` | ✅ | Estado del entrenamiento (WebSocket) |
+
+### Herramientas Web Auxiliares
+| Método | Ruta | Protegido | Descripción |
+|--------|------|-----------|-------------|
+| GET | `/opencv` | ❌ | Herramienta de diagnóstico de visión por computadora |
+| GET | `/dataset` | ❌ | Panel interactivo de dataset y entrenamiento |
+| GET | `/reconocimiento` | ❌ | Herramienta de visualización de tablero y FEN en vivo |
 
 ---
 
