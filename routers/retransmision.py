@@ -1,6 +1,8 @@
 """
 Endpoints HTTP y WebSocket para la retransmisión de partidas en tiempo real.
 """
+import asyncio
+import json
 import random
 import string
 from typing import Dict, List
@@ -183,7 +185,25 @@ async def websocket_host(websocket: WebSocket, token: str, db: Session = Depends
     try:
         # Bucle infinito para recibir actualizaciones del host.
         while True:
-            data = await websocket.receive_json()
+            try:
+                data_text = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
+            except asyncio.TimeoutError:
+                try:
+                    await websocket.close(code=1001, reason="Heartbeat timeout")
+                except Exception:
+                    pass
+                await manager.disconnect_host(token, db)
+                break
+
+            if data_text == "ping":
+                await websocket.send_text("pong")
+                continue
+
+            try:
+                data = json.loads(data_text)
+            except json.JSONDecodeError:
+                continue
+
             await manager.broadcast_to_viewers(token, data)
     except WebSocketDisconnect:
         await manager.disconnect_host(token, db)

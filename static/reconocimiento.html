@@ -575,7 +575,7 @@
                     const sqName = `${colName}${row}`;
                     const cellInfo = boardState[sqName] || { label: "empty" };
                     const label = cellInfo.label;
-                    const isDark = (row + colIdx) % 2 === 0;
+                    const isDark = (row + colIdx) % 2 !== 0;
 
                     const sqEl = document.createElement("div");
                     sqEl.className = `sq ${isDark ? "dark" : "light"}`;

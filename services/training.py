@@ -30,6 +30,8 @@ training_state: dict = {
     "message":       "",
 }
 
+state_lock = threading.RLock()
+
 # Lista de clientes WebSocket conectados
 ws_clients: List[WebSocket] = []
 
@@ -38,11 +40,13 @@ _main_loop: asyncio.AbstractEventLoop | None = None
 
 # Función que devuelve el estado actual del entrenamiento
 def get_state() -> dict:
-    return training_state.copy()
+    with state_lock:
+        return training_state.copy()
 
 # Función que devuelve si el entrenamiento está corriendo
 def is_running() -> bool:
-    return training_state["running"]
+    with state_lock:
+        return training_state["running"]
 
 # Función que añade un cliente WebSocket a la lista de clientes conectados
 def add_ws_client(ws: WebSocket):
@@ -77,22 +81,25 @@ def _run_training_wrapper():
     try:
         _run_training_logic()
     except Exception as e:
-        training_state.update({"running": False, "status": "error", "message": str(e)})
-        _broadcast(training_state.copy())
+        with state_lock:
+            training_state.update({"running": False, "status": "error", "message": str(e)})
+            current_state = training_state.copy()
+        _broadcast(current_state)
 
 # Función interna que ejecuta el entrenamiento
 def _run_training_logic():
     # Actualiza el estado del entrenamiento a loading
-    training_state.update({
-        "running": True, 
-        "status": "loading", 
-        "epoch": 0, 
-        "message": "Preparando dataset..."}
-    
-    )
+    with state_lock:
+        training_state.update({
+            "running": True, 
+            "status": "loading", 
+            "epoch": 0, 
+            "message": "Preparando dataset..."
+        })
+        current_state = training_state.copy()
 
     # Envía el estado a todos los WebSocket conectados
-    _broadcast(training_state.copy())
+    _broadcast(current_state)
 
     # Carga el dataset de imágenes
     train_ds = tf.keras.utils.image_dataset_from_directory(
@@ -126,10 +133,12 @@ def _run_training_logic():
     val_ds   = val_ds.prefetch(buffer_size=AUTOTUNE)
 
     # Actualiza el estado del entrenamiento a building
-    training_state.update({"status": "building", "message": "Construyendo modelo MobileNetV2..."})
+    with state_lock:
+        training_state.update({"status": "building", "message": "Construyendo modelo MobileNetV2..."})
+        current_state = training_state.copy()
     
     # Envía el estado a todos los WebSocket conectados
-    _broadcast(training_state.copy())
+    _broadcast(current_state)
 
     # Crea el modelo base MobileNetV2
     base_model = tf.keras.applications.MobileNetV2(
@@ -159,22 +168,26 @@ def _run_training_logic():
 
     # Número de épocas
     EPOCHS = 20
-    training_state.update({"status": "training", "total_epochs": EPOCHS, "message": "Entrenando..."})
+    with state_lock:
+        training_state.update({"status": "training", "total_epochs": EPOCHS, "message": "Entrenando..."})
+        current_state = training_state.copy()
     
     # Envía el estado a todos los WebSocket conectados
-    _broadcast(training_state.copy())
+    _broadcast(current_state)
 
     # Callback para enviar el estado del entrenamiento a los WebSocket
     class _WSCallback(tf.keras.callbacks.Callback):
         def on_epoch_end(self, epoch, logs=None):
-            training_state.update({
-                "epoch":        epoch + 1,
-                "loss":         round(float(logs.get("loss", 0)), 4),
-                "accuracy":     round(float(logs.get("accuracy", 0)), 4),
-                "val_loss":     round(float(logs.get("val_loss", 0)), 4),
-                "val_accuracy": round(float(logs.get("val_accuracy", 0)), 4),
-            })
-            _broadcast(training_state.copy())
+            with state_lock:
+                training_state.update({
+                    "epoch":        epoch + 1,
+                    "loss":         round(float(logs.get("loss", 0)), 4),
+                    "accuracy":     round(float(logs.get("accuracy", 0)), 4),
+                    "val_loss":     round(float(logs.get("val_loss", 0)), 4),
+                    "val_accuracy": round(float(logs.get("val_accuracy", 0)), 4),
+                })
+                current_state = training_state.copy()
+            _broadcast(current_state)
 
     model.fit(
         train_ds, validation_data=val_ds, epochs=EPOCHS,
@@ -189,10 +202,12 @@ def _run_training_logic():
     model.save(os.path.join(settings.MODELS_DIR, "chess_model.h5"))
 
     # Actualiza el estado del entrenamiento a done
-    training_state.update({"running": False, "status": "done", "message": "Entrenamiento completado y modelo guardado."})
+    with state_lock:
+        training_state.update({"running": False, "status": "done", "message": "Entrenamiento completado y modelo guardado."})
+        current_state = training_state.copy()
 
     # Envía el estado a todos los WebSocket conectados
-    _broadcast(training_state.copy())
+    _broadcast(current_state)
 
     # Libera memoria (esencial para evitar errores de GPU en procesos consecutivos)
     tf.keras.backend.clear_session()
