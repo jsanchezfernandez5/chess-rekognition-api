@@ -199,7 +199,7 @@ def _run_training_logic():
     )
 
     # GUARDAMOS EL MODELO!!!!
-    model.save(os.path.join(settings.MODELS_DIR, "chess_model.h5"))
+    model.save(os.path.join(settings.MODELS_DIR, "chess_model.keras"))
 
     # Actualiza el estado del entrenamiento a done
     with state_lock:

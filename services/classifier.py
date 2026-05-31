@@ -35,7 +35,7 @@ class ChessClassifier:
         Si los archivos no existen, el clasificador queda en estado no listo.
         Usa _lock para evitar inferencias durante la recarga.
         """
-        model_path = os.path.join(settings.MODELS_DIR, "chess_model.h5")
+        model_path = os.path.join(settings.MODELS_DIR, "chess_model.keras")
         names_path = os.path.join(settings.MODELS_DIR, "class_names.json")
 
         # Bloqueo para evitar inferencias durante la recarga
