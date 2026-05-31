@@ -198,7 +198,7 @@ def _run_training_logic():
         ],
     )
 
-    # Guardamos el modelo entrenado en disco
+    # Guardamos el modelo entrenado en disco.
     model.save(os.path.join(settings.MODELS_DIR, "chess_model.keras"))
 
     # Actualiza el estado del entrenamiento a done
