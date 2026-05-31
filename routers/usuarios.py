@@ -1,5 +1,8 @@
 """
-Endpoint de registro de nuevos usuarios.
+Router de registro de nuevos usuarios.
+
+Endpoints:
+    POST /usuarios/register | Registra un nuevo usuario y envía un email de bienvenida via Resend.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -12,12 +15,15 @@ from services.email import send_welcome_email
 # Creación del router.
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
-# Endpoint para registrar nuevos usuarios.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - POST /usuarios/register
+# Registra un nuevo usuario y envía un email de bienvenida via Resend.
+# -------------------------------------------------------------------------------
 @router.post(
     "/register",
     response_model=UsuarioResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Registrar nuevo usuario",
+    summary="Registra un nuevo usuario y envía un email de bienvenida via Resend.",
     responses={
         201: {"description": "Usuario creado correctamente."},
         409: {"description": "El username o email ya están en uso."},
@@ -25,7 +31,9 @@ router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 )
 async def register(body: UsuarioCreate, db: Session = Depends(get_db)):
     """
-    Registra un nuevo usuario: valida unicidad, hashea la contraseña y envía email de bienvenida.
+    Registra un nuevo usuario y envía un email de bienvenida via Resend.
+
+    Valida unicidad del username y email, hashea la contraseña y envía email de bienvenida.
     """
     # Valida la unicidad del username.
     if db.query(Usuario).filter(Usuario.username == body.username).first():

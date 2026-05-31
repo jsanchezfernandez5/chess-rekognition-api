@@ -1,19 +1,18 @@
-"""Modelos ORM y schemas de validación del sistema.
+"""
+Modelos ORM y schemas de validación del sistema.
 
-Unifica en un único módulo los modelos SQLAlchemy (ORM) y los schemas
-Pydantic (validación/serialización), eliminando la duplicidad entre
-las antiguas carpetas models/ y schemas/.
+Unifica en un único módulo los modelos SQLAlchemy (ORM) y los schemas Pydantic (validación/serialización).
 """
 from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
+
 from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from core.database import Base
-
 
 # ---------------------------------------------------------------------------
 # ORM — tablas de la base de datos
@@ -21,7 +20,10 @@ from core.database import Base
 
 # Clase tipo Tabla con los datos de los usuarios.
 class Usuario(Base):
-    """Tabla 'usuarios': credenciales y datos personales del jugador."""
+    """
+    Tabla usuarios: Credenciales y datos personales del jugador.
+    Relaciones con la tabla partidas (1:N) y retransmisiones (1:N).
+    """
     __tablename__ = "usuarios"
 
     username  = Column(String(50),  primary_key=True, index=True)
@@ -30,12 +32,16 @@ class Usuario(Base):
     password  = Column(String(255), nullable=False)
     mail      = Column(String(255), nullable=False)
 
+    # Relaciones con partidas y retransmisiones.
     partidas        = relationship("Partida",        back_populates="usuario", lazy="dynamic")
     retransmisiones = relationship("Retransmision",  back_populates="usuario", lazy="dynamic")
 
 # Clase tipo Tabla con los datos de las partidas.
 class Partida(Base):
-    """Tabla 'partidas': metadatos y PGN de una partida de ajedrez."""
+    """
+    Tabla partidas: Metadatos y PGN de una partida de ajedrez.
+    Relación con la tabla usuarios (N:1).
+    """
     __tablename__ = "partidas"
 
     id_partida     = Column(Integer,     primary_key=True, autoincrement=True)
@@ -58,7 +64,10 @@ class Partida(Base):
 
 # Clase tipo Tabla con los datos de las retransmisiones.
 class Retransmision(Base):
-    """Tabla 'retransmisiones': retransmisión en directo de una partida."""
+    """
+    Tabla retransmisiones: Retransmisión en directo de una partida.
+    Relación con la tabla usuarios (N:1).
+    """
     __tablename__ = "retransmisiones"
 
     id_retransmision    = Column(Integer,     primary_key=True, autoincrement=True, index=True)
@@ -80,7 +89,7 @@ class Retransmision(Base):
 
 
 # ---------------------------------------------------------------------------
-# Pydantic schemas — validación de entrada y serialización de salida
+# Pydantic schemas - Validación de entrada y serialización de salida
 # ---------------------------------------------------------------------------
 
 # Clase tipo Pydantic para la creación de usuarios.

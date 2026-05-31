@@ -1,7 +1,7 @@
-# services/email.py
-# Servicio de email usando Resend (https://resend.com).
 """
-Módulo de envío de correos electrónicos mediante la API de Resend.
+Servicio de envío de emails transaccionales mediante la API de Resend (https://resend.com).
+
+Actualmente se usa para enviar el email de bienvenida tras el registro en POST /usuarios/register.
 """
 import asyncio
 import resend

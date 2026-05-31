@@ -1,5 +1,12 @@
 """
-Endpoints HTTP y WebSocket para la retransmisión de partidas en tiempo real.
+Router de retransmisión de partidas de ajedrez en tiempo real.
+
+Endpoints:
+    POST /retransmision/host                | Crea una nueva retransmisión con token único y la marca como activa.
+    GET  /retransmision/status/{token}      | Devuelve si la retransmisión está activa y cuántos viewers hay conectados.
+    PATCH /retransmision/{id}               | Actualiza los metadatos de una retransmisión del usuario autenticado.
+    WS   /retransmision/ws/host/{token}     | WebSocket del emisor (host): recibe el estado del tablero y hace broadcast a los viewers.
+    WS   /retransmision/ws/viewer/{token}   | WebSocket del espectador (viewer): recibe actualizaciones en tiempo real del tablero.
 """
 import asyncio
 import json
@@ -16,36 +23,49 @@ from core.dependencies import get_current_user
 from core.models import Retransmision, RetransmisionCreate, RetransmisionResponse, Usuario
 
 # Creamos el router para las retransmisiones.
-router = APIRouter(
-    prefix="/retransmision",
-    tags=["Retransmisión en tiempo real"],
-    responses={404: {"description": "No encontrado"}},
-)
+router = APIRouter(prefix="/retransmision", tags=["Retransmisión"], responses={404: {"description": "No encontrado"}},)
 
-# Función para generar tokens únicos.
+# Función interna para generar tokens únicos.
 def _generate_token(length: int = 8) -> str:
     chars = string.ascii_lowercase + string.digits
     return "".join(random.choice(chars) for _ in range(length))
 
-# Modelo para obtener el estado de una retransmisión.
+# -------------------------------------------------------------------------------
+# SCHEMA DE REQUEST
+# Define los datos que el cliente debe enviar en el body del POST /retransmision/host y PATCH /retransmision/{id}.
+# Pydantic valida automáticamente los tipos y restricciones antes de ejecutar el endpoint.
+# -------------------------------------------------------------------------------
 class RetransmisionStatus(BaseModel):
     token: str
     active: bool
     viewers: int
 
-# Clase para gestionar las conexiones WebSocket de emisores (hosts) y espectadores (viewers).
+# -------------------------------------------------------------------------------
+# CONNECTION MANAGER
+# Clase que centraliza toda la lógica de conexiones WebSocket.
+# Mantiene en memoria tres diccionarios indexados por token:
+#   - hosts:   un solo WebSocket por token (el emisor de la partida)
+#   - viewers: lista de WebSockets por token (los espectadores)
+#   - states:  último estado del tablero recibido del host (para enviarlo a viewers que se conecten tarde)
+# -------------------------------------------------------------------------------
 class ConnectionManager:
     """
     Gestiona las conexiones WebSocket de emisores (hosts) y espectadores (viewers).
     """
     # Conexiones WebSocket de los viewers.
     def __init__(self):
+        # Dict[token → List[WebSocket]]: viewers conectados por retransmisión
         self.viewers: Dict[str, List[WebSocket]] = {}
+
+        # Dict[token → dict]: último estado del tablero enviado por el host para cada retransmisión
         self.states:  Dict[str, dict] = {}
+
+        # Dict[token → WebSocket]: conexión del host por retransmisión (solo uno por token)
         self.hosts:   Dict[str, WebSocket] = {}
 
     # Método para conectar un viewer a la retransmisión.
     async def connect_viewer(self, websocket: WebSocket, token: str):
+        """Acepta la conexión del viewer y le envía el último estado conocido del tablero."""
         await websocket.accept()
         self.viewers.setdefault(token, []).append(websocket)
         if token in self.states:
@@ -53,17 +73,22 @@ class ConnectionManager:
 
     # Método para desconectar un viewer de la retransmisión.
     def disconnect_viewer(self, websocket: WebSocket, token: str):
+        """Elimina el viewer de la lista de conexiones activas."""
         if token in self.viewers and websocket in self.viewers[token]:
             self.viewers[token].remove(websocket)
 
     # Método para conectar un host a la retransmisión.
     async def connect_host(self, websocket: WebSocket, token: str):
+        """Acepta la conexión del host y registra su WebSocket."""
         await websocket.accept()
         self.hosts[token] = websocket
         self.viewers.setdefault(token, [])
 
     # Método para desconectar un host de la retransmisión.
     async def disconnect_host(self, token: str, db: Session):
+        """
+        Desconecta el host, marca la retransmisión como inactiva en la base de datos y cierra todas las conexiones de viewers con código 1000 (cierre normal).
+        """
         # Elimina el host.
         self.hosts.pop(token, None)
         
@@ -82,8 +107,12 @@ class ConnectionManager:
             except Exception:
                 pass
 
-    # Método para enviar un mensaje a todos los viewers de una retransmisión.
+    # Método para hacer broadcast a los viewers de una retransmisión.
     async def broadcast_to_viewers(self, token: str, message: dict):
+        """
+        Guarda el estado del tablero y lo envía a todos los viewers conectados.
+        Si un viewer falla al recibir, se desconecta limpiamente.
+        """
         self.states[token] = message
         dead = []
         for viewer in self.viewers.get(token, []):
@@ -91,17 +120,23 @@ class ConnectionManager:
                 await viewer.send_json(message)
             except Exception:
                 dead.append(viewer)
+
+        # Elimina los viewers con conexión rota fuera del bucle para no modificar la lista mientras se itera
         for d in dead:
             self.disconnect_viewer(d, token)
 
-# Instancia del gestor de conexiones.
+# Instancia Singleton del gestor de conexiones.
 manager = ConnectionManager()
 
-# Endpoint para inicializar una nueva retransmisión.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - POST /retransmision/host
+# Crea una nueva retransmisión con token único y la marca como activa.
+# El token se genera aleatoriamente y se comprueba que no exista en la base de datos.
+# -------------------------------------------------------------------------------
 @router.post(
     "/host", 
     response_model=RetransmisionResponse,
-     summary="Inicializar una nueva retransmisión"
+    summary="Crea una nueva retransmisión con token único y la marca como activa."
 )
 def init_retransmision(
     datos: RetransmisionCreate,
@@ -109,7 +144,9 @@ def init_retransmision(
     current_user: Usuario = Depends(get_current_user),
 ):
     """
-    Crea una retransmisión con token único y la marca como activa.
+    Crea una nueva retransmisión con token único y la marca como activa.
+
+    El token se genera aleatoriamente y se comprueba que no exista en la base de datos.
     """
     token = _generate_token()
 
@@ -126,10 +163,13 @@ def init_retransmision(
     # Devuelve la retransmisión creada.
     return r
 
-# Endpoint para obtener el estado de una retransmisión por token.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - GET /retransmision/status/{token}
+# Devuelve si la retransmisión está activa y cuántos viewers hay conectados.
+# -------------------------------------------------------------------------------
 @router.get(
     "/status/{token}", 
-    summary="Obtener el estado de una retransmisión por token"
+    summary="Devuelve si la retransmisión está activa y cuántos viewers hay conectados."
 )
 async def get_retransmision_status(token: str):
     """
@@ -144,10 +184,13 @@ async def get_retransmision_status(token: str):
         },
     }
 
-# Endpoint para actualizar una retransmisión.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - PATCH /retransmision/{id}
+# Actualiza los metadatos de una retransmisión del usuario autenticado.
+# -------------------------------------------------------------------------------
 @router.patch(
     "/{id_retransmision}", 
-    summary="Actualizar retransmisión"
+    summary="Actualiza los metadatos de una retransmisión del usuario autenticado."
 )
 def update_retransmision(
     id_retransmision: int,
@@ -155,6 +198,9 @@ def update_retransmision(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    """
+    Actualiza los metadatos de una retransmisión del usuario autenticado.
+    """
     # Busca la retransmisión por ID y usuario autenticado.
     r = db.query(Retransmision).filter(
         Retransmision.id_retransmision == id_retransmision,
@@ -172,7 +218,10 @@ def update_retransmision(
     db.refresh(r)
     return r
 
-# Endpoint WebSocket para conectar el host al WebSocket.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - WS /retransmision/ws/host/{token}
+# WebSocket del emisor: recibe estado del tablero y hace broadcast a los viewers.
+# -------------------------------------------------------------------------------
 @router.websocket(
     "/ws/host/{token}"
 )
@@ -208,7 +257,10 @@ async def websocket_host(websocket: WebSocket, token: str, db: Session = Depends
     except WebSocketDisconnect:
         await manager.disconnect_host(token, db)
 
-# Endpoint WebSocket para conectar el viewer al WebSocket.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - WS /retransmision/ws/viewer/{token}
+# WebSocket del espectador: recibe actualizaciones en tiempo real del tablero.
+# -------------------------------------------------------------------------------
 @router.websocket(
     "/ws/viewer/{token}"
 )

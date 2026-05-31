@@ -20,39 +20,45 @@ tags_metadata = [
     },
     {
         "name": "Usuarios",
-        "description": "Registro de nuevos perfiles en la plataforma.",
+        "description": "Registro de nuevos usuarios.",
     },
     {
         "name": "Partidas",
-        "description": "Operaciones CRUD de partidas PGN.",
+        "description": "Operaciones CRUD de partidas de ajedrez en formato PGN.",
     },
     {
         "name": "Motor",
-        "description": "Integración con Stockfish para jugar contra el ordenador.",
+        "description": "Integración con Stockfish v17.1 para jugar contra el ordenador.",
     },
     {
         "name": "Visión",
-        "description": "Reconocimiento del tablero mediante OpenCV.",
-    },
-    {
-        "name": "Retransmisión",
-        "description": "Servicio para retransmitir partidas en directo.",
+        "description": "Reconocimiento mediante rectificación de la homografía del tablero mediante OpenCV.",
     },
     {
         "name": "Dataset",
-        "description": "Herramientas para captura de imágenes y entrenamiento del modelo ML.",
+        "description": "Herramientas para captura de imágenes (crops) y entrenamiento del modelo ML.",
+    },
+    {
+        "name": "Retransmisión",
+        "description": "Servicio para retransmitir partidas en directo mediante WebSockets.",
+    },
+    {
+        "name": "Sistema",
+        "description": "Endpoints de estado y monitorización del servidor.",
     }
 ]
 
-# Inicialización de la API con Swagger UI personalizado
+# -------------------------------------------------------------------------------------------
+# ---------------- INICIALIZACIÓN API CON SWAGGER PERSONALIZADO -----------------------------
+# -------------------------------------------------------------------------------------------
 app = FastAPI(
     title="Chess Rekognition API",
     description=(
         "### Reconocimiento visual de jugadas en partidas de ajedrez presencial.\n\n"
         "**Herramientas web integradas:**\n"
-        "* **Diagnóstico OpenCV:** [/opencv](/opencv)\n"
-        "* **Módulo de Dataset:** [/dataset](/dataset)\n"
-        "* **Reconocimiento en Vivo:** [/reconocimiento](/reconocimiento)"
+        "* **Correción homográfica - De imagen 3D a vista cenital 2D con OpenCV:** [/opencv](/opencv)\n"
+        "* **Módulo de Dataset - Captura recortes (crops) de la imagen y Etiquetado de clases para el Entrenamiento del Modelo MobileNetV2:** [/dataset](/dataset)\n"
+        "* **Reconocimiento del tablero y las piezas, a través del Modelo MobileNetV2, obteniéndose el código de ajedrez FEN:** [/reconocimiento](/reconocimiento)"
     ),
     version="1.0.0",
     openapi_tags=tags_metadata,
@@ -67,10 +73,11 @@ app = FastAPI(
     docs_url=None,
 )
 
-# Monta el directorio de archivos estáticos para servir recursos como el favicon y las páginas HTML auxiliares.
+# -------------------------------------------------------------------------------------------
+# ----------------------- DIRECTORIO STATIC y CORS ------------------------------------------
+# -------------------------------------------------------------------------------------------
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Configura CORS para permitir solicitudes desde cualquier origen.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -80,7 +87,9 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# ROUTERS. Registra los routers de cada módulo para organizar las rutas de la API según su funcionalidad.
+# -------------------------------------------------------------------------------------------
+# ---------------------------------- ROUTERS ------------------------------------------------
+# -------------------------------------------------------------------------------------------
 app.include_router(auth.router)
 app.include_router(usuarios.router)
 app.include_router(partidas.router)
@@ -89,7 +98,9 @@ app.include_router(vision.router)
 app.include_router(dataset.router)
 app.include_router(retransmision.router)
 
-# --------------------- ENDPOINTS DE SERVICIO ------------------------------------------------
+# -------------------------------------------------------------------------------------------
+# --------------------- ENDPOINTS AUXILIARES ------------------------------------------------
+# -------------------------------------------------------------------------------------------
 
 # Endpoint para servir el favicon de la aplicación
 @app.get("/favicon.ico", include_in_schema=False)
@@ -97,21 +108,22 @@ def favicon():
     """Devuelve el favicon de la aplicación para los navegadores."""
     return FileResponse("static/favicon.ico")
 
-# Endpoint pruebas de OpenCV para el reconocimiento del tablero.
+# Endpoint de pruebas de OpenCV para el reconocimiento del tablero rectificando la homografía a vista cenital.
 @app.get("/opencv", include_in_schema=False)
 def opencv():
     """Sirve la página de pruebas del módulo de visión por computadora."""
     return FileResponse("static/opencv.html")
 
-# Endpoint CAPTURA IMAGENES para el dataset y ENTREAR el modelo de reconocimiento visual.
+# Endpoint para capturar imágenes para el dataset haciendo recortes (crops) y entrenar el modelo de reconocimiento neuronal MobileNetV2 de TensorFlow.
 @app.get("/dataset", include_in_schema=False)
 def dataset_tool():
-    """Sirve la herramienta interactiva de captura de imágenes para el dataset."""
+    """Sirve la herramienta interactiva de captura de imágenes (crops) para el dataset."""
     return FileResponse("static/dataset.html")
 
-# Endpoint herramienta de reconocimiento visual.
+# Endpoint herramienta de reconocimiento del tablero y las piezas de ajedrez a través del modelo de reconocimiento neuronal MobileNetV2 de TensorFlow.
 @app.get("/reconocimiento", include_in_schema=False)
 def reconocimiento():
+    """Sirve la herramienta de reconocimiento visual en tiempo real."""
     return FileResponse("static/reconocimiento.html")
 
 # Endpoint para servir la documentación de Swagger UI.

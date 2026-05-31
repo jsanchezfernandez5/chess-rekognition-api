@@ -1,5 +1,9 @@
 """
-Módulo de interacción con el motor de ajedrez Stockfish.
+Router del motor de ajedrez Stockfish v17.1.
+
+Endpoints:
+    GET  /engine/status    | Verifica el estado y la versión del motor Stockfish v17.1.
+    POST /engine/move      | Obtiene la mejor jugada dada una posición en FEN. Parámetros opcionales: elo (1320-3190) y depth (1-30).
 """
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
@@ -11,7 +15,11 @@ from services.engine import engine_service
 # Creamos el router para el motor.
 router = APIRouter(prefix="/engine", tags=["Motor"])
 
-# Modelo de solicitud para consultar al motor Stockfish.
+# -------------------------------------------------------------------------------
+# SCHEMA DE REQUEST
+# Define los datos que el cliente debe enviar en el body del POST /engine/move.
+# Pydantic valida automáticamente los tipos y restricciones antes de ejecutar el endpoint.
+# -------------------------------------------------------------------------------
 class EngineRequest(BaseModel):
     """
     Modelo de solicitud para consultar al motor Stockfish.
@@ -43,6 +51,10 @@ class EngineRequest(BaseModel):
         examples=[15]
     )
 
+# -------------------------------------------------------------------------------
+# SCHEMA DE RESPONSE
+# Define la estructura del JSON que devuelve el endpoint POST /engine/move.
+# -------------------------------------------------------------------------------
 class EngineResponse(BaseModel):
     """Modelo de respuesta del motor Stockfish.
 
@@ -60,29 +72,35 @@ class EngineResponse(BaseModel):
     info: Optional[dict] = Field(None, description="Información de análisis (score, depth, pv, nodes)")
     message: Optional[str] = None
 
-# Endpoint para verificar el estado del motor.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - GET /engine/status
+# Verifica el estado y la versión del motor Stockfish v17.1.
+# -------------------------------------------------------------------------------
 @router.get(
     "/status",
-    summary="Verificar salud y versión del motor",
+    summary="Verifica el estado y la versión del motor Stockfish v17.1.",
 )
 def get_engine_status():
     """
-    Verifica el estado y la versión del motor de ajedrez.
+    Verifica el estado y la versión del motor Stockfish v17.1.
 
     Returns:
         Dict con el estado del motor, versión y mensaje informativo.
     """
     return engine_service.check_status()
 
-# Endpoint para obtener la mejor jugada.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - POST /engine/move
+# Obtiene la mejor jugada dada una posición en FEN. Parámetros opcionales: elo (1320-3190) y depth (1-30).
+# -------------------------------------------------------------------------------
 @router.post(
     "/move",
     response_model=EngineResponse,
-    summary="Obtiene la mejor jugada dada una posición en FEN",
+    summary="Obtiene la mejor jugada dada una posición en FEN. Parámetros opcionales: elo (1320-3190) y depth (1-30).",
 )
 def get_move(request: EngineRequest):
     """
-    Obtiene la mejor jugada desde una posición FEN mediante Stockfish.
+    Obtiene la mejor jugada dada una posición en FEN. Parámetros opcionales: elo (1320-3190) y depth (1-30).
 
     Args:
         request: Parámetros de la solicitud (FEN, ELO opcional, depth).
@@ -90,9 +108,10 @@ def get_move(request: EngineRequest):
     Returns:
         EngineResponse con la mejor jugada y análisis asociado.
 
-    Raises:
-        HTTPException 503: Si el binario de Stockfish no está disponible.
-        HTTPException 500: Si ocurre un error interno durante el análisis.
+    Raises. Gestiona 3 casos:
+        - Jugada normal: Devuelve best_move en notación UCI (ej: "e2e4").
+        - Partida terminada: Devuelve best_move="(none)" con el motivo.
+        - Error del motor: Lanza HTTP 503 si Stockfish no está disponible, HTTP 500 si es otro error.
     """
     try:
         # Llama al servicio para obtener la mejor jugada.

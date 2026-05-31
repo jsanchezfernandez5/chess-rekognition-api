@@ -1,11 +1,13 @@
 # ═══════════════════════════════════════════════════════════════
 # requirements.txt — Chess Rekognition API
+# Instalación de dependencias para la API REST de Chess Rekognition
+# uso: pip install -r requirements.txt
 # ═══════════════════════════════════════════════════════════════
 
 # FastAPI: framework principal de la API REST. Incluye soporte para async, validación automática y Swagger UI
 fastapi==0.135.1
 
-# Servidor ASGI recomendado para producción. Soporta HTTP/2, WebSocket y es muy eficiente.
+# Servidor ASGI recomendado para producción. Soporta HTTP/2, WebSocket y es muy eficiente
 uvicorn[standard]==0.41.0
 
 # SQLAlchemy: ORM para mapear las tablas MySQL a clases Python
@@ -14,19 +16,19 @@ sqlalchemy==2.0.36
 # PyMySQL: driver de conexión Python a MySQL/MariaDB
 pymysql==1.1.1
 
-# Autenticación y seguridad
+# Autenticación y seguridad (JWT: generación y verificación de tokens, hashing de contraseñas y backends de passlib)
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 
-# Validación y configuración. El extra [email] añade soporte para EmailStr en los schemas.
+# Validación y configuración. El extra [email] añade soporte para EmailStr en los schemas
 pydantic[email]==2.12.5
 
 # pydantic-settings: carga y valida las variables del archivo .env
 pydantic-settings==2.6.1
 python-dotenv==1.0.1
 
-# Necesario para recibir Form() y UploadFile en FastAPI
+# Necesario para recibir Form() que extrae los datos del request y UploadFile en FastAPI
 python-multipart==0.0.17
 
 # Cliente oficial de Resend para envío de emails transaccionales
@@ -38,7 +40,8 @@ anyio==4.12.1
 # Necesario para servir archivos estáticos (favicon, etc.)
 aiofiles==24.1.0
 
-# Procesamiento de imagen y utilidades
+# Procesamiento de imagen y utilidades científicas. 
+# OpenCV se usa para la corrección de perspectiva y preprocesamiento de las imágenes de los tableros
 numpy==2.2.3
 opencv-python-headless>=4.8.0
 
@@ -48,5 +51,5 @@ python-chess==1.999
 # Wrapper Python para el binario de Stockfish (gestiona el protocolo UCI)
 stockfish>=3.28.0
 
-# Modelo ML (MobileNetV2). Usamos tensorflow-cpu para ahorrar espacio en Railway
+# Modelo ML (MobileNetV2). Se usa tensorflow-cpu para ahorrar espacio en Railway
 tensorflow-cpu>=2.13.0

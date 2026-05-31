@@ -1,3 +1,7 @@
+-- -------------------------------------------------------------------------------------------
+-- SCRIPT de Creación de la BBDD y TABLAS para el proyecto Chess Rekognition.
+-- --------------------------------------------------------------------------------------------
+
 -- TABLA DE USUARIOS
 CREATE TABLE usuarios 
 (

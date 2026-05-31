@@ -1,5 +1,10 @@
 """
-Endpoints de autenticación: login, refresh de token y datos del usuario.
+Router de autenticación de los endpoints de autenticación.
+
+Endpoints:
+    POST /auth/login      | Autentica con username + password y devuelve access token (30 min) y refresh token (7 días).
+    POST /auth/refresh    | Emite un nuevo access token a partir de un refresh token válido.
+    GET  /auth/whoami     | Devuelve los datos del usuario identificado por el access token.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -9,10 +14,13 @@ from core.dependencies import get_current_user
 from core.models import Usuario, LoginRequest, RefreshRequest, TokenResponse, UsuarioResponse
 from core.security import verify_password, create_access_token, create_refresh_token, decode_token
 
-# Router para los endpoints de autenticación.
+# Router para los endpoints de Autenticación.
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
-# Endpoint para iniciar sesión en el sistema.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - POST /auth/login
+# Autentica con username + password y devuelve access token (30 min) y refresh token (7 días).
+# -------------------------------------------------------------------------------
 @router.post(
     "/login", 
     response_model=TokenResponse, 
@@ -35,7 +43,10 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         "token_type":    "bearer",
     }
 
-# Endpoint para renovar el token de acceso.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - POST /auth/refresh
+# Emite un nuevo access token a partir de un refresh token válido.
+# -------------------------------------------------------------------------------
 @router.post(
     "/refresh", 
     response_model=TokenResponse, 
@@ -65,12 +76,17 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
         "token_type":    "bearer",
     }
 
-# Endpoint para obtener los datos del usuario autenticado.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - GET /auth/whoami
+# Devuelve los datos del usuario identificado por el access token.
+# -------------------------------------------------------------------------------
 @router.get(
     "/whoami", 
     response_model=UsuarioResponse, 
     summary="Datos del usuario autenticado"
 )
 def whoami(usuario_actual: Usuario = Depends(get_current_user)):
-    """Devuelve los datos del usuario identificado por el access token."""
+    """
+    Devuelve los datos del usuario identificado por el access token.
+    """
     return usuario_actual

@@ -1,13 +1,10 @@
 """
-Configuración de la base de datos.
+Configura la conexión a MySQL con SQLAlchemy.
 
-Configura la conexión a MySQL con SQLAlchemy, la fábrica de sesiones
-y la clase base declarativa para los modelos ORM.
+Fábrica de sesiones, clase base declarativa y generador de sesiones para inyectar con Depends() en los endpoints.
 """
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
-
-# Importamos el settings
 from core.config import settings
 
 # Motor de base de datos
@@ -22,15 +19,11 @@ class Base(DeclarativeBase):
 
 # Generador de sesiones
 def get_db():
-    """Generador de sesiones de base de datos para inyectar con Depends().
-
-    El bloque try/finally garantiza que la sesión siempre se cierre,
-    incluso ante una excepción, evitando fugas de conexiones.
+    """
+    Generador de sesiones de base de datos para inyectar con Depends().
     """
     db = SessionLocal()
-    try:
-        # Genera una sesión de base de datos
-        yield db
-    finally:
-        # Cierra la sesión
-        db.close()
+    try:        
+        yield db # Genera una sesión de base de datos
+    finally:        
+        db.close() # Cierra la sesión

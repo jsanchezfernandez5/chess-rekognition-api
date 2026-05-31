@@ -1,10 +1,9 @@
-# services/vision.py
 """
-Módulo de visión por computador con OpenCV para la detección y rectificación del tablero de ajedrez.
+Servicio para la rectificación de la homografía con OpenCV para la detección y rectificación del tablero de ajedrez.
 
 Proporciona funciones:
     - Detectar el tablero mediante findChessboardCornersSB.
-    - Calcular sus esquinas exteriore.
+    - Calcular sus esquinas exteriores.
     - Rectificar la perspectiva a vista cenital (homografía).
     - Analizar las 64 casillas y generar imágenes de diagnóstico. 
     

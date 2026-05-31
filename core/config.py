@@ -4,16 +4,16 @@ Configuración de la aplicación.
 Carga variables de entorno mediante Pydantic Settings y provee una instancia singleton accesible desde cualquier módulo.
 """
 from pydantic_settings import BaseSettings
+
+# Decorador de la librería estándar que cachea el resultado de una función (evita ejecutarla más de una vez)
 from functools import lru_cache
 
 # Clase para la centralización de las variables de la aplicación
 class Settings(BaseSettings):
     """Configuración centralizada de la aplicación.
 
-    Lee las variables del archivo .env y expone propiedades
-    como la URL de conexión a la base de datos y parámetros JWT.
+    Lee las variables del archivo .env y expone propiedades como la URL de conexión a la base de datos y parámetros JWT.
     """
-
     # BASE DE DATOS
     DB_HOST: str
     DB_PORT: int = 3306
@@ -39,11 +39,14 @@ class Settings(BaseSettings):
         "w_P", "w_N", "w_B", "w_R", "w_Q", "w_K",
         "b_P", "b_N", "b_B", "b_R", "b_Q", "b_K"
     ]
-    BOARD_SIZE: int = 400
-    CELL_SIZE: int = 50
-    IMG_SIZE: tuple = (96, 96)
-    COLS: str = "abcdefgh"
 
+    # VARIABLES PARA LA VISIÓN POR COMPUTADORA
+    BOARD_SIZE: int = 400       # Tamaño en píxeles del tablero rectificado.
+    CELL_SIZE: int = 50         # Tamaño en píxeles de cada casilla (400 / 8 columnas = 50 px).
+    IMG_SIZE: tuple = (96, 96)  # Tamaño al que se redimensiona cada crop antes de pasarlo al modelo.
+    COLS: str = "abcdefgh"      # Letras de las columnas del tablero en notación algebraica de ajedrez.
+
+    # Propiedad autocalculada para construir la URL de conexión a la base de datos a partir de las variables individuales.
     @property
     def DATABASE_URL(self) -> str:
         """
@@ -57,13 +60,13 @@ class Settings(BaseSettings):
             f"?ssl_disabled=true"
         )
 
-    # Configuración del archivo .env
+    # Configuración interna de pydantic para decir a BaseSettings donde está el archivo .env y su codificación.
     class Config:
         """Configuración del archivo .env."""
         env_file = ".env"
         env_file_encoding = "utf-8"
 
-# Instancia singleton de Settings
+# Instancia Singleton de Settings
 @lru_cache()
 def get_settings() -> Settings:
     """Retorna una instancia singleton de Settings.

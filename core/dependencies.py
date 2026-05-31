@@ -1,8 +1,7 @@
 """
 Dependencias reutilizables de FastAPI.
 
-Define las dependencias que se inyectan en los endpoints mediante
-Depends(), como la autenticación y acceso a la base de datos.
+Proporciona get_current_user para proteger endpoints mediante Depends(), verificando el token JWT y devolviendo el usuario autenticado.
 """
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials

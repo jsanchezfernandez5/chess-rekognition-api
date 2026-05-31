@@ -1,5 +1,5 @@
 """
-Módulo de clasificación de piezas de ajedrez mediante un modelo TensorFlow (MobileNetV2).
+Servicio de clasificación de piezas de ajedrez mediante un modelo TensorFlow (MobileNetV2).
 
     - Proporciona la clase ChessClassifier que carga un modelo preentrenado desde disco.
     - Clasifica las 64 casillas de un tablero rectificado en un solo batch

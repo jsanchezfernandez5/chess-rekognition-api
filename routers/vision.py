@@ -1,5 +1,12 @@
 """
-Módulo de visión por computador.
+Router del módulo de visión por computador (OpenCV + MobileNetV2).
+
+Endpoints:
+    GET  /vision/status          | Devuelve el estado operativo del módulo y la versión de OpenCV.
+    POST /vision/recognize-board | Detecta y rectifica el tablero aplicando la homografía. Devuelve vista cenital 400x400.
+    POST /vision/classify        | Clasifica las 64 casillas del tablero con MobileNetV2 y genera el FEN completo.
+    POST /vision/classify/reload | Recarga el modelo ML desde disco sin reiniciar el servidor.
+    POST /vision/detect-move     | Compara el estado actual del tablero con un FEN previo y detecta el movimiento realizado.
 """
 from typing import Optional
 import cv2
@@ -12,16 +19,15 @@ from services.classifier import classifier
 from services.move_detector import detect_move as _detect_move
 
 # Creación del router.
-router = APIRouter(
-    prefix="/vision",
-    tags=["Visión"],
-    responses={404: {"description": "No encontrado"}},
-)
+router = APIRouter(prefix="/vision", tags=["Visión"], responses={404: {"description": "No encontrado"}})
 
-# Endpoint para reconocer y rectificar el tablero.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - POST /vision/recognize-board
+# Reconoce y rectifica un tablero de ajedrez desde una imagen. Devuelve una vista rectificada en perspectiva cenital (400x400).
+# -------------------------------------------------------------------------------
 @router.post(
     "/recognize-board", 
-    summary="Reconoce y rectifica un tablero de ajedrez"
+    summary="Reconoce y rectifica un tablero de ajedrez desde una imagen."
 )
 async def recognize_board(
     file: UploadFile = File(...),
@@ -29,7 +35,8 @@ async def recognize_board(
     rotation: int = Form(0)
 ):
     """
-    Reconoce y rectifica un tablero de ajedrez desde una imagen.
+    Reconoce y rectifica un tablero de ajedrez desde una imagen. 
+    
     Devuelve una vista rectificada en perspectiva cenital (400x400).
 
     Args:
@@ -41,26 +48,33 @@ async def recognize_board(
         Dict con el resultado de la detección y el tablero rectificado.
     """
     try:
+        # Lee todos los bytes del fichero subido de forma asíncrona
         contents = await file.read()
+
+        # Convierte los bytes a array NumPy y luego a imagen OpenCV (matriz BGR)
         arr = np.frombuffer(contents, np.uint8)
         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         if frame is None:
             return {"success": False, "error": "No se pudo decodificar la imagen recibida"}
 
+        # Delega toda la lógica de detección y rectificación al servicio de visión
         result = VisionService.detect_and_rectify(contents, coords, rotation)
         return result
 
     except Exception as e:
         return {"success": False, "error": str(e), "detail": traceback.format_exc()}
 
-# Endpoint para obtener el estado del motor de visión.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - GET /vision/status
+# Devuelve el estado operativo del módulo de visión y la versión de OpenCV.
+# -------------------------------------------------------------------------------
 @router.get(
     "/status", 
-    summary="Estado del motor de visión"
+    summary="Devuelve el estado operativo del módulo de visión y la versión de OpenCV."
 )
 def vision_status():
     """
-    Obtiene el estado del módulo de visión a través de OpenCV.
+    Devuelve el estado operativo del módulo de visión y la versión de OpenCV.
 
     Returns:
         Dict con el estado operativo y la versión de OpenCV.
@@ -71,10 +85,16 @@ def vision_status():
         "version": cv2.__version__
     }
 
-# Endpoint para clasificar las 64 casillas del tablero. El corazón de la API.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - POST /vision/classify
+# Corazón del sistema de reconocimiento visual. Pipeline completo en 3 pasos:
+#   1. Detecta y rectifica el tablero (homografía → vista cenital 400x400).
+#   2. Clasifica las 64 casillas con MobileNetV2 (13 clases: 12 piezas + empty).
+#   3. Genera el FEN completo del estado del tablero para usarlo con python-chess o Stockfish.
+# -------------------------------------------------------------------------------
 @router.post(
     "/classify", 
-    summary="Clasifica las 64 casillas del tablero"
+    summary="Clasifica las 64 casillas del tablero con MobileNetV2 y genera el FEN completo."
 )
 async def classify_board(
     file: UploadFile = File(...),
@@ -108,11 +128,9 @@ async def classify_board(
         if not classifier.is_ready():
             return {"success": False, "error": "El modelo de clasificación no está cargado. Entrena primero en /dataset."}
 
-        # Leemos el archivo
+        # Lee y decodifica la imagen (mismo proceso que en /recognize-board)
         contents = await file.read()
-        # Convertimos el archivo a array de numpy
         arr = np.frombuffer(contents, np.uint8)
-        # Decodificamos el array de numpy a imagen
         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         
         # Detectamos el tablero en la imagen con OpenCV.
@@ -137,9 +155,11 @@ async def classify_board(
 
         # Clasificamos las 64 casillas del tablero.
         board_state = classifier.classify_board(warped)
+
         # Generamos el FEN completo del estado del tablero.
         simple_state = {sq: v["label"] for sq, v in board_state.items()}
         
+        # Retornamos el estado de cada casilla y el FEN generado.
         return {
             "success": True,
             "board_state": board_state,
@@ -148,14 +168,17 @@ async def classify_board(
     except Exception as e:
         return {"success": False, "error": str(e), "detail": traceback.format_exc()}
 
-# Endpoint para recargar el modelo ML desde disco.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - POST /vision/classify/reload
+# Recarga el modelo de clasificación desde disco sin reiniciar el servidor.
+# -------------------------------------------------------------------------------
 @router.post(
     "/classify/reload", 
-    summary="Recarga el modelo ML desde disco"
+    summary="Recarga el modelo de clasificación desde disco sin reiniciar el servidor."
 )
 def reload_model():
     """
-    Recarga el modelo de clasificación desde disco en caliente.
+    Recarga el modelo de clasificación desde disco sin reiniciar el servidor.
 
     Vuelve a cargar el modelo ML guardado en el sistema de archivos sin necesidad de reiniciar el servidor. 
     Útil tras reentrenar el modelo desde el módulo de dataset.
@@ -166,10 +189,14 @@ def reload_model():
     classifier.reload()
     return {"success": True, "ready": classifier.is_ready()}
 
-# Endpoint para detectar el movimiento entre dos posiciones.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - POST /vision/detect-move
+# Compara el estado actual del tablero con un FEN previo y detecta el movimiento realizado.
+# -------------------------------------------------------------------------------
 @router.post(
     "/detect-move", 
-    summary="Detecta el movimiento entre dos posiciones")
+    summary="Detecta el movimiento entre dos posiciones"
+)
 async def detect_move_endpoint(
     file: UploadFile = File(...),
     prev_fen: str = Form(...),
@@ -195,8 +222,10 @@ async def detect_move_endpoint(
         # Comprobamos si el modelo está cargado.
         if not classifier.is_ready():
             return {"success": False, "error": "Modelo no cargado. Entrena primero en /dataset."}
+        
         # Leemos el archivo
         contents = await file.read()
+
         # Convertimos el archivo a array de numpy
         arr = np.frombuffer(contents, np.uint8)
 

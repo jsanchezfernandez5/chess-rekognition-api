@@ -1,5 +1,12 @@
 """
-Endpoints CRUD de partidas de ajedrez.
+Router CRUD de partidas de ajedrez.
+
+Endpoints:
+    POST   /partidas/                 | Crea una nueva partida asociada al usuario autenticado.
+    GET    /partidas/                 | Lista todas las partidas del usuario autenticado, con filtro opcional por tipo (PI: Partida Introducida / PR: Partida Retransmitida).
+    GET    /partidas/{id_partida}     | Obtiene el detalle de una partida por ID. Solo devuelve la partida si pertenece al usuario.
+    PATCH  /partidas/{id_partida}     | Actualiza los campos enviados de una partida del usuario autenticado.
+    DELETE /partidas/{id_partida}     | Elimina una partida del usuario autenticado. (Actualmente no se usa en la app).
 """
 from typing import List, Optional
 
@@ -13,12 +20,15 @@ from core.models import Partida, PartidaCreate, PartidaUpdate, PartidaResponse, 
 # Creamos el router para las partidas.
 router = APIRouter(prefix="/partidas", tags=["Partidas"])
 
-# Endpoint para crear una nueva partida.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - POST /partidas/
+# Crea una nueva partida asociada al usuario autenticado.
+# -------------------------------------------------------------------------------
 @router.post(
     "/", 
     status_code=status.HTTP_201_CREATED, 
     response_model=PartidaResponse, 
-    summary="Guardar una nueva partida"
+    summary="Crea una nueva partida asociada al usuario autenticado."
 )
 def create_partida(
     partida_in: PartidaCreate,
@@ -37,18 +47,21 @@ def create_partida(
     db.refresh(nueva)
     return nueva
 
-# Endpoint para listar las partidas del usuario.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - GET /partidas/
+# Lista todas las partidas del usuario autenticado, con filtro opcional por tipo (PI: Partida Introducida / PR: Partida Retransmitida).
+# -------------------------------------------------------------------------------
 @router.get(
     "/", 
     response_model=List[PartidaResponse], 
-    summary="Listar mis partidas")
+    summary="Lista todas las partidas del usuario autenticado, con filtro opcional por tipo (PI: Partida Introducida / PR: Partida Retransmitida).")
 def list_partidas(
-    tipo: Optional[str] = Query(None, pattern="^(PI|PR)$", description="Filtro: PI (Manual) o PR (Retransmisión)"),
+    tipo: Optional[str] = Query(None, pattern="^(PI|PR)$", description="Filtro: PI (Partida Introducida) o PR (Partida Retransmitida)"),
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(get_current_user),
 ):
     """
-    Lista las partidas del usuario autenticado, opcionalmente filtradas por tipo.
+    Lista todas las partidas del usuario autenticado, con filtro opcional por tipo (PI: Partida Introducida / PR: Partida Retransmitida).
     """
     # Filtramos las partidas por usuario y tipo.
     q = db.query(Partida).filter(Partida.username == usuario_actual.username)
@@ -58,11 +71,14 @@ def list_partidas(
     # Retornamos las partidas ordenadas por fecha de registro.
     return q.order_by(Partida.fecha_registro.desc()).all()
 
-# Endpoint para obtener una partida por ID.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - GET /partidas/{id_partida}
+# Obtiene el detalle de una partida por ID. Solo devuelve la partida si pertenece al usuario.
+# -------------------------------------------------------------------------------
 @router.get(
     "/{id_partida}", 
     response_model=PartidaResponse, 
-    summary="Ver detalles de una partida"
+    summary="Obtiene el detalle de una partida por ID. Solo devuelve la partida si pertenece al usuario."
 )
 def get_partida(
     id_partida: int,
@@ -70,9 +86,9 @@ def get_partida(
     usuario_actual: Usuario = Depends(get_current_user),
 ):
     """
-    Obtiene el detalle de una partida. 
-    Solo devuelve la partida si pertenece al usuario.
+    Obtiene el detalle de una partida por ID. Solo devuelve la partida si pertenece al usuario.
     """
+    # Verificamos que la partida exista y pertenezca al usuario.
     partida = db.query(Partida).filter(
         Partida.id_partida == id_partida,
         Partida.username == usuario_actual.username,
@@ -85,11 +101,14 @@ def get_partida(
     # Retornamos la partida si existe
     return partida
 
-# Endpoint para actualizar una partida.
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - PATCH /partidas/{id_partida}
+# Actualiza los campos enviados de una partida del usuario autenticado.
+# -------------------------------------------------------------------------------
 @router.patch(
     "/{id_partida}", 
     response_model=PartidaResponse, 
-    summary="Actualizar datos de una partida"
+    summary="Actualiza los campos enviados de una partida del usuario autenticado."
 )
 def update_partida(
     id_partida: int,
@@ -98,9 +117,9 @@ def update_partida(
     usuario_actual: Usuario = Depends(get_current_user),
 ):
     """
-    Actualiza los campos de una partida del usuario autenticado.
+    Actualiza los campos enviados de una partida del usuario autenticado.
     """
-    # Buscamos la partida.
+    # Verificamos que la partida exista y pertenezca al usuario.
     partida = db.query(Partida).filter(
         Partida.id_partida == id_partida,
         Partida.username == usuario_actual.username,
@@ -121,12 +140,14 @@ def update_partida(
     # Retornamos la partida actualizada.
     return partida
 
-
-# Endpoint para eliminar una partida. (Actualmente no se usa en la app)
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - DELETE /partidas/{id_partida}
+# Elimina una partida del usuario autenticado. (Actualmente no se usa en la app).
+# -------------------------------------------------------------------------------
 @router.delete(
     "/{id_partida}", 
     status_code=status.HTTP_204_NO_CONTENT, 
-    summary="Eliminar una partida"
+    summary="Elimina una partida del usuario autenticado"
 )
 def delete_partida(
     id_partida: int,
@@ -136,7 +157,7 @@ def delete_partida(
     """
     Elimina una partida del usuario autenticado.
     """
-    # Buscamos la partida.
+    # Verificamos que la partida exista y pertenezca al usuario.
     partida = db.query(Partida).filter(
         Partida.id_partida == id_partida,
         Partida.username == usuario_actual.username,

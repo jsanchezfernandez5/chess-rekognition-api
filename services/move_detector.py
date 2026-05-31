@@ -1,5 +1,5 @@
 """
-Módulo de detección de movimientos de ajedrez mediante comparación visual.
+Servicio de detección de movimientos de ajedrez mediante comparación visual.
 
 Compara el estado del tablero clasificado por el modelo ML con la posición anterior representada en FEN.
 """

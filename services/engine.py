@@ -1,5 +1,5 @@
 """
-Módulo de integración con el motor de ajedrez Stockfish.
+Servicio de integración con el motor de ajedrez Stockfish.
 """
 import os
 import platform

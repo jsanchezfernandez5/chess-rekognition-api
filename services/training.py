@@ -166,7 +166,7 @@ def _run_training_logic():
         metrics=["accuracy"],
     )
 
-    # Número de épocas
+    # Número de Epochs para el entrenamiento (con EarlyStopping se detendrá antes si no hay mejora para no reentrenar).
     EPOCHS = 20
     with state_lock:
         training_state.update({"status": "training", "total_epochs": EPOCHS, "message": "Entrenando..."})
@@ -198,7 +198,7 @@ def _run_training_logic():
         ],
     )
 
-    # GUARDAMOS EL MODELO!!!!
+    # Guardamos el modelo entrenado en disco
     model.save(os.path.join(settings.MODELS_DIR, "chess_model.keras"))
 
     # Actualiza el estado del entrenamiento a done
