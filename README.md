@@ -87,8 +87,8 @@ Esta capa es dirigida por el archivo main.py e incluye:
 - Routers registrados con los endpoints.
 - Archivos estáticos.
 
-| Endpoint / Componente | Metodo | Descripcion | Detalle |
-| :--- | :---: | :--- | :--- |
+| Endpoint / Componente | Método | Detalle |
+| :--- | :---: | :--- |
 | `/` | **GET** | Estado de la API |  |
 | `/favicon.ico` | **GET** | Favicon | Sirve static/favicon.ico |
 | `/opencv` | **GET** | Pagina HTML de pruebas OpenCV | Sirve static/opencv.html |
@@ -106,7 +106,7 @@ Los diferentes routers con los que cuenta la API y sus correspondientes endpoint
 
 ##### auth.py
 
-| Endpoint / Componente | Metodo | Detalle |
+| Endpoint / Componente | Método | Detalle |
 | :--- | :---: | :--- |
 | `/auth/login` | **POST** | Autentica con username + password y devuelve access token (30 min) y refresh token (7 días). |
 | `/auth/refresh` | **POST** | Emite un nuevo access token a partir de un refresh token válido. |
@@ -114,13 +114,13 @@ Los diferentes routers con los que cuenta la API y sus correspondientes endpoint
 
 ##### usuarios.py
 
-| Endpoint / Componente | Metodo | Detalle |
+| Endpoint / Componente | Método | Detalle |
 | :--- | :---: | :--- |
 | `/usuarios/register` | **POST** | Registra un nuevo usuario y envía un email de bienvenida via Resend. |
 
 ##### partidas.py
 
-| Endpoint / Componente | Metodo | Detalle |
+| Endpoint / Componente | Método | Detalle |
 | :--- | :---: | :--- |
 | `/partidas/` | **POST** | Crea una nueva partida asociada al usuario autenticado. |
 | `/partidas/` | **GET** | Lista todas las partidas del usuario autenticado, con filtro opcional por tipo (PI: Partida Introducida / PR: Partida Retransmitida). |
@@ -130,14 +130,14 @@ Los diferentes routers con los que cuenta la API y sus correspondientes endpoint
 
 ##### engine.py
 
-| Endpoint / Componente | Metodo | Detalle |
+| Endpoint / Componente | Método | Detalle |
 | :--- | :---: | :--- |
 | `/engine/status` | **GET** | Verifica el estado y la versión del motor Stockfish v17.1. |
 | `/engine/move` | **POST** | Obtiene la mejor jugada dada una posición en FEN. Parámetros opcionales: elo (1320-3190) y depth (1-30). |
 
 ##### vision.py
 
-| Endpoint / Componente | Metodo | Detalle |
+| Endpoint / Componente | Método | Detalle |
 | :--- | :---: | :--- |
 | `/vision/status` | **GET** | Devuelve el estado operativo del módulo y la versión de OpenCV. |
 | `/vision/recognize-board`| **POST** | Detecta y rectifica el tablero aplicando la homografía. Devuelve vista cenital 400x400. |
@@ -147,7 +147,7 @@ Los diferentes routers con los que cuenta la API y sus correspondientes endpoint
 
 ##### retransmision.py
 
-| Endpoint / Componente | Metodo | Detalle |
+| Endpoint / Componente | Método | Detalle |
 | :--- | :---: | :--- |
 | `/retransmision/host` | **POST** | Crea una nueva retransmisión con token único y la marca como activa. |
 | `/retransmision/status/{token}`| **GET** | Devuelve si la retransmisión está activa y cuántos viewers hay conectados. |
@@ -157,7 +157,7 @@ Los diferentes routers con los que cuenta la API y sus correspondientes endpoint
 
 ##### dataset.py
 
-| Endpoint / Componente | Metodo | Detalle |
+| Endpoint / Componente | Método | Detalle |
 | :--- | :---: | :--- |
 | `/dataset/capture` | **POST** | Detecta el tablero, rectifica la homografía y devuelve las 64 casillas recortadas (crops) con etiquetado sugerido por el STD. |
 | `/dataset/save` | **POST** | Recibe las casillas (crops) etiquetadas y las guarda en el directorio de su clase con nombre UUID único. |
