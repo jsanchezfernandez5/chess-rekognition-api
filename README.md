@@ -1,6 +1,18 @@
 # Chess Rekognition API
 
-El "cerebro" del sistema. Esta API construida con **FastAPI** se encarga del procesamiento de imágenes, la lógica de juego mediante Stockfish, la gestión de usuarios y la retransmisión en tiempo real mediante WebSockets.
+Bienvenido/a a la documentación de la API de Chess Rekognition.
+
+Esta API construida con **FastAPI** se encarga de:
+
+- Procesamiento de las imágenes del tablero de ajedrez.
+- Reconocimiento y corrección de la homografía del tablero de ajedrez.
+- Recorte y clasificación de las casillas del tablero de ajedrez corregido en vista cenital.
+- Entrenamiento de modelo CNN (MobileNetV2 de TensorFlow).
+- Reconocimiento de las piezas.
+- Lógica de juego mediante Stockfish.
+- Gestión de usuarios.
+- Guardado de partidas en PGN.
+- Retransmisión en tiempo real mediante WebSockets.
 
 **¿Qué es FastAPI?** FastAPI es un framework web Python de alto rendimiento para construir APIs REST, con soporte nativo para operaciones asíncronas (`async/await`) y generación automática de documentación interactiva en formato OpenAPI/Swagger.
 
@@ -16,300 +28,151 @@ La documentación automática está disponible en:
 
 ---
 
+## Estructura de archivos
+
+```
+api/
+├── main.py                 # Punto de entrada de FastAPI
+├── Procfile                # Comando de inicio para el despliegue automático en Railway
+├── requirements.txt        # Dependencias de Python necesarias para la API
+│
+├── core/                   # Capa CORE
+│   ├── config.py           # Configuración del entorno (.env) con patrón Singleton (@lru_cache)
+│   ├── security.py         # Hasheo de contraseñas con bcrypt y utilidades criptográficas de JWT
+│   ├── dependencies.py     # Inyectores de dependencia (Depends) de sesión DB y usuario actual
+│   ├── database.py         # Configuración de base de datos MySQL e inicialización del motor ORM
+│   └── models.py           # Definición ORM (SQLAlchemy) y esquemas de validación (Pydantic DTOs)
+│
+├── routers/                # Capa ROUTERS
+│   ├── auth.py             # Rutas de login, refresh de sesión y whoami
+│   ├── usuarios.py         # Registro de usuarios
+│   ├── partidas.py         # CRUD de partidas PGN
+│   ├── engine.py           # Motor StockFish v17.1
+│   ├── vision.py           # Endpoints de diagnóstico OpenCV, clasificación y detección de jugadas
+│   ├── retransmision.py    # Gestión de salas activas y WebSockets de emisores y espectadores
+│   └── dataset.py          # Captura de crops de casillas, estadísticas y disparadores de entrenamiento
+│
+├── services/               # Capa SERVICES
+│   ├── vision.py           # Servicio para la rectificación de la homografía con OpenCV para la detección y rectificación del tablero de ajedrez.
+│   ├── classifier.py       # Servicio de clasificación de piezas de ajedrez mediante un modelo TensorFlow (MobileNetV2).
+│   ├── move_detector.py    # Servicio de detección de movimientos de ajedrez mediante comparación visual.
+│   ├── engine.py           # Servicio de integración con el motor de ajedrez Stockfish v17.1.
+│   ├── training.py         # Servicio de entrenamiento del modelo MobileNetV2.
+│   └── email.py            # Servicio de envío de emails transaccionales mediante la API de Resend (https://resend.com).
+│
+└── static/
+    ├── favicon.ico         # Icono de la API
+    ├── dataset.html        # Pagina HTML de captura de crops, clasificación y entrenamiento del modelo CNN (MobileNetV2 de TensorFlow)
+    ├── opencv.html         # Pagina HTML de pruebas OpenCV (Rectificación, homografía del tablero y valores de Desviación Estándar STD)
+    └── reconocimiento.html # Pagina HTML de reconocimiento del tablero y las piezas de ajedrez
+```
+
+---
+
 ## Arquitectura del Sistema
 
 ### Patrón de Diseño: Arquitectura en 3 Capas
 
-El backend sigue una **arquitectura en 3 capas** con separación clara de responsabilidades. Cada capa tiene una función específica y solo se comunica con la capa inmediatamente inferior:
+El backend sigue una **arquitectura en 3 capas** con separación clara de responsabilidades.
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                     Capa de Presentación                 │
-│                    (routers / endpoints)                  │
-│  Recibe requests HTTP/WS, ejecuta lógica CRUD directa,  │
-│  delega en servicios cuando hay complejidad real         │
-├──────────────────────────────────────────────────────────┤
-│                     Capa de Servicios                    │
-│              (services / lógica de negocio compleja)     │
-│  Solo donde hay complejidad real: visión por computador, │
-│  clasificador ML, motor Stockfish, retransmisión WS      │
-├──────────────────────────────────────────────────────────┤
-│                  Capa de Infraestructura (core)          │
-│      config · security · database · models (SQLModel)    │
-│  Configuración global, JWT/bcrypt, BD y definición de    │
-│  modelos de datos (ORM + validación Pydantic unificados) │
-└──────────────────────────────────────────────────────────┘
-```
+![Arquitectura de 3 Capas](docs/images/arquitectura.png)
 
-### Principio de diseño
+Cada capa tiene una función específica y solo se comunica con la capa inmediatamente inferior:
 
-La capa de servicios **solo existe donde la lógica no cabe razonablemente en el router**: visión por computador (OpenCV), clasificador ML (TensorFlow/MobileNetV2), motor de ajedrez (Stockfish subprocess UCI) y retransmisión en tiempo real (WebSocket broadcast). Para operaciones CRUD sencillas (auth, usuarios, partidas), el propio router gestiona la lógica directamente contra la base de datos, evitando capas intermedias innecesarias.
+#### Capa de Presentación
 
-### Patrones Implementados
+Esta capa es dirigida por el archivo main.py e incluye: 
 
-| Patrón | Ubicación | Propósito |
-|--------|-----------|-----------|
-| **Singleton** | `core/config.py` — `get_settings()` con `@lru_cache` | Una única instancia de configuración global |
-| **Inyección de Dependencias** | `core/dependencies.py` — `Depends()` de FastAPI | Inyecta sesiones BD, usuario autenticado, etc. |
-| **Observer (WebSocket)** | `routers/retransmision.py` — `ConnectionManager` | Broadcast de estado del tablero a múltiples viewers |
-| **Callback (Hook)** | `services/training.py` — `_WSCallback` | Keras callback para notificar progreso vía WebSocket |
-| **Facade** | `services/vision.py` — `VisionService.detect_and_rectify()` | Orquesta todo el pipeline de visión en un solo método público |
-| **Data Transfer Object (DTO)** | `core/models.py` — SQLAlchemy + Pydantic | ORM y schemas de validación unificados en un único módulo |
+- Endpoints auxiliares.
+- Routers registrados con los endpoints.
+- Archivos estáticos.
 
----
+| Endpoint / Componente | Metodo | Descripcion | Detalle |
+| :--- | :---: | :--- | :--- |
+| `/` | **GET** | Estado de la API |  |
+| `/favicon.ico` | **GET** | Favicon | Sirve static/favicon.ico |
+| `/opencv` | **GET** | Pagina HTML de pruebas OpenCV | Sirve static/opencv.html |
+| `/dataset` | **GET** | Pagina HTML de captura de crops, clasificación y entrenamiento del modelo CNN (MobileNetV2 de TensorFlow) | Sirve static/dataset.html |
+| `/reconocimiento` | **GET** | Pagina HTML de reconocimiento del tablero y las piezas de ajedrez | Sirve static/reconocimiento.html |
+| `/docs` | **GET** | Swagger UI personalizado | Usa get_swagger_ui_html() |
+| `CORSMiddleware` | — | Permite peticiones cross-origin desde cualquier origen | `allow_origins=['*']`, methods: GET/POST/PUT/DELETE/OPTIONS/PATCH, credentials=True |
+| `include_router(x7)` | — | auth, usuarios, partidas, engine, vision, dataset, retransmision | app.include_router() para cada modulo del directorio routers/ |
 
-### Flujo de una Petición Típica
+#### Capa Routers
 
-```
-Cliente (React)                    FastAPI (Python)
-     │                                  │
-     │  POST /vision/classify           │
-     │  (multipart: imagen)             │
-     │ ──────────────────────────────►  │
-     │                                  │──► router/vision.py
-     │                                  │      │
-     │                                  │      ├─► services/vision.py
-     │                                  │      │    ├─ _detectar_tablero()    [OpenCV]
-     │                                  │      │    ├─ _calcular_esquinas()   [vectores]
-     │                                  │      │    └─ _rectificar()          [homografía]
-     │                                  │      │
-     │                                  │      ├─► services/classifier.py
-     │                                  │      │    └─ ChessClassifier       [TensorFlow]
-     │                                  │      │
-     │                                  │      └─► services/vision.py
-     │                                  │           └─ board_state_to_fen_board()
-     │                                  │
-     │  { success, board_state, fen }   │
-     │ ◄────────────────────────────── │
-```
+Esta capa contiene los diferentes endpoints y websockets registrados en la capa de presentación (main.py). 
 
-### Autenticación (JWT Dual Token)
+Los diferentes routers con los que cuenta la API y sus correspondientes endpoints son:
 
-```
-┌─────────┐         ┌──────────────┐         ┌───────────┐
-│  Login  │ ──────► │  POST /auth  │ ──────► │ Generar   │
-│ (creds) │         │  /login      │         │ JWT dual  │
-└─────────┘         └──────────────┘         └─────┬─────┘
-                                                   │
-                            ┌──────────────────────┤
-                            │                      │
-                     ┌──────▼──────┐        ┌──────▼──────┐
-                     │ Access Token │        │Refresh Token│
-                     │  30 min     │        │  7 días     │
-                     │  en memoria │        │ localStorage│
-                     └──────┬──────┘        └──────┬──────┘
-                            │                      │
-                     ┌──────▼──────┐               │
-                     │  Endpoint   │               │
-                     │  protegido  │               │
-                     │  con JWT    │               │
-                     └─────────────┘               │
-                            │                      │
-                     Si 401 ─────────────────────► │
-                                                  │
-                                        ┌─────────▼─────────┐
-                                        │ POST /auth/refresh │
-                                        └───────────────────┘
-```
+##### auth.py
 
----
+| Endpoint / Componente | Metodo | Detalle |
+| :--- | :---: | :--- |
+| `/auth/login` | **POST** | Autentica con username + password y devuelve access token (30 min) y refresh token (7 días). |
+| `/auth/refresh` | **POST** | Emite un nuevo access token a partir de un refresh token válido. |
+| `/auth/whoami` | **GET** | Devuelve los datos del usuario identificado por el access token. |
 
-## Módulos del Sistema
+##### usuarios.py
 
-### 🧠 Visión por Computador (`services/vision.py`)
+| Endpoint / Componente | Metodo | Detalle |
+| :--- | :---: | :--- |
+| `/usuarios/register` | **POST** | Registra un nuevo usuario y envía un email de bienvenida via Resend. |
 
-Pipeline completo de detección y rectificación del tablero:
+##### partidas.py
 
-1. **`_detectar_tablero()`** — OpenCV `findChessboardCornersSB` detecta las 49 intersecciones internas (7×7). Fallback al método clásico. Refinamiento subpíxel.
-2. **`_calcular_esquinas_exteriores()`** — Extrapolación vectorial con MARGIN 1.12 para obtener el perímetro real del tablero desde las esquinas internas.
-3. **`_rectificar()`** — Homografía (`getPerspectiveTransform` + `warpPerspective`) → vista cenital 400×400.
-4. **`_analizar_casillas()`** — Autocalibración dinámica de umbrales por percentiles. Clasifica ocupada/vacía con STD + detección de bordes Canny.
-5. **`_calibrar_umbrales()`** — Estadísticos robustos que se adaptan a cualquier iluminación sin calibración manual.
+| Endpoint / Componente | Metodo | Detalle |
+| :--- | :---: | :--- |
+| `/partidas/` | **POST** | Crea una nueva partida asociada al usuario autenticado. |
+| `/partidas/` | **GET** | Lista todas las partidas del usuario autenticado, con filtro opcional por tipo (PI: Partida Introducida / PR: Partida Retransmitida). |
+| `/partidas/{id_partida}` | **GET** | Obtiene el detalle de una partida por ID. Solo devuelve la partida si pertenece al usuario. |
+| `/partidas/{id_partida}` | **PATCH** | Actualiza los campos enviados de una partida del usuario autenticado. |
+| `/partidas/{id_partida}` | **DELETE** | Elimina una partida del usuario autenticado. (Actualmente no se usa en la app). |
 
-### 🏷️ Clasificador ML (`services/classifier.py`)
+##### engine.py
 
-- **Modelo**: MobileNetV2 (transfer learning desde ImageNet)
-- **Input**: 96×96 píxeles, batch de 64 casillas
-- **Clases**: 13 (`empty`, `w_P`…`b_K`)
-- **Thread-safe**: `RLock` para evitar condiciones de carrera durante recarga en caliente
-- **Cache**: El modelo se mantiene en memoria y se recarga bajo demanda (`/classify/reload`)
+| Endpoint / Componente | Metodo | Detalle |
+| :--- | :---: | :--- |
+| `/engine/status` | **GET** | Verifica el estado y la versión del motor Stockfish v17.1. |
+| `/engine/move` | **POST** | Obtiene la mejor jugada dada una posición en FEN. Parámetros opcionales: elo (1320-3190) y depth (1-30). |
 
-### ♟️ Motor de Ajedrez (`services/engine.py`)
+##### vision.py
 
-- **Stockfish 17.1** vía subprocess con protocolo UCI
-- **ELO ajustable** (1320–3190) mediante interpolación lineal a Skill Level
-- **Timeout** de 20 segundos con kill forzoso
-- **Parseo**: Extrae `bestmove`, score (cp/mate), depth, nodes y PV de la salida UCI
+| Endpoint / Componente | Metodo | Detalle |
+| :--- | :---: | :--- |
+| `/vision/status` | **GET** | Devuelve el estado operativo del módulo y la versión de OpenCV. |
+| `/vision/recognize-board`| **POST** | Detecta y rectifica el tablero aplicando la homografía. Devuelve vista cenital 400x400. |
+| `/vision/classify` | **POST** | Clasifica las 64 casillas del tablero con MobileNetV2 y genera el FEN completo. |
+| `/vision/classify/reload` | **POST** | Recarga el modelo ML desde disco sin reiniciar el servidor. |
+| `/vision/detect-move` | **POST** | Compara el estado actual del tablero con un FEN previo y detecta el movimiento realizado. |
 
-### 🔄 Detector de Movimientos (`services/move_detector.py`)
+##### retransmision.py
 
-Compara el estado ML vs FEN anterior:
+| Endpoint / Componente | Metodo | Detalle |
+| :--- | :---: | :--- |
+| `/retransmision/host` | **POST** | Crea una nueva retransmisión con token único y la marca como activa. |
+| `/retransmision/status/{token}`| **GET** | Devuelve si la retransmisión está activa y cuántos viewers hay conectados. |
+| `/retransmision/{id_retransmision}`| **PATCH**| Actualiza los metadatos de una retransmisión del usuario autenticado. |
+| `/retransmision/ws/host/{token}`| **WS** | WebSocket del emisor (host): recibe el estado del tablero y hace broadcast a los viewers. |
+| `/retransmision/ws/viewer/{token}`| **WS** | WebSocket del espectador (viewer): recibe actualizaciones en tiempo real del tablero. |
 
-1. Clasifica el tablero actual con ML
-2. Convierte a objeto `chess.Board` (python-chess)
-3. Itera sobre movimientos legales del FEN anterior
-4. Encuentra el movimiento que produce matching perfecto de piezas
-5. Clasifica tipo: `normal`, `capture`, `castling_short/long`, `en_passant`, `promotion`
+##### dataset.py
 
-### 📡 Retransmisión en Tiempo Real (`routers/retransmision.py`)
+| Endpoint / Componente | Metodo | Detalle |
+| :--- | :---: | :--- |
+| `/dataset/capture` | **POST** | Detecta el tablero, rectifica la homografía y devuelve las 64 casillas recortadas (crops) con etiquetado sugerido por el STD. |
+| `/dataset/save` | **POST** | Recibe las casillas (crops) etiquetadas y las guarda en el directorio de su clase con nombre UUID único. |
+| `/dataset/stats` | **GET** | Devuelve el número de imágenes por clase y el total acumulado. |
+| `/dataset/train` | **POST** | Lanza el entrenamiento de MobileNetV2 en un hilo secundario que generar el archivo del modelo. |
+| `/dataset/train/status` | **GET** | Devuelve el estado actual del entrenamiento (polling). |
+| `/dataset/train/ws` | **WS** | WebSocket de progreso del entrenamiento en tiempo real para consola. El token JWT se pasa como query param: ?token=<access_token> |
 
-- **Host** → WebSocket emisor: envía estado del tablero → broadcast a viewers
-- **Viewer** → WebSocket receptor: recibe actualizaciones en vivo
-- **ConnectionManager**: Mantiene diccionarios de hosts, viewers y último estado (para inyectar a nuevos viewers)
-- **Heartbeat**: Los viewers envían "ping" para mantener la conexión activa
+#### Capa Services
 
-### 🎯 Entrenamiento (`services/training.py` + `routers/dataset.py`)
+Esta capa contiene los diferentes servicios asíncronos y síncronos con los que cuenta la API para procesar lógica de negocio compleja.
 
-- **Captura y dataset** (`routers/dataset.py`): extrae 64 casillas, sugiere etiqueta por heurística STD, guarda con UUID por clase
-- **Training pipeline** (`services/training.py`): `image_dataset_from_directory` → MobileNetV2 + Data Augmentation → EarlyStopping → ReduceLROnPlateau
-- **Métricas del Modelo**:
-  - **Dataset**: 13.229 imágenes (10.584 entrenamiento, 2.645 validación) divididas en 13 clases.
-  - **Precisión (Accuracy)**: 97.30% en entrenamiento, 96.22% en validación.
-  - **Pérdida (Loss)**: 0.0778 en entrenamiento, 0.1187 en validación.
+#### Capa Core
 
----
-
-## Estructura del Proyecto
-
-```
-api/
-├── main.py                 # Entrypoint FastAPI, CORS, routers, Swagger
-├── Procfile                # Comando Railway (uvicorn)
-├── requirements.txt        # Dependencias con versiones fijas
-│
-├── core/                   # Capa de infraestructura
-│   ├── config.py           # Settings singleton (@lru_cache), constantes globales
-│   ├── security.py         # JWT (access/refresh, 30min/7días) + bcrypt
-│   ├── dependencies.py     # get_current_user, get_db — inyección de dependencias
-│   ├── database.py         # Engine SQLAlchemy, SessionLocal, Base, get_db
-│   └── models.py           # ORM (Usuario, Partida, Retransmision) +
-│                           # Schemas Pydantic (validación entrada/salida)
-│                           # unificados en un solo módulo
-│
-├── routers/                # Capa de presentación (endpoints HTTP + WebSocket)
-│   ├── auth.py             # POST /login, POST /refresh, GET /whoami
-│   ├── usuarios.py         # POST /register (bcrypt + email bienvenida inline)
-│   ├── partidas.py         # CRUD /partidas/ con filtrado PI/PR (inline)
-│   ├── engine.py           # GET /status, POST /move → delega en services/engine
-│   ├── vision.py           # POST /recognize-board, /classify, /detect-move
-│   ├── retransmision.py    # WS host/viewer, PATCH, POST host
-│   └── dataset.py          # Capture, save, stats, train, WS progreso
-│
-├── services/               # Capa de lógica compleja
-│   ├── vision.py           # Pipeline OpenCV + helpers chess (label_to_piece, board_state_to_fen_board)
-│   ├── classifier.py       # ChessClassifier: MobileNetV2, thread-safe, recarga caliente
-│   ├── move_detector.py    # Comparación ML vs FEN → movimiento legal python-chess
-│   ├── engine.py           # StockfishService: subprocess UCI, ELO, timeout
-│   ├── training.py         # Pipeline entrenamiento MobileNetV2 + broadcast WS
-│   └── email.py            # Resend API: email de bienvenida asíncrono
-│
-└── static/                 # Favicon, dataset.html, opencv.html, reconocimiento.html
-```
-
-> **Nota de transparencia al frontend:** esta reorganización conceptual no modifica ningún endpoint ni contrato de la API. Las rutas, métodos HTTP, parámetros y respuestas son idénticos. El frontend no requiere ningún cambio.
-
----
-
-## Endpoints de la API
-
-### Autenticación
-| Método | Ruta | Protegido | Descripción |
-|--------|------|-----------|-------------|
-| POST | `/auth/login` | ❌ | Iniciar sesión (devuelve access + refresh JWT) |
-| POST | `/auth/refresh` | ❌ | Renovar access token mediante refresh token |
-| GET | `/auth/whoami` | ✅ | Datos del usuario autenticado |
-
-### Usuarios
-| Método | Ruta | Protegido | Descripción |
-|--------|------|-----------|-------------|
-| POST | `/usuarios/register` | ❌ | Registrar nuevo usuario |
-
-### Partidas
-| Método | Ruta | Protegido | Descripción |
-|--------|------|-----------|-------------|
-| POST | `/partidas/` | ✅ | Guardar nueva partida |
-| GET | `/partidas/` | ✅ | Listar partidas (filtro opcional PI/PR) |
-| GET | `/partidas/{id}` | ✅ | Obtener detalle de partida |
-| PATCH | `/partidas/{id}` | ✅ | Actualizar partida |
-| DELETE | `/partidas/{id}` | ✅ | Eliminar partida |
-
-### Motor (Stockfish)
-| Método | Ruta | Protegido | Descripción |
-|--------|------|-----------|-------------|
-| GET | `/engine/status` | ❌ | Estado del binario Stockfish |
-| POST | `/engine/move` | ❌ | Mejor jugada desde posición FEN |
-
-### Visión por Computador
-| Método | Ruta | Protegido | Descripción |
-|--------|------|-----------|-------------|
-| POST | `/vision/recognize-board` | ❌ | Detectar y rectificar tablero |
-| POST | `/vision/classify` | ❌ | Clasificar 64 casillas + FEN |
-| POST | `/vision/classify/reload` | ❌ | Recargar modelo ML en caliente |
-| POST | `/vision/detect-move` | ❌ | Detectar movimiento vs FEN previo |
-| GET | `/vision/status` | ❌ | Estado del módulo OpenCV |
-
-### Retransmisión en Tiempo Real
-| Método | Ruta | Protegido | Descripción |
-|--------|------|-----------|-------------|
-| POST | `/retransmision/host` | ✅ | Inicializar retransmisión |
-| GET | `/retransmision/status/{token}` | ❌ | Estado de retransmisión |
-| PATCH | `/retransmision/{id}` | ✅ | Actualizar retransmisión |
-| WS | `/retransmision/ws/host/{token}` | ❌ | WebSocket emisor |
-| WS | `/retransmision/ws/viewer/{token}` | ❌ | WebSocket espectador |
-
-### Dataset y Entrenamiento
-| Método | Ruta | Protegido | Descripción |
-|--------|------|-----------|-------------|
-| POST | `/dataset/capture` | ✅ | Capturar 64 casillas desde imagen |
-| POST | `/dataset/save` | ✅ | Guardar recortes etiquetados |
-| GET | `/dataset/stats` | ✅ | Estadísticas del dataset |
-| POST | `/dataset/train` | ✅ | Iniciar entrenamiento del modelo |
-| GET | `/dataset/train/status` | ✅ | Estado del entrenamiento (polling) |
-| WS | `/dataset/train/ws` | ✅ | Estado del entrenamiento (WebSocket) |
-
-### Herramientas Web Auxiliares
-| Método | Ruta | Protegido | Descripción |
-|--------|------|-----------|-------------|
-| GET | `/opencv` | ❌ | Herramienta de diagnóstico de visión por computadora |
-| GET | `/dataset` | ❌ | Panel interactivo de dataset y entrenamiento |
-| GET | `/reconocimiento` | ❌ | Herramienta de visualización de tablero y FEN en vivo |
-
----
-
-## Flujo de Datos: Reconocimiento de Tablero
-
-```
-Imagen (cámara / archivo)
-        │
-        ▼
-┌───────────────────────────────┐
-│  _detectar_tablero()         │
-│  findChessboardCornersSB     │
-│  → 49 puntos internos (7×7)  │
-└───────────┬───────────────────┘
-            │
-            ▼
-┌───────────────────────────────┐
-│  _calcular_esquinas_ext()    │
-│  Extrapolación vectorial     │
-│  → 4 esquinas exteriores     │
-└───────────┬───────────────────┘
-            │
-            ▼
-┌───────────────────────────────┐
-│  _rectificar() (homografía)  │
-│  400×400, cada casilla 50×50 │
-└───────────┬───────────────────┘
-            │
-     ┌──────┴──────┐
-     ▼             ▼
-┌──────────┐  ┌──────────┐
-│ Análisis │  │  ML      │
-│ clásico  │  │ clasif.  │
-│ ocupada/ │  │ 13 clases│
-│ vacía    │  │ + FEN    │
-└──────────┘  └──────────┘
-```
+La capa core representa el núcleo de la infraestructura del sistema, gestionando la base de datos, la configuración global y las herramientas transversales de seguridad.
 
 ---
 
