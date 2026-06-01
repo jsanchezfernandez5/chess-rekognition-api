@@ -1,9 +1,12 @@
 """
 Servicio de clasificación de piezas de ajedrez mediante un modelo TensorFlow (MobileNetV2).
 
-    - Proporciona la clase ChessClassifier que carga un modelo preentrenado desde disco.
-    - Clasifica las 64 casillas de un tablero rectificado en un solo batch
-    - Devuelve la etiqueta y confianza para cada casilla.
+Funciones principales:
+
+    - ChessClassifier._load()          | Carga el modelo chess_model.keras y class_names.json desde MODELS_DIR.
+    - ChessClassifier.reload()         | Recarga el modelo sin reiniciar servidor.
+    - ChessClassifier.is_ready()       | Verifica si el modelo está cargado.
+    - ChessClassifier.classify_board() | Clasifica las 64 casillas de un tablero rectificado.
 """
 import cv2
 import json
@@ -16,7 +19,10 @@ from core.config import settings
 # Clase que carga el modelo y clasifica las piezas
 class ChessClassifier:
     """
-    Clasificador de piezas de ajedrez basado en un modelo MobileNetV2 de TensorFlow.
+    Clasificador de piezas de ajedrez basado en MobileNetV2 de TensorFlow.
+
+    Carga el modelo chess_model.keras y class_names.json desde MODELS_DIR al instanciarse.
+    Usa un RLock para garantizar thread-safety durante la recarga en caliente del modelo.
     """
     # Método constructor que carga el modelo
     def __init__(self):
@@ -55,6 +61,8 @@ class ChessClassifier:
     def reload(self):
         """
         Recarga el modelo desde disco en caliente (sin reiniciar servidor).
+
+        Se llama desde POST /vision/classify/reload tras un nuevo entrenamiento.
         """
         self._load()
 

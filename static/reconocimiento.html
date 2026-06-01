@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,7 +27,7 @@
             margin: 0 auto;
         }
 
-        /* ── Cabecera ── */
+        /* CABECERA */
         header {
             border-bottom: 1px solid #e2e8f0;
             padding-bottom: 12px;
@@ -44,7 +45,7 @@
             margin-top: 2px;
         }
 
-        /* ── Tarjetas ── */
+        /* TARJETAS */
         .card {
             background: #fff;
             border: 1px solid #e2e8f0;
@@ -61,20 +62,21 @@
             margin-bottom: 12px;
         }
 
-        /* ── Layout ── */
+        /* LAYOUT */
         .layout {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 16px;
         }
 
+        /* RESPONSIVE */
         @media (max-width: 700px) {
             .layout {
                 grid-template-columns: 1fr;
             }
         }
 
-        /* ── Cámara ── */
+        /* CÁMARA */
         .camera-wrap {
             background: #000;
             border-radius: 6px;
@@ -107,7 +109,7 @@
             cursor: crosshair;
         }
 
-        /* ── Botones ── */
+        /* BOTONES */
         .btn-row {
             display: flex;
             gap: 8px;
@@ -115,7 +117,8 @@
             flex-wrap: wrap;
         }
 
-        button, select {
+        button,
+        select {
             padding: 8px 16px;
             border-radius: 6px;
             border: 1px solid #e2e8f0;
@@ -127,7 +130,8 @@
             transition: background .15s;
         }
 
-        button:hover, select:hover {
+        button:hover,
+        select:hover {
             background: #f8fafc;
         }
 
@@ -156,7 +160,7 @@
             background: #b91c1c;
         }
 
-        /* ── Consola ── */
+        /* CONSOLA */
         #log {
             font-family: monospace;
             font-size: 11px;
@@ -183,7 +187,7 @@
             color: #10b981;
         }
 
-        /* ── Tablero 2D ── */
+        /* TABLERO 2D */
         .board-container {
             display: flex;
             flex-direction: column;
@@ -221,13 +225,13 @@
 
         .piece-w {
             color: #ffffff;
-            text-shadow: 0 0 4px rgba(0,0,0,0.8), 0 0 1px rgba(0,0,0,0.5);
+            text-shadow: 0 0 4px rgba(0, 0, 0, 0.8), 0 0 1px rgba(0, 0, 0, 0.5);
             font-weight: bold;
         }
 
         .piece-b {
             color: #1e293b;
-            text-shadow: 0 0 2px rgba(255,255,255,0.6);
+            text-shadow: 0 0 2px rgba(255, 255, 255, 0.6);
             font-weight: bold;
         }
 
@@ -314,16 +318,17 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
             <h1>Reconocimiento en Vivo | Chess Rekognition</h1>
-            <p>Clasifica la posición de tu tablero físico y genera su código FEN en tiempo real.</p>
+            <p>Reconocimiento del tablero y piezas. Generación del código FEN.</p>
         </header>
 
         <div class="layout">
             <div class="card">
-                <h2>Origen de Imagen</h2>
+                <h2>Origen de la imagen</h2>
                 <div class="camera-wrap">
                     <video id="cam" autoplay playsinline muted></video>
                     <img id="imgSource" alt="Tablero cargado">
@@ -334,7 +339,8 @@
                     <button class="btn-danger" id="btnLimpiar">Limpiar Esquinas</button>
                     <button id="btnCargar" onclick="document.getElementById('inputFile').click()">Cargar Foto</button>
                     <button id="btnUsarCam" style="display:none;" onclick="activarCamara()">Usar Cámara</button>
-                    <input type="file" id="inputFile" accept="image/*" style="display:none" onchange="cargarArchivo(event)">
+                    <input type="file" id="inputFile" accept="image/*" style="display:none"
+                        onchange="cargarArchivo(event)">
                     <select id="selectRotacion">
                         <option value="0">Blancas debajo (0º)</option>
                         <option value="90">Blancas a la derecha (90º)</option>
@@ -358,7 +364,9 @@
                         </div>
                     </div>
                     <div class="fen-box">
-                        <div class="fen-text" id="fenText">rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1</div>
+                        <div class="fen-text" id="fenText">
+                            rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+                        </div>
                         <button class="btn-copy" onclick="copiarFEN()">Copiar FEN</button>
                     </div>
                 </div>
@@ -369,12 +377,14 @@
     <canvas id="snap" style="display:none"></canvas>
 
     <script>
-        const UNICODE_PIECES = {
+        const UNICODE_PIECES =
+        {
             w_P: '♙', w_N: '♘', w_B: '♗', w_R: '♖', w_Q: '♕', w_K: '♔',
             b_P: '♟', b_N: '♞', b_B: '♝', b_R: '♜', b_Q: '♛', b_K: '♚',
             empty: ''
         };
 
+        /* VARIABLES */
         const video = document.getElementById("cam");
         const imgSource = document.getElementById("imgSource");
         const canvas = document.getElementById("snap");
@@ -394,6 +404,7 @@
         let modoImagen = false;
         let procesando = false;
 
+        // FUNCIÓN PARA EL LOG
         function log(msg, type = "") {
             const hora = new Date().toLocaleTimeString("es-ES");
             let cls = "";
@@ -402,12 +413,14 @@
             logPanel.innerHTML = `<span class="log-time">[${hora}]</span><span${cls}>${msg}</span><br>` + logPanel.innerHTML;
         }
 
+        // FUNCIÓN PARA EL ESTADO
         function setStatus(text, dotClass = "") {
             statusTxt.textContent = text;
             statusDot.className = "status-dot";
             if (dotClass) statusDot.classList.add(dotClass);
         }
 
+        // FUNCIÓN PARA LA CÁMARA
         async function activarCamara() {
             try {
                 btnUsarCam.style.display = "none";
@@ -431,6 +444,7 @@
             }
         }
 
+        // FUNCIÓN PARA CARGAR ARCHIVO
         function cargarArchivo(event) {
             const file = event.target.files[0];
             if (file) {
@@ -457,6 +471,7 @@
             }
         }
 
+        // FUNCIÓN PARA DIBUJAR EL OVERLAY
         function drawOverlay() {
             const ctx = overlay.getContext("2d");
             overlay.width = overlay.clientWidth;
@@ -492,6 +507,7 @@
             }
         }
 
+        // FUNCIÓN PARA DIBUJAR EL OVERLAY AL HACER CLICK
         overlay.addEventListener("click", (e) => {
             const rect = overlay.getBoundingClientRect();
             const x = (e.clientX - rect.left) / rect.width;
@@ -505,14 +521,17 @@
             drawOverlay();
         });
 
+        // FUNCIÓN PARA LIMPIAR LAS COORDENADAS DE CALIBRACIÓN
         btnLimpiar.onclick = () => {
             manualPoints = [];
             drawOverlay();
             log("Coordenadas de calibración reseteadas.");
         };
 
+        // FUNCIÓN PARA REDIMENSIONAR EL OVERLAY
         window.addEventListener("resize", drawOverlay);
 
+        // FUNCIÓN PARA CLASIFICAR LA POSICIÓN
         async function clasificarPosicion() {
             if (procesando) return;
             procesando = true;
@@ -546,6 +565,7 @@
             }
 
             try {
+                // LLAMADA A LA API
                 const res = await fetch("/vision/classify", { method: "POST", body: fd });
                 const data = await res.json();
 
@@ -566,6 +586,7 @@
             }
         }
 
+        // FUNCIÓN PARA RENDERIZAR EL TABLERO 2D
         function renderizarTablero2D(boardState) {
             board2d.innerHTML = "";
             const cols = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -599,6 +620,7 @@
             }
         }
 
+        // FUNCIÓN PARA COPIAR EL FEN AL PORTAPAPALES
         function copiarFEN() {
             navigator.clipboard.writeText(fenText.textContent).then(() => {
                 log("FEN copiado al portapapeles.", "success");
@@ -607,8 +629,12 @@
             });
         }
 
+        // EVENTO CLICK DEL BOTÓN CLASIFICAR
         btnClasificar.onclick = clasificarPosicion;
+
+        // ACTIVAR LA CÁMARA
         activarCamara();
     </script>
 </body>
+
 </html>

@@ -2,6 +2,12 @@
 Servicio de detección de movimientos de ajedrez mediante comparación visual.
 
 Compara el estado del tablero clasificado por el modelo ML con la posición anterior representada en FEN.
+
+Funciones principales:
+    - detect_move()          | Clasifica el tablero actual y lo compara con el FEN previo para detectar el movimiento legal realizado.
+    - _positions_match()     | Función interna para comparar cada casilla del chess.Board con la clasificación ML.
+    - _classify_move_type()  | Función interna que clasifica el tipo de movimiento.
+    - _avg_confidence()      | Función interna que calcula la confianza media del clasificador ML en las 64 casillas.
 """
 import chess
 import numpy as np

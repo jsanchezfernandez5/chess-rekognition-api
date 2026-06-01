@@ -1,5 +1,12 @@
 """
-Servicio de integración con el motor de ajedrez Stockfish.
+Servicio de integración con el motor de ajedrez Stockfish v17.1.
+
+Funciones y clases principales:
+    - _elo_to_skill()                   | Función interna para convertir ELO a Skill Level (0-20).
+    - _create_engine()                  | Crea una instancia nueva de Stockfish.
+    - _safe_cleanup()                   | Cierra el proceso Stockfish.
+    - StockfishService.check_status()   | Verifica que el binario de Stockfish existe y es accesible.
+    - StockfishService.get_best_move()  | Calcula la mejor jugada para una posición FEN.
 """
 import os
 import platform
@@ -48,7 +55,6 @@ _ELO_SKILL_TABLE = [
 def _elo_to_skill(elo: int) -> int:
     """
     Convierte un valor ELO (1320-3190) al Skill Level correspondiente (0-20).
-    Usa interpolación lineal entre los puntos de la tabla calibrada.
     """
     if elo <= _ELO_SKILL_TABLE[0][0]:
         return _ELO_SKILL_TABLE[0][1]
@@ -112,7 +118,9 @@ def _safe_cleanup(eng: Stockfish | None) -> None:
     except Exception as e:
         logger.error(f"Error limpiando proceso Stockfish: {e}")
 
-# Clase principal
+# ----------------------------------------------------------------
+# ---------------------- CLASE PRINCIPAL -------------------------
+# ----------------------------------------------------------------
 class StockfishService:
 
     # Método para verificar el estado del binario

@@ -1,7 +1,8 @@
 """
 Servicio de envío de emails transaccionales mediante la API de Resend (https://resend.com).
 
-Actualmente se usa para enviar el email de bienvenida tras el registro en POST /usuarios/register.
+Funciones principales:
+  - send_welcome_email()  | Registra y envía un email de bienvenida al usuario.
 """
 import asyncio
 import resend

@@ -4,6 +4,16 @@ Servicio de entrenamiento del modelo MobileNetV2.
     - Gestiona el estado global del entrenamiento, 
     - Broadcasting de progreso por WebSocket y 
     - el pipeline completo de transfer learning con Keras.
+
+Funciones y clases principales:
+    - get_state()              | Función que devuelve el estado actual del entrenamiento.
+    - is_running()             | Función que devuelve si el entrenamiento está corriendo.
+    - add_ws_client()          | Función que añade un cliente WebSocket a la lista de clientes conectados.
+    - remove_ws_client()       | Función que elimina un cliente WebSocket de la lista de clientes conectados.
+    - start()                  | Lanza el entrenamiento en un hilo separado capturando el event loop principal.
+    - _broadcast()             | Función interna que envía el estado a todos los WebSocket conectados desde el hilo de entrenamiento.
+    - _run_training_wrapper()  | Función interna wrapper que ejecuta el entrenamiento para capturar excepciones no controladas y actualizar el estado a "error".
+    - _run_training_logic()    | Función interna que ejecuta el entrenamiento.
 """
 import asyncio
 import gc

@@ -27,7 +27,7 @@
             margin: 0 auto;
         }
 
-        /* ── Cabecera ── */
+        /* CABECERA */
         header {
             display: flex;
             justify-content: space-between;
@@ -48,7 +48,7 @@
             margin-top: 2px;
         }
 
-        /* ── Tarjetas ── */
+        /* TARJETAS */
         .card {
             background: #fff;
             border: 1px solid #e2e8f0;
@@ -69,7 +69,7 @@
             letter-spacing: .04em;
         }
 
-        /* ── Layout principal ── */
+        /* LAYOUT */
         .layout {
             display: grid;
             grid-template-columns: 1fr 260px;
@@ -82,7 +82,7 @@
             }
         }
 
-        /* ── Login ── */
+        /* LOGIN */
         #loginCard {
             max-width: 340px;
             margin: 80px auto;
@@ -104,7 +104,7 @@
             font-size: 14px;
         }
 
-        /* ── Botones ── */
+        /* BOTONES */
         button,
         select {
             padding: 8px 16px;
@@ -153,7 +153,7 @@
             padding: 6px 12px;
         }
 
-        /* ── Cámara ── */
+        /* CÁMARA */
         .camera-wrap {
             background: #000;
             border-radius: 6px;
@@ -185,7 +185,7 @@
             margin-top: 12px;
         }
 
-        /* ── Rejilla de casillas ── */
+        /* REJILLA DE CASILLAS */
         .board-grid {
             display: grid;
             grid-template-columns: repeat(8, 1fr);
@@ -232,7 +232,7 @@
             border: 2px solid #fdba74;
         }
 
-        /* ── Selector de etiqueta ── */
+        /* SELECTOR DE ETIQUETA */
         .piece-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
@@ -261,7 +261,7 @@
             border-color: #2563eb;
         }
 
-        /* ── Estadísticas ── */
+        /* ESTADÍSTICAS */
         .stat {
             display: flex;
             justify-content: space-between;
@@ -274,7 +274,7 @@
             color: #2563eb;
         }
 
-        /* ── Consola ── */
+        /* CONSOLA */
         #log {
             font-family: monospace;
             font-size: 11px;
@@ -303,7 +303,9 @@
             <input type="text" id="inputUser" placeholder="username" value="chess_test01">
             <label>Contraseña</label>
             <input type="password" id="inputPass" placeholder="••••••••" value="chess_test01">
-            <button class="btn-primary" style="width:100%; margin-top:14px;" onclick="doLogin()">Entrar</button>
+            <button class="btn-primary" style="width:100%; margin-top:14px;" onclick="doLogin()">
+                Entrar
+            </button>
         </div>
 
         <!-- INTERFAZ PRINCIPAL -->
@@ -311,14 +313,16 @@
             <header>
                 <div>
                     <h1>Dataset | Chess Rekognition</h1>
-                    <p>Captura las casillas (crops) y etiqueta las piezas para entrenar el clasificador.</p>
+                    <p>
+                        Captura las casillas (crops) y etiqueta las piezas para entrenar
+                        el modelo CNN (MobileNetV2 de TensorFlow).
+                    </p>
                 </div>
                 <button class="btn-danger" onclick="doLogout()">Cerrar sesión</button>
             </header>
 
             <div class="layout">
-
-                <!-- ── Columna izquierda: cámara + tablero ── -->
+                <!-- Columna izquierda: cámara + tablero -->
                 <div>
                     <div class="card">
                         <h2>Cámara en vivo</h2>
@@ -365,7 +369,7 @@
                     </div>
                 </div>
 
-                <!-- ── Columna derecha: stats + entrenamiento ── -->
+                <!-- Columna derecha: stats + entrenamiento -->
                 <div>
                     <div class="card">
                         <h2>Dataset</h2>
@@ -393,10 +397,6 @@
     <canvas id="snap" class="hidden"></canvas>
 
     <script>
-        // ═══════════════════════════════════════════════════════════
-        // CONSTANTES DEL DOMINIO
-        // ═══════════════════════════════════════════════════════════
-
         // Lista de etiquetas válidas que maneja el clasificador ML
         const CLASES = [
             "empty",
@@ -580,6 +580,7 @@
             }
         }
 
+        // Función para usar la cámara
         function usarCamaraOriginal() {
             const btnUsarCam = document.getElementById("btnUsarCamara");
             const btnReiniciarCam = document.getElementById("btnReiniciarCam");
@@ -588,6 +589,7 @@
             iniciarCamara();
         }
 
+        // Función para dibujar el overlay
         function drawOverlay() {
             const overlay = document.getElementById("overlay");
             if (!overlay) return;
@@ -750,7 +752,6 @@
                 log("Error de conexión al capturar.");
             }
         }
-
 
         // ═══════════════════════════════════════════════════════════
         // REJILLA DE CASILLAS Y SELECTOR DE ETIQUETA
