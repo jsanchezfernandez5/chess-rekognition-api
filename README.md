@@ -26,7 +26,9 @@ La documentación automática está disponible en:
 - Repositorio: https://github.com/fastapi/fastapi
 - Tutorial oficial completo: https://fastapi.tiangolo.com/tutorial/
 
----
+## Colabora para hacer un mejor DATASET clasificando tus fotos de tableros con piezas de tipo Stauton
+
+- [Captura y clasificación de crops, y entrenamiento del modelo CNN (MobileNetV2)](https://chess-rekognition-api-production.up.railway.app/dataset)
 
 ## Estructura de archivos
 
@@ -208,6 +210,10 @@ pip install -r requirements.txt
 # 3. Ejecutar servidor de desarrollo
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+## Notas sobre uso de Inteligencia Artificial usada en la implementación:
+
+> Uso de Gemeni como ayuda en la parte del código de la API. Concretamente utilizada en los servicios del modelo MobileNetV2 de TensorFlow, para que el programa pueda clasificar las piezas del ajedrez en la retransmisión.
 
 ---
 
