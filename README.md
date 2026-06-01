@@ -26,7 +26,9 @@ La documentación automática está disponible en:
 - Repositorio: https://github.com/fastapi/fastapi
 - Tutorial oficial completo: https://fastapi.tiangolo.com/tutorial/
 
-## Colabora para hacer un mejor DATASET clasificando tus fotos de tableros con piezas de tipo Stauton
+## Colabora con el DATASET del Modelo
+
+Colabora para hacer un mejor DATASET clasificando tus fotos de tableros con piezas de tipo Stauton
 
 - [Captura y clasificación de crops, y entrenamiento del modelo CNN (MobileNetV2)](https://chess-rekognition-api-production.up.railway.app/dataset)
 
