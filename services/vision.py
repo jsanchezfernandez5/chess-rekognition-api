@@ -668,6 +668,7 @@ class VisionService:
                 "debug_image":    _encode_image(debug_image),
                 "export_image":   _encode_image(collage),
                 "squares":        squares,
+                "corners":        [[float(pt[0]) / frame.shape[1], float(pt[1]) / frame.shape[0]] for pt in exterior],
                 "occupied_count": occupied_count,
                 "num_squares":    len(squares),
                 "config": {
