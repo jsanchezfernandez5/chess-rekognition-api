@@ -215,7 +215,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ## Notas sobre uso de Inteligencia Artificial usada en la implementación:
 
-> Uso de Gemeni como ayuda en la parte del código de la API. Concretamente utilizada en los servicios del modelo MobileNetV2 de TensorFlow, para que el programa pueda clasificar las piezas del ajedrez en la retransmisión.
+> Uso de IA generativa como ayuda en la parte del código de la API. Concretamente utilizada en los servicios del modelo MobileNetV2 de TensorFlow, para que el programa pueda clasificar las piezas del ajedrez en la retransmisión.
 
 ---
 
