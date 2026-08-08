@@ -60,5 +60,5 @@ VALUES (
     'José Joaquín',
     'Sánchez Fernández',
     '$2b$12$HFsVcKAxRWs6ATHXO1MJR.MjDMTC/d5HqdTz7Uyo1xWZYR5RNPghC',  -- chess-test01
-    'jsanchezfernandez5@uoc.edu'
+    'web@ajedrezcoimbra.com
 );
