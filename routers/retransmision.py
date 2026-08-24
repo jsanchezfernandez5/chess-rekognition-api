@@ -5,8 +5,13 @@ Endpoints:
     POST /retransmision/host                | Crea una nueva retransmisión con token único y la marca como activa.
     GET  /retransmision/status/{token}      | Devuelve si la retransmisión está activa y cuántos viewers hay conectados.
     PATCH /retransmision/{id}               | Actualiza los metadatos de una retransmisión del usuario autenticado.
-    WS   /retransmision/ws/host/{token}     | WebSocket del emisor (host): recibe el estado del tablero y hace broadcast a los viewers.
-    WS   /retransmision/ws/viewer/{token}   | WebSocket del espectador (viewer): recibe actualizaciones en tiempo real del tablero.
+    WS   /retransmision/ws/host/{token}     | WebSocket del emisor (host): recibe el estado del tablero (y opcionalmente frames de vídeo) y hace broadcast a los viewers.
+    WS   /retransmision/ws/viewer/{token}   | WebSocket del espectador (viewer): recibe actualizaciones en tiempo real del tablero (y vídeo si el host lo comparte).
+
+Relay de vídeo OPCIONAL: el host puede enviar mensajes JSON {"type": "video_frame", "frame":
+"<jpeg base64>"} por su mismo WebSocket. El servidor actúa SOLO como relé (no decodifica ni
+procesa imagen): reenvía el frame a todos los viewers SIN cachearlo — la caché de estado
+(self.states) sigue reservada al último FEN/PGN para los late-joiners.
 """
 import asyncio
 import json
@@ -24,6 +29,11 @@ from core.models import Retransmision, RetransmisionCreate, RetransmisionRespons
 
 # Creamos el router para las retransmisiones.
 router = APIRouter(prefix="/retransmision", tags=["Retransmisión"], responses={404: {"description": "No encontrado"}},)
+
+# Límite de tamaño (en caracteres del texto JSON) por frame de vídeo retransmitido.
+# Con JPEG 480px calidad ~0.5 los frames rondan 15-30 KB; el margen cubre picos y
+# descarta abusos sin romper el relay normal.
+MAX_VIDEO_FRAME_BYTES = 200_000
 
 # Función interna para generar tokens únicos.
 def _generate_token(length: int = 8) -> str:
@@ -122,6 +132,26 @@ class ConnectionManager:
                 dead.append(viewer)
 
         # Elimina los viewers con conexión rota fuera del bucle para no modificar la lista mientras se itera
+        for d in dead:
+            self.disconnect_viewer(d, token)
+
+    # Método para retransmitir un frame de vídeo a los viewers SIN cachearlo.
+    async def relay_video_frame(self, token: str, message: dict):
+        """
+        Relé puro de frames de vídeo del host hacia todos los viewers conectados.
+
+        A diferencia de broadcast_to_viewers(), NO toca self.states: la caché de estado debe
+        seguir conteniendo el último FEN/PGN (es lo que reciben los late-joiners), nunca un
+        frame de vídeo obsoleto. Los viewers que llegan tarde simplemente empiezan a ver
+        vídeo en el siguiente frame.
+        """
+        dead = []
+        for viewer in self.viewers.get(token, []):
+            try:
+                await viewer.send_json(message)
+            except Exception:
+                dead.append(viewer)
+
         for d in dead:
             self.disconnect_viewer(d, token)
 
@@ -251,6 +281,13 @@ async def websocket_host(websocket: WebSocket, token: str, db: Session = Depends
             try:
                 data = json.loads(data_text)
             except json.JSONDecodeError:
+                continue
+
+            # Relay de vídeo OPCIONAL: se reenvía sin cachear (ver relay_video_frame).
+            # Se limita el tamaño por frame para que un host desbocado no sature el ancho de banda.
+            if isinstance(data, dict) and data.get("type") == "video_frame":
+                if len(data_text) <= MAX_VIDEO_FRAME_BYTES:
+                    await manager.relay_video_frame(token, data)
                 continue
 
             await manager.broadcast_to_viewers(token, data)
