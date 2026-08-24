@@ -4,10 +4,11 @@ Servicio de detección de movimientos de ajedrez mediante comparación visual.
 Compara el estado del tablero clasificado por el modelo ML con la posición anterior representada en FEN.
 
 Funciones principales:
-    - detect_move()          | Clasifica el tablero actual y lo compara con el FEN previo para detectar el movimiento legal realizado.
-    - _positions_match()     | Función interna para comparar cada casilla del chess.Board con la clasificación ML.
-    - _classify_move_type()  | Función interna que clasifica el tipo de movimiento.
-    - _avg_confidence()      | Función interna que calcula la confianza media del clasificador ML en las 64 casillas.
+    - detect_move()                  | Clasifica el tablero actual y lo compara con el FEN previo para detectar el movimiento legal realizado.
+    - detect_move_desde_estado()     | Igual que detect_move() pero recibiendo un board_state ya clasificado (por TF, YOLO o fusión), sin volver a clasificar.
+    - _positions_match()             | Función interna para comparar cada casilla del chess.Board con la clasificación ML.
+    - _classify_move_type()          | Función interna que clasifica el tipo de movimiento.
+    - _avg_confidence()              | Función interna que calcula la confianza media del clasificador ML en las 64 casillas.
 """
 import chess
 import numpy as np
@@ -31,6 +32,28 @@ def detect_move(warped: np.ndarray, prev_fen: str, classifier) -> dict:
         # Clasificamos el tablero actual mediante el clasificador ML
         board_state = classifier.classify_board(warped)
 
+        # La búsqueda del movimiento legal se delega en la función reutilizable
+        return detect_move_desde_estado(board_state, prev_fen)
+    except Exception as e:
+        return {"found": False, "error": str(e)}
+
+# Función reutilizable para buscar el movimiento desde un estado ya clasificado (TF, YOLO o fusión)
+def detect_move_desde_estado(board_state: dict, prev_fen: str) -> dict:
+    """
+    Busca el movimiento legal que explica la transición desde prev_fen hacia un board_state ya clasificado.
+
+    Es la MISMA lógica de fuerza bruta de detect_move(), extraída para poder reutilizarla desde
+    otros motores (YOLO, fusión) sin duplicar código: el resultado depende solo del estado final
+    clasificado, no de qué motor lo produjo.
+
+    Args:
+        board_state: Diccionario {"e4": {"label": "w_P", "confidence": 0.91}, ...} ya clasificado.
+        prev_fen: Notación FEN de la posición anterior al movimiento.
+
+    Returns:
+        Diccionario con los resultados (mismas claves que detect_move).
+    """
+    try:
         # Convertimos el estado del tablero a un formato simple
         simple_state = {sq: v["label"] for sq, v in board_state.items()}
 
@@ -146,7 +169,8 @@ def _avg_confidence(board_state: dict) -> float:
     Returns:
         Confianza media del clasificador ML en todas las casillas.
     """
-    confidences = [v["confidence"] for v in board_state.values()]
+    # Confianzas None (casillas vacías de YOLO, sin valor numérico) se excluyen de la media
+    confidences = [v["confidence"] for v in board_state.values() if v.get("confidence") is not None]
     if not confidences:
         return 0.0
 

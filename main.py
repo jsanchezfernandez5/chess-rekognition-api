@@ -63,7 +63,8 @@ app = FastAPI(
         "* **Correción homográfica - De imagen 3D a vista cenital 2D con OpenCV:** [/opencv](/opencv)\n"
         "* **Módulo de Dataset - Captura recortes (crops) de la imagen y Etiquetado de clases para el Entrenamiento del Modelo MobileNetV2:** [/dataset](/dataset)\n"
         "* **Reconocimiento del tablero y las piezas, a través del Modelo MobileNetV2, obteniéndose el código de ajedrez FEN:** [/reconocimiento](/reconocimiento)\n"
-        "* **Módulo de Dataset YOLO26 - Anotación semi-automática de bounding boxes (arrancada desde las predicciones de MobileNetV2) y entrenamiento del detector YOLO26:** [/yolo-dataset](/yolo-dataset)"
+        "* **Módulo de Dataset YOLO26 - Anotación semi-automática de bounding boxes (arrancada desde las predicciones de MobileNetV2) y entrenamiento del detector YOLO26:** [/yolo-dataset](/yolo-dataset)\n"
+        "* **Detección en directo con YOLO26 (bounding boxes de piezas y manos) sobre el tablero rectificado:** [/yolo](/yolo)"
     ),
     version="1.0.0",
     openapi_tags=tags_metadata,
@@ -138,6 +139,12 @@ def yolo_dataset_tool():
     """Sirve la herramienta interactiva de anotación y entrenamiento del dataset YOLO26."""
     return FileResponse("static/yolo_dataset.html")
 
+# Endpoint para probar el detector YOLO26 sobre el tablero rectificado (cajas de piezas y manos en directo).
+@app.get("/yolo", include_in_schema=False)
+def yolo_tool():
+    """Sirve la herramienta de prueba del detector YOLO26 en tiempo real."""
+    return FileResponse("static/yolo.html")
+
 # Endpoint para servir la documentación de Swagger UI.
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui():
@@ -160,6 +167,7 @@ def root():
             "dataset": "/dataset",
             "reconocimiento": "/reconocimiento",
             "yolo_dataset": "/yolo-dataset",
+            "yolo": "/yolo",
             "docs": "/docs"
         }
     }

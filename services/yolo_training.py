@@ -278,7 +278,7 @@ def _run_training_logic():
         epochs=EPOCHS,
         patience=10,
         batch=8,               # Batch pequeño pensado para CPU / memoria limitada en Railway.
-        imgsz=416,             # Múltiplo de 32 cercano al tablero rectificado 400x400.
+        imgsz=settings.YOLO_IMG_SIZE,  # Múltiplo de 32 cercano al tablero rectificado 400x400.
         device="cpu",          # Sin GPU en producción (Railway): fuerza CPU explícitamente.
         verbose=False,
     )

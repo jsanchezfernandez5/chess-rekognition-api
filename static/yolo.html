@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Rekognition | Detección YOLO</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, sans-serif;
+            font-size: 14px;
+            background: #f1f5f9;
+            color: #1e293b;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        /* CABECERA */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        header p {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        /* TARJETAS */
+        .card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card+.card {
+            margin-top: 16px;
+        }
+
+        .card h2 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .hint {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+
+        /* LAYOUT */
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 420px) 1fr;
+            gap: 16px;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* LOGIN */
+        #loginCard {
+            max-width: 340px;
+            margin: 80px auto;
+        }
+
+        #loginCard label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            margin-top: 12px;
+        }
+
+        #loginCard input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        /* BOTONES */
+        button,
+        select,
+        input[type="text"] {
+            padding: 8px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: #fff;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        button.primary {
+            background: #204ead;
+            border-color: #204ead;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        button.primary:disabled,
+        button:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        button.danger {
+            background: #dc2626;
+            border-color: #dc2626;
+            color: #fff;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        /* MENSAJES DE ESTADO */
+        .msg {
+            font-size: 12px;
+            margin-top: 10px;
+            min-height: 16px;
+            color: #475569;
+            white-space: pre-wrap;
+        }
+
+        .msg.err {
+            color: #dc2626;
+        }
+
+        .msg.ok {
+            color: #16a34a;
+        }
+
+        /* VIDEO Y CANVAS */
+        video,
+        #board {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            background: #0f172a;
+            display: block;
+        }
+
+        /* CONTROLES */
+        .controls label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+            margin-bottom: 4px;
+        }
+
+        .controls select,
+        .controls input[type="text"] {
+            width: 100%;
+            cursor: text;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            font-size: 13px;
+        }
+
+        /* RESULTADOS */
+        #moveResult {
+            font-family: ui-monospace, monospace;
+            font-size: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 10px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        #detList {
+            margin-top: 10px;
+            max-height: 260px;
+            overflow: auto;
+        }
+
+        #detList table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        #detList th,
+        #detList td {
+            text-align: left;
+            padding: 4px 6px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        #detList th {
+            color: #64748b;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            background: #fff;
+        }
+
+        /* BANNER DE MANO DETECTADA */
+        #handBanner {
+            display: none;
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #b91c1c;
+            font-size: 13px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Detección YOLO26 sobre el tablero rectificado</h1>
+                <p>Segundo motor de reconocimiento: bounding boxes de piezas y manos (clase hand) en la vista cenital 400x400.</p>
+            </div>
+            <button id="btnLogout">Salir</button>
+        </header>
+
+        <!-- LOGIN: mismo patrón que dataset.html (JWT en localStorage con refresh automático) -->
+        <div id="loginCard" class="card">
+            <h2>Iniciar sesión</h2>
+            <label>Usuario</label>
+            <input id="loginUser" type="text" autocomplete="username">
+            <label>Contraseña</label>
+            <input id="loginPass" type="password" autocomplete="current-password">
+            <div class="btn-row">
+                <button id="btnLogin" class="primary">Entrar</button>
+            </div>
+            <div id="loginMsg" class="msg"></div>
+        </div>
+
+        <!-- UI PRINCIPAL -->
+        <div id="mainUI" style="display:none">
+            <div class="layout">
+                <!-- COLUMNA IZQUIERDA: cámara y vista del detector -->
+                <div>
+                    <div class="card">
+                        <h2>Cámara</h2>
+                        <video id="video" autoplay playsinline muted></video>
+                        <div class="btn-row">
+                            <button id="btnCam">Encender cámara</button>
+                            <select id="deviceSel"></select>
+                        </div>
+                        <div class="hint">La detección de tablero (homografía) se ejecuta sobre el frame de la cámara. El resultado dibujado abajo es lo que ve YOLO.</div>
+                    </div>
+
+                    <div class="card">
+                        <h2>Vista del detector (tablero rectificado 400×400)</h2>
+                        <canvas id="board" width="400" height="400"></canvas>
+                        <div id="handBanner">✋ Mano detectada sobre el tablero</div>
+                    </div>
+                </div>
+
+                <!-- COLUMNA DERECHA: controles y resultados -->
+                <div>
+                    <div class="card controls">
+                        <h2>Control</h2>
+                        <label>Rotación del tablero</label>
+                        <select id="rotationSel">
+                            <option value="0">0° (blancas abajo)</option>
+                            <option value="90">90°</option>
+                            <option value="180">180°</option>
+                            <option value="270">270°</option>
+                        </select>
+
+                        <label>FEN previo (opcional, para detectar el movimiento)</label>
+                        <input id="prevFen" type="text" placeholder="rnbqkbnr/pppppppp/... w KQkq - 0 1">
+                        <div class="hint">Si lo rellenas, cada detección buscará además la jugada legal que explica la transición.</div>
+
+                        <div class="btn-row">
+                            <button id="btnCalibrate" class="primary">Calibrar tablero</button>
+                        </div>
+
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="liveChk">
+                            <label for="liveChk" style="margin:0">Detección continua (≈1,5 fps)</label>
+                        </div>
+
+                        <div id="statusMsg" class="msg"></div>
+                    </div>
+
+                    <div class="card">
+                        <h2>Movimiento detectado</h2>
+                        <div id="moveResult">—</div>
+                    </div>
+
+                    <div class="card">
+                        <h2>Detecciones (cajas asignadas por su centro)</h2>
+                        <div id="detList">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Clase</th>
+                                        <th>Confianza</th>
+                                        <th>Casilla</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detBody">
+                                    <tr>
+                                        <td colspan="3" style="color:#94a3b8">Sin detecciones todavía.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =====================================================================
+        // CONSTANTES
+        // =====================================================================
+        const BOARD_PX = 400;
+
+        // =====================================================================
+        // ESTADO GLOBAL DE LA HERRAMIENTA
+        // =====================================================================
+        let token = localStorage.getItem("token");
+        let refreshToken = localStorage.getItem("refresh_token");
+
+        let stream = null;           // Stream de la cámara
+        let srcBlob = null;          // Último frame capturado (JPEG)
+        let warpedImg = null;        // Imagen rectificada de fondo para el canvas
+        let calibrated = false;      // ¿Hay esquinas guardadas de la calibración?
+        let liveTimer = null;        // Temporizador del modo continuo
+        let busy = false;            // Anti-concurrencia del bucle
+
+        const $ = (id) => document.getElementById(id);
+        const canvas = $('board');
+        const ctx = canvas.getContext('2d');
+        const video = $('video');
+
+        // =====================================================================
+        // AUTENTICACIÓN (idéntico patrón que dataset.html)
+        // =====================================================================
+        async function apiFetch(url, options = {}) {
+            const res = await fetch(url, {
+                ...options,
+                headers: { ...options.headers, "Authorization": `Bearer ${token}` }
+            });
+            if (res.status === 401 && refreshToken) {
+                const refRes = await fetch("/auth/refresh", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ refresh_token: refreshToken })
+                });
+                if (refRes.ok) {
+                    const data = await refRes.json();
+                    token = data.access_token;
+                    localStorage.setItem("token", token);
+                    return fetch(url, {
+                        ...options,
+                        headers: { ...options.headers, "Authorization": `Bearer ${token}` }
+                    });
+                }
+            }
+            return res;
+        }
+
+        $('btnLogin').onclick = doLogin;
+        async function doLogin() {
+            const msg = $('loginMsg');
+            msg.className = "msg"; msg.textContent = "";
+            try {
+                const res = await fetch("/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        username: $("loginUser").value.trim(),
+                        password: $("loginPass").value
+                    })
+                });
+                if (!res.ok) throw new Error((await res.json()).detail || "Credenciales incorrectas");
+                const data = await res.json();
+                token = data.access_token;
+                refreshToken = data.refresh_token;
+                localStorage.setItem("token", token);
+                localStorage.setItem("refresh_token", refreshToken);
+                mostrarUI();
+            } catch (e) {
+                msg.className = "msg err";
+                msg.textContent = "Error: " + e.message;
+            }
+        }
+
+        $('btnLogout').onclick = () => {
+            pararLive();
+            localStorage.removeItem("token");
+            localStorage.removeItem("refresh_token");
+            location.reload();
+        };
+
+        function mostrarUI() {
+            $('loginCard').style.display = "none";
+            $('mainUI').style.display = "";
+            listarDispositivos();
+        }
+
+        if (token) mostrarUI();
+
+        function setMsg(id, texto, esError = false) {
+            const el = $(id);
+            el.className = "msg" + (esError ? " err" : "");
+            el.textContent = texto || "";
+        }
+
+        // =====================================================================
+        // CÁMARA
+        // =====================================================================
+        async function listarDispositivos() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const cams = devices.filter(d => d.kind === 'videoinput');
+                const sel = $('deviceSel');
+                sel.innerHTML = '';
+                cams.forEach((cam, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = cam.deviceId;
+                    opt.textContent = cam.label || ('Cámara ' + (i + 1));
+                    sel.appendChild(opt);
+                });
+            } catch (e) { /* sin permisos aún: lista vacía */ }
+        }
+
+        $('btnCam').onclick = async () => {
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+                $('btnCam').textContent = 'Encender cámara';
+                return;
+            }
+            try {
+                const deviceId = $('deviceSel').value || undefined;
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: deviceId ? { deviceId } : { width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: false
+                });
+                video.srcObject = stream;
+                $('btnCam').textContent = 'Apagar cámara';
+                await listarDispositivos();
+            } catch (e) {
+                setMsg('statusMsg', 'No se pudo acceder a la cámara: ' + e.message, true);
+            }
+        };
+
+        // Captura un frame del vídeo como blob JPEG.
+        function capturarFrame() {
+            if (!stream || video.videoWidth === 0) throw new Error('La cámara no está activa.');
+            const c = document.createElement('canvas');
+            c.width = video.videoWidth;
+            c.height = video.videoHeight;
+            c.getContext('2d').drawImage(video, 0, 0);
+            return new Promise(resolve => c.toBlob(b => resolve(b), 'image/jpeg', 0.85));
+        }
+
+        // =====================================================================
+        // CALIBRACIÓN (homografía) Y BUCLE DE DETECCIÓN
+        // =====================================================================
+        $('btnCalibrate').onclick = calibrar;
+        async function calibrar() {
+            try {
+                setMsg('statusMsg', 'Calibrando tablero...');
+                srcBlob = await capturarFrame();
+
+                // 1) recognize-board: obtiene las esquinas y la imagen rectificada de fondo.
+                const fd = new FormData();
+                fd.append('file', srcBlob, 'frame.jpg');
+                fd.append('rotation', $('rotationSel').value);
+                const res = await apiFetch('/vision/recognize-board', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Tablero no detectado');
+
+                warpedImg = new Image();
+                warpedImg.src = data.rectified_clean;
+                calibrated = true;
+                setMsg('statusMsg', 'Tablero calibrado. Activa la detección continua.', false);
+
+                render(null);   // Redibuja solo el fondo mientras llegan detecciones
+
+                // 2) Primera pasada de YOLO inmediata tras calibrar.
+                await detectarUnaVez();
+            } catch (e) {
+                setMsg('statusMsg', 'Error: ' + e.message, true);
+            }
+        }
+
+        $('liveChk').onchange = (e) => e.target.checked ? arrancarLive() : pararLive();
+
+        function arrancarLive() {
+            if (!calibrated) {
+                setMsg('statusMsg', 'Calibra primero el tablero.', true);
+                $('liveChk').checked = false;
+                return;
+            }
+            liveTimer = setInterval(detectarUnaVez, 650);
+        }
+
+        function pararLive() {
+            if (liveTimer) clearInterval(liveTimer);
+            liveTimer = null;
+        }
+
+        // Una pasada completa: captura → detect-yolo (el endpoint ya hace homografía + YOLO).
+        async function detectarUnaVez() {
+            if (busy || !calibrated) return;
+            busy = true;
+            try {
+                srcBlob = await capturarFrame();
+                const fd = new FormData();
+                fd.append('file', srcBlob, 'frame.jpg');
+                fd.append('rotation', $('rotationSel').value);
+                const prevFen = $('prevFen').value.trim();
+                if (prevFen) fd.append('prev_fen', prevFen);
+
+                const res = await apiFetch('/vision/detect-yolo', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Fallo en la detección');
+
+                render(data);
+
+                // Banner de mano detectada.
+                $('handBanner').style.display = data.hand_detected ? 'block' : 'none';
+
+                // Resultado del movimiento (solo si se envió prev_fen).
+                if (prevFen) {
+                    $('moveResult').textContent = JSON.stringify({
+                        found: data.found,
+                        move: data.move || null,
+                        error: data.error || undefined,
+                        new_fen: data.new_fen || undefined
+                    }, null, 2);
+                }
+
+                pintarTabla(data);
+                setMsg('statusMsg', `${data.detections.length} objetos · ${data.hand_boxes.length} mano(s)` +
+                    (data.box_conflicts.length ? ` · ${data.box_conflicts.length} conflicto(s) de solape` : ''));
+            } catch (e) {
+                setMsg('statusMsg', 'Error: ' + e.message, true);
+            } finally {
+                busy = false;
+            }
+        }
+
+        // =====================================================================
+        // RENDER DEL CANVAS CON LAS CAJAS
+        // =====================================================================
+        function render(data) {
+            ctx.clearRect(0, 0, BOARD_PX, BOARD_PX);
+
+            // Fondo: última imagen rectificada disponible.
+            if (warpedImg && warpedImg.complete) {
+                ctx.drawImage(warpedImg, 0, 0, BOARD_PX, BOARD_PX);
+            } else if (warpedImg) {
+                warpedImg.onload = () => render(data);
+            }
+
+            // Rejilla ligera de referencia.
+            ctx.strokeStyle = 'rgba(255,255,255,.15)';
+            ctx.lineWidth = 1;
+            for (let i = 1; i < 8; i++) {
+                ctx.beginPath(); ctx.moveTo(i * 50, 0); ctx.lineTo(i * 50, BOARD_PX); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i * 50); ctx.lineTo(BOARD_PX, i * 50); ctx.stroke();
+            }
+
+            if (!data || !Array.isArray(data.detections)) return;
+
+            // Colores por familia: blancas → cian, negras → naranja, mano → rojo discontinuo.
+            for (const det of data.detections) {
+                const [x, y, w, h] = det.bbox_px;
+                let color = '#f97316', dash = [];
+                if (det.class_name === 'hand') { color = '#ef4444'; dash = [6, 4]; }
+                else if (det.class_name.startsWith('w_')) { color = '#22d3ee'; }
+
+                ctx.save();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.setLineDash(dash);
+                ctx.strokeRect(x, y, w, h);
+                ctx.setLineDash([]);
+
+                // Etiqueta clase + confianza sobre la caja.
+                const etiqueta = `${det.class_name} ${Math.round(det.confidence * 100)}%`;
+                ctx.font = '11px system-ui';
+                const tw = ctx.measureText(etiqueta).width;
+                const ly = y - 14 < 0 ? y + h + 14 : y - 4;
+                ctx.fillStyle = color;
+                ctx.fillRect(x, ly - 12, tw + 8, 14);
+                ctx.fillStyle = '#0f172a';
+                ctx.fillText(etiqueta, x + 4, ly - 1);
+                ctx.restore();
+            }
+        }
+
+        function pintarTabla(data) {
+            const tbody = $('detBody');
+            tbody.innerHTML = '';
+            if (!data.detections.length) {
+                tbody.innerHTML = '<tr><td colspan="3" style="color:#94a3b8">Sin objetos detectados.</td></tr>';
+                return;
+            }
+            const cols = 'abcdefgh';
+            for (const det of [...data.detections].sort((a, b) => b.confidence - a.confidence)) {
+                const [x, y, w, h] = det.bbox_px;
+                const col = Math.min(Math.max(Math.floor((x + w / 2) / 50), 0), 7);
+                const fila = Math.min(Math.max(Math.floor((y + h / 2) / 50), 0), 7);
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${det.class_name === 'hand' ? '✋ ' : ''}${det.class_name}</td>` +
+                    `<td>${(det.confidence * 100).toFixed(1)}%</td>` +
+                    `<td>${det.class_name === 'hand' ? '—' : cols[col] + (8 - fila)}</td>`;
+                tbody.appendChild(tr);
+            }
+        }
+    </script>
+</body>
+
+</html>

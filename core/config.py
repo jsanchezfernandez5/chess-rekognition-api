@@ -3,6 +3,8 @@ Configuración de la aplicación.
 
 Carga variables de entorno mediante Pydantic Settings y provee una instancia singleton accesible desde cualquier módulo.
 """
+import os
+
 from pydantic_settings import BaseSettings
 
 # Decorador de la librería estándar que cachea el resultado de una función (evita ejecutarla más de una vez)
@@ -58,6 +60,23 @@ class Settings(BaseSettings):
         "hand"
     ]
 
+    # Parámetros de inferencia del detector YOLO26:
+    #   - Confianza mínima para aceptar una detección (valor por defecto razonable de Ultralytics).
+    #   - Umbral IoU del postprocesado de cajas solapadas (Non-Maximum Suppression).
+    #   - Tamaño de imagen de inferencia/entrenamiento en píxeles (múltiplo de 32; el tablero
+    #     rectificado mide 400x400, así que 416 es el múltiplo de 32 inmediatamente superior).
+    YOLO_CONF_THRESHOLD: float = 0.25
+    YOLO_IOU_THRESHOLD: float = 0.45
+    YOLO_IMG_SIZE: int = 416
+
+    # Parámetros de la FUSIÓN (arbitraje casilla a casilla entre MobileNetV2 y YOLO):
+    #   - Confianza mínima que debe tener una predicción de MobileNetV2 para considerarse fiable.
+    #   - Confianza mínima que debe tener una detección de YOLO para poder sobrescribir a MobileNetV2.
+    #   - Confianza mínima para que una detección de mano invalide la lectura de las casillas que ocupa.
+    FUSION_MIN_TF_CONFIDENCE: float = 0.50
+    FUSION_MIN_YOLO_CONFIDENCE: float = 0.50
+    HAND_MIN_CONFIDENCE: float = 0.45
+
     # VARIABLES PARA LA VISIÓN POR COMPUTADORA
     BOARD_SIZE: int = 400       # Tamaño en píxeles del tablero rectificado.
     CELL_SIZE: int = 50         # Tamaño en píxeles de cada casilla (400 / 8 columnas = 50 px).
@@ -77,6 +96,12 @@ class Settings(BaseSettings):
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
             f"?ssl_disabled=true"
         )
+
+    # Propiedad autocalculada con la ruta del modelo YOLO entrenado dentro de MODELS_DIR.
+    @property
+    def YOLO_MODEL_PATH(self) -> str:
+        """Ruta absoluta/relativa del fichero .pt del detector YOLO entrenado."""
+        return os.path.join(self.MODELS_DIR, "yolo_chess.pt")
 
     # Configuración interna de pydantic para decir a BaseSettings donde está el archivo .env y su codificación.
     class Config:
