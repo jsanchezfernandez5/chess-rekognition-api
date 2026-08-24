@@ -13,6 +13,7 @@ Endpoints:
     GET  /yolo-dataset/stats        | Nº de imágenes anotadas, cajas por clase, total y desglose por origen de la caja.
     POST /yolo-dataset/train        | Lanza el entrenamiento de YOLO26 en un hilo secundario.
     GET  /yolo-dataset/train/status | Devuelve el estado actual del entrenamiento (polling).
+    WS   /yolo-dataset/train/ws     | WebSocket de progreso del entrenamiento en tiempo real para consola. El token JWT se pasa como query param: ?token=<access_token>
 """
 import asyncio
 import base64
@@ -21,10 +22,11 @@ import os
 import traceback
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 
 from core.config import settings
 from core.dependencies import get_current_user
+from core.security import decode_token
 from services import yolo_training
 
 # Router para los endpoints del dataset YOLO.
@@ -222,3 +224,34 @@ async def start_yolo_training(user=Depends(get_current_user)):
 def get_yolo_train_status(user=Depends(get_current_user)):
     """Devuelve el estado actual del entrenamiento YOLO."""
     return yolo_training.get_state()
+
+
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - WS /yolo-dataset/train/ws
+# WebSocket de progreso del entrenamiento YOLO26 en tiempo real para la consola de la
+# herramienta /yolo-dataset. Mismo patrón que /dataset/train/ws (MobileNetV2): el token
+# JWT se pasa como query param porque un WebSocket no pasa por Depends()/get_current_user.
+# Conecta aquí la infraestructura add_ws_client/_broadcast de services/yolo_training.py.
+# -------------------------------------------------------------------------------
+@router.websocket("/train/ws")
+async def train_websocket(websocket: WebSocket, token: str = Query(...)):
+    """WebSocket de progreso del entrenamiento YOLO26. Autenticación por query param: ?token=<access_token>."""
+    # Validamos el token JWT de acceso antes de aceptar la conexión WebSocket.
+    try:
+        decode_token(token, expected_type="access")
+    except ValueError:
+        # Token inválido o expirado: cierre 1008 (Policy Violation), igual que en dataset.py.
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+
+    # Registra el cliente para recibir los broadcasts del hilo de entrenamiento.
+    yolo_training.add_ws_client(websocket)
+
+    # Bucle que mantiene la conexión abierta (este canal solo envía).
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        yolo_training.remove_ws_client(websocket)

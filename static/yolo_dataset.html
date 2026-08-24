@@ -418,6 +418,18 @@
                 </div>
 
                 <div class="card">
+                    <h2>Entrenamiento del detector</h2>
+                    <button id="btnTrain" class="btn-primary" style="width:100%;">Entrenar YOLO26 con este dataset</button>
+                    <p id="trainMsg" class="msg"></p>
+                    <!-- Consola de progreso en tiempo real (WebSocket /yolo-dataset/train/ws) -->
+                    <div id="trainLog"
+                        style="display:none;max-height:180px;overflow-y:auto;background:#0f172a;color:#cbd5e1;font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px;line-height:1.6;padding:8px 10px;border-radius:6px;">
+                    </div>
+                    <p class="hint">Genera <code>data/models/yolo_chess.pt</code>. Sobre CPU (Railway) puede tardar
+                        bastante; puedes cerrar la página, el entrenamiento sigue en el servidor.</p>
+                </div>
+
+                <div class="card">
                     <h2>Estadísticas del dataset</h2>
                     <table class="stats-table" id="statsTable"></table>
                     <p class="hint">Desglose por origen: cuántas cajas se aceptaron tal cual de la pre-predicción
@@ -534,6 +546,7 @@
             $('mainUI').style.display = "";
             construirSelectorClases();
             refrescarStats();
+            consultarEstadoEntrenamiento();
         }
 
         // Al cargar la página comprobamos si ya hay sesión activa
@@ -957,6 +970,77 @@
             } catch (e) {
                 setMsg('saveMsg', "Error: " + e.message, true);
             }
+        }
+
+        // =====================================================================
+        // ENTRENAMIENTO DEL DETECTOR YOLO26 (mismo patrón que dataset.html)
+        // Lanza POST /yolo-dataset/train y abre un WebSocket a /yolo-dataset/train/ws
+        // (token JWT como query param) para recibir el progreso época a época.
+        // =====================================================================
+        $('btnTrain').onclick = async () => {
+            if (!confirm("¿Iniciar el entrenamiento de YOLO26? Sobre CPU puede tardar bastante según el tamaño del dataset.")) return;
+            setMsg('trainMsg', "Iniciando...");
+            try {
+                const res = await apiFetch('/yolo-dataset/train', { method: 'POST' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || "No se pudo iniciar");
+                setMsg('trainMsg', "Entrenamiento iniciado. Progreso en la consola:");
+                abrirWSEntrenamiento();
+            } catch (e) {
+                setMsg('trainMsg', "Error: " + e.message, true);
+            }
+        };
+
+        function abrirWSEntrenamiento() {
+            const logEl = $('trainLog');
+            logEl.style.display = "";
+            logEl.innerHTML = "";
+
+            const log = (texto) => {
+                const linea = document.createElement('div');
+                linea.textContent = texto;
+                logEl.appendChild(linea);
+                logEl.scrollTop = logEl.scrollHeight;
+            };
+
+            // URL WebSocket respetando el protocolo actual (ws / wss)
+            const proto = location.protocol === "https:" ? "wss:" : "ws:";
+            const ws = new WebSocket(`${proto}//${location.host}/yolo-dataset/train/ws?token=${encodeURIComponent(token)}`);
+
+            ws.onopen = () => log("· WebSocket de entrenamiento conectado");
+            ws.onmessage = (ev) => {
+                let d;
+                try { d = JSON.parse(ev.data); } catch { return; }
+                if (d.status === "preparing") {
+                    log("· Preparando split train/val determinista y data.yaml...");
+                } else if (d.status === "training") {
+                    log(`· Época ${d.epoch}/${d.total_epochs} — loss: ${d.loss ?? "-"} | mAP50: ${d.map50 ?? "-"}`);
+                } else if (d.status === "done") {
+                    log("· Entrenamiento completado. Modelo guardado en data/models/yolo_chess.pt");
+                    ws.close();
+                } else if (d.status === "error") {
+                    log("· ERROR: " + (d.message || "desconocido"));
+                    ws.close();
+                }
+            };
+            ws.onerror = () => log("· Error en la conexión WebSocket");
+            ws.onclose = () => log("· WebSocket cerrado");
+        }
+
+        // Al iniciar sesión, muestra el estado del último entrenamiento y, si sigue en curso,
+        // reconecta la consola al WebSocket de progreso.
+        async function consultarEstadoEntrenamiento() {
+            try {
+                const res = await apiFetch('/yolo-dataset/train/status');
+                const d = await res.json();
+                if (!d.status || d.status === "idle") return;
+                const logEl = $('trainLog');
+                logEl.style.display = "";
+                logEl.innerHTML = `<div>· Último estado: <strong>${d.status}</strong>` +
+                    (d.total_epochs ? ` (época ${d.epoch}/${d.total_epochs})` : "") +
+                    (d.message ? ` — ${d.message}` : "") + `</div>`;
+                if (d.running) abrirWSEntrenamiento();
+            } catch { /* silencioso: no interrumpe el flujo de anotación */ }
         }
 
         // =====================================================================
