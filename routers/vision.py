@@ -499,6 +499,11 @@ async def classify_fusion_endpoint(
 # participa en el entrenamiento) y compara precisión casilla a casilla, tableros
 # exactos, precisión/recall de piezas y tiempo medio por imagen.
 # SOLO INFORMA: la promoción a motor por defecto sigue siendo una decisión manual.
+#
+# ⚠️ CORRE SÍNCRONO en la petición HTTP con inferencias CPU (TF + YOLO por imagen):
+# con max_images alto puede tardar minutos y el gateway de Railway cortar la conexión
+# por timeout. Se recomienda 50-100 imágenes en producción; si algún día hace falta
+# evaluar cientos, migrar al patrón del entrenamiento (hilo en background + polling).
 # -------------------------------------------------------------------------------
 @router.post(
     "/engine-stats",
@@ -509,12 +514,15 @@ def engine_stats_endpoint(max_images: int = Form(100)):
     Evalúa los tres modos de reconocimiento sobre las imágenes de validación etiquetadas.
 
     Args:
-        max_images: Número máximo de imágenes a evaluar (por defecto 100; corre sobre CPU).
+        max_images: Número máximo de imágenes a evaluar (por defecto 100). Ejecución
+                    síncrona sobre CPU: valores altos pueden exceder el timeout del
+                    gateway en producción; se recomienda mantenerse entre 50 y 100.
 
     Returns:
         Dict con métricas por motor (square_accuracy, fen_exact, piece_precision,
-        piece_recall, avg_ms), el mejor motor según fen_exact y una nota metodológica
-        sobre el sesgo de la anotación semi-automática.
+        piece_recall, avg_ms), el mejor motor según fen_exact, una nota metodológica
+        sobre el sesgo de la anotación semi-automática y nota_rendimiento con la
+        recomendación de uso en producción.
     """
     try:
         # Acotamos el parámetro para que nadie pueda pedir una evaluación eterna en producción.

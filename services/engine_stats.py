@@ -123,12 +123,20 @@ def _resumen(nombre, acumulado, n_imgs, ms_total):
 def evaluar_motores(max_images=100):
     """Ejecuta la evaluación completa de los tres modos sobre la validación.
 
+    ⚠️ RENDIMIENTO EN PRODUCCIÓN: esta evaluación corre DE FORMA SÍNCRONA dentro de la
+    petición HTTP, con inferencias de TensorFlow + YOLO sobre CPU (Railway no tiene GPU).
+    Con max_images alto puede tardar varios MINUTOS y el proxy/gateway puede cortar la
+    conexión por timeout antes de recibir la respuesta. Se recomienda mantener valores
+    moderados (50-100 imágenes) hasta que, si hace falta, se migre a un patrón de
+    ejecución en segundo plano con polling de progreso.
+
     Args:
         max_images: límite de imágenes a evaluar (la validación puede crecer mucho y esto
                     corre sobre CPU en producción).
 
     Returns:
-        Dict con las métricas por motor, el mejor por fen_exact y la nota metodológica.
+        Dict con las métricas por motor, el mejor por fen_exact, la nota metodológica
+        sobre el sesgo semi-automático y una nota de rendimiento para producción.
         Si un motor no está disponible, su entrada explica el motivo en vez de fallar todo.
     """
     from services.classifier import classifier
@@ -228,5 +236,10 @@ def evaluar_motores(max_images=100):
             "proceden de anotación semi-automática arrancada desde TensorFlow, por lo que la "
             "puntuación de TF está sesgada al alza aquí; corrige cajas a mano en /yolo-dataset "
             "para reducir el sesgo. La promoción de motor por defecto es una decisión manual."
+        ),
+        "nota_rendimiento": (
+            "Evaluación SÍNCRONA sobre CPU (inferencia TensorFlow + YOLO por imagen). Con "
+            "max_images alto la petición puede tardar minutos y el gateway de producción "
+            "(Railway) puede cortarla por timeout: usa valores moderados (50-100)."
         ),
     }
