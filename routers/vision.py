@@ -386,3 +386,104 @@ async def detect_yolo_endpoint(
 
     except Exception as e:
         return {"success": False, "error": str(e), "detail": traceback.format_exc()}
+
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - POST /vision/classify-fusion
+# Tercer modo de reconocimiento: ejecuta AMBOS motores sobre el MISMO tablero rectificado
+# y arbitra casilla a casilla según la confianza de cada uno (services/fusion.py).
+# MobileNetV2 sigue siendo el motor por defecto: YOLO solo sobrescribe cuando sus
+# detecciones superan sus umbrales. Las manos detectadas invalidan la lectura de las
+# casillas que cubren y, si llega prev_fen, bloquean la búsqueda de movimiento mientras
+# duren (la posición está tapada: cualquier FEN sería una suposición).
+# -------------------------------------------------------------------------------
+@router.post(
+    "/classify-fusion",
+    summary="Clasifica el tablero con AMBOS motores (MobileNetV2 + YOLO26), arbitra por confianza y opcionalmente detecta el movimiento."
+)
+async def classify_fusion_endpoint(
+    file: UploadFile = File(...),
+    coords: Optional[str] = Form(None),
+    rotation: int = Form(0),
+    prev_fen: Optional[str] = Form(None)
+):
+    """
+    Fusión por arbitraje de confianza entre los dos motores de reconocimiento.
+
+    1. Rectifica el tablero una sola vez (misma homografía para ambos motores).
+    2. Clasifica las 64 casillas con MobileNetV2 y detecta objetos con YOLO26 en paralelo.
+    3. Fusiona ambos board_states casilla a casilla (services/fusion.py): las detecciones de
+       mano tapan su lectura; en desacuerdo gana la lectura más confiada.
+    4. Genera el FEN final y, si se envía prev_fen y no hay mano sobre el tablero, busca el
+       movimiento legal que explica la transición.
+
+    Args:
+        file: Imagen actual del tablero.
+        coords: Coordenadas manuales del tablero en formato 'x1,y1,x2,y2,x3,y3,x4,y4' (porcentajes 0-1).
+        rotation: Rotación del tablero (0, 90, 180, 270 grados).
+        prev_fen: FEN opcional del estado anterior para detectar además el movimiento realizado.
+
+    Returns:
+        Dict con el estado fusionado, el FEN, las manos detectadas, el resumen de decisiones
+        del arbitraje y (si procede) el movimiento detectado.
+    """
+    try:
+        # La fusión necesita los DOS motores operativos; si falta alguno se avisa con claridad
+        # para que el frontend pueda caer al modo TensorFlow a secas.
+        if not classifier.is_ready():
+            return {"success": False, "error": "El modelo TensorFlow no está cargado. Entrena primero en /dataset."}
+        if not yolo_detector.is_ready():
+            return {"success": False, "error": "El modelo YOLO no está disponible. Entrena primero en /yolo-dataset."}
+
+        # Leemos y decodificamos la imagen.
+        contents = await file.read()
+        arr = np.frombuffer(contents, np.uint8)
+        frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if frame is None:
+            return {"success": False, "error": "Imagen no decodificable"}
+
+        # Homografía compartida: UNA rectificación para los dos motores.
+        found, exterior, corners = VisionService.obtener_exterior_y_corners(frame, coords)
+        if not found:
+            return {"success": False, "error": "Tablero no detectado"}
+        warped = _rectificar(frame, exterior)
+
+        # Aplicamos la rotación si corresponde (misma rotación para ambos motores).
+        warped = _rotar_warped(warped, rotation)
+
+        # Los dos motores leen exactamente la misma vista cenital.
+        board_state_tf = classifier.classify_board(warped)
+        detecciones = yolo_detector.detect(warped)
+        board_state_yolo, hand_boxes_todas, conflictos = boxes_a_board_state(detecciones)
+
+        # Arbitraje casilla a casilla.
+        board_state_final, resumen_fusion = fusionar_board_states(board_state_tf, board_state_yolo, hand_boxes_todas)
+
+        simple_final = {sq: v["label"] for sq, v in board_state_final.items()}
+        hand_detected = len(resumen_fusion["manos_validas"]) > 0
+
+        response = {
+            "success": True,
+            "engine": "fusion",
+            "board_state": board_state_final,
+            "fen": board_state_to_fen_board(simple_final).fen(),
+            "hand_detected": hand_detected,
+            "hand_boxes": resumen_fusion["manos_validas"],
+            "hand_squares": resumen_fusion["casillas_con_mano"],
+            "fusion_summary": resumen_fusion["contadores"],
+            "fusion_decisions": resumen_fusion["decisiones"],
+            "box_conflicts": conflictos
+        }
+
+        # Con una mano tapando casillas NO tiene sentido buscar movimiento: la posición está
+        # incompleta y cualquier coincidencia sería casualidad. Se informa como estado incierto.
+        if prev_fen:
+            if hand_detected:
+                response.update({"found": False, "error": "hand_over_board"})
+            else:
+                resultado = _detect_move_desde_estado(board_state_final, prev_fen)
+                response.update({k: v for k, v in resultado.items() if k != "board_state"})
+
+        return response
+
+    except Exception as e:
+        return {"success": False, "error": str(e), "detail": traceback.format_exc()}
