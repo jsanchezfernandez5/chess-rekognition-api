@@ -42,8 +42,8 @@ aiofiles==24.1.0
 
 # Procesamiento de imagen y utilidades científicas. 
 # OpenCV se usa para la corrección de perspectiva y preprocesamiento de las imágenes de los tableros
+# (la variante headless se instala al FINAL del fichero, ver último bloque)
 numpy==2.2.3
-opencv-python-headless>=4.8.0
 
 # Reglas de ajedrez y validación de movimientos
 python-chess==1.999
@@ -62,3 +62,11 @@ tensorflow-cpu>=2.13.0
 # con PyTorch preinstalado. La API arranca igualmente si este paquete falta: el motor YOLO
 # queda simplemente "no listo" (import diferido en services/yolo_detector.py).
 ultralytics>=8.4.120
+
+# ⚠️ Variante headless de OpenCV (sin soporte GUI/X11). Debe quedar como ÚLTIMO paquete
+# relacionado con OpenCV del fichero: ultralytics declara "opencv-python" (variante completa,
+# que necesita libxcb.so.1/X11 y no existe en el contenedor de Railway) y ambos escriben en
+# site-packages/cv2/, así que el último en instalarse gana. No usamos ninguna función GUI
+# (ni cv2.imshow ni .show()), por lo que forzar headless no quita funcionalidad real.
+# Defensa adicional garantista en nixpacks.toml (force-reinstall tras el pip install normal).
+opencv-python-headless>=4.8.0

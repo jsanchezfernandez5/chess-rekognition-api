@@ -1,0 +1,27 @@
+# ═══════════════════════════════════════════════════════════════
+# nixpacks.toml — Chess Rekognition API (Railway)
+#
+# ¿Por qué existe este fichero?
+# ultralytics declara como dependencia "opencv-python" (variante COMPLETA,
+# con soporte GUI/X11 que necesita libxcb.so.1, ausente en Railway), mientras
+# el proyecto usa "opencv-python-headless". Ambos paquetes escriben en el mismo
+# site-packages/cv2/, y en la resolución de requirements.txt la variante GUI
+# acababa sobrescribiendo a la headless → ImportError: libxcb.so.1 al hacer
+# import cv2 en producción.
+#
+# FIX: tras el pip install normal, se fuerza la reinstalación de la variante
+# headless para que sus ficheros sobrescriban cualquier cv2 completo que haya
+# dejado ultralytics. No usamos ninguna función GUI de OpenCV ni de Ultralytics,
+# así que forzar headless es seguro y no quita funcionalidad real.
+#
+# El token "..." conserva los comandos por defecto del provider Python de
+# Nixpacks (venv, pip install -r requirements.txt, ...) y añade el nuestro
+# AL FINAL, sin depender del orden interno del provider:
+# https://nixpacks.com/docs/guides/configuring-builds (Custom build command)
+# ═══════════════════════════════════════════════════════════════
+
+[phases.install]
+cmds = [
+    "...",
+    "pip install --force-reinstall --no-deps 'opencv-python-headless>=4.8.0'"
+]
