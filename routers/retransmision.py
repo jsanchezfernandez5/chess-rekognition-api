@@ -11,7 +11,9 @@ Endpoints:
 Relay de vídeo OPCIONAL: el host puede enviar mensajes JSON {"type": "video_frame", "frame":
 "<jpeg base64>"} por su mismo WebSocket. El servidor actúa SOLO como relé (no decodifica ni
 procesa imagen): reenvía el frame a todos los viewers SIN cachearlo — la caché de estado
-(self.states) sigue reservada al último FEN/PGN para los late-joiners.
+(self.states) sigue reservada al último FEN/PGN para los late-joiners. Cuando el host deja de
+compartir vídeo, envía {"type": "video_stopped"}, que también se reenvía por relé puro: si se
+cachease, pisaría el último FEN/PGN y los late-joiners recibirían un estado obsoleto.
 """
 import asyncio
 import json
@@ -288,6 +290,13 @@ async def websocket_host(websocket: WebSocket, token: str, db: Session = Depends
             if isinstance(data, dict) and data.get("type") == "video_frame":
                 if len(data_text) <= MAX_VIDEO_FRAME_BYTES:
                     await manager.relay_video_frame(token, data)
+                continue
+
+            # Aviso de FIN de vídeo (el host apagó el toggle o paró la cámara): también relé puro,
+            # sin cachear — si se guardase en states pisaría el último FEN/PGN que reciben los
+            # late-joiners, dejándoles con un estado obsoleto hasta la siguiente jugada.
+            if isinstance(data, dict) and data.get("type") == "video_stopped":
+                await manager.relay_video_frame(token, data)
                 continue
 
             await manager.broadcast_to_viewers(token, data)
