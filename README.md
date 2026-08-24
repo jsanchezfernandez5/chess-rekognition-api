@@ -8,11 +8,14 @@ Esta API construida con **FastAPI** se encarga de:
 - Reconocimiento y corrección de la homografía del tablero de ajedrez.
 - Recorte y clasificación de las casillas del tablero de ajedrez corregido en vista cenital.
 - Entrenamiento de modelo CNN (MobileNetV2 de TensorFlow).
+- **Segundo motor de reconocimiento con detección de objetos (YOLO26 de Ultralytics)**: piezas y manos sobre el tablero rectificado.
+- **Fusión por arbitraje de confianza** entre ambos motores, casilla a casilla.
+- Evaluación comparativa de motores sobre validación (criterio medible de promoción).
 - Reconocimiento de las piezas.
 - Lógica de juego mediante Stockfish.
 - Gestión de usuarios.
 - Guardado de partidas en PGN.
-- Retransmisión en tiempo real mediante WebSockets.
+- Retransmisión en tiempo real mediante WebSockets (estado FEN/PGN y relay opcional de vídeo en directo).
 
 **¿Qué es FastAPI?** FastAPI es un framework web Python de alto rendimiento para construir APIs REST, con soporte nativo para operaciones asíncronas (`async/await`) y generación automática de documentación interactiva en formato OpenAPI/Swagger.
 
@@ -28,9 +31,11 @@ La documentación automática está disponible en:
 
 ## Colabora con el DATASET del Modelo
 
-Colabora para hacer un mejor DATASET clasificando tus fotos de tableros con piezas de tipo Stauton
+Colabora para hacer un mejor DATASET clasificando tus fotos de tableros con piezas de tipo Staunton:
 
 - [Captura y clasificación de crops, y entrenamiento del modelo CNN (MobileNetV2)](https://chess-rekognition-api-production.up.railway.app/dataset)
+- [Anotación semi-automática de bounding boxes y entrenamiento del detector YOLO26](https://chess-rekognition-api-production.up.railway.app/yolo-dataset) — las cajas se pre-rellenan desde las predicciones de MobileNetV2 y solo hay que corregirlas; incluye la clase `hand` (manos sobre el tablero) para la fusión de motores.
+- [Prueba del detector YOLO26 en directo](https://chess-rekognition-api-production.up.railway.app/yolo)
 
 ## Estructura de archivos
 
@@ -52,23 +57,30 @@ api/
 │   ├── usuarios.py         # Registro de usuarios
 │   ├── partidas.py         # CRUD de partidas PGN
 │   ├── engine.py           # Motor StockFish v17.1
-│   ├── vision.py           # Endpoints de diagnóstico OpenCV, clasificación y detección de jugadas
-│   ├── retransmision.py    # Gestión de salas activas y WebSockets de emisores y espectadores
-│   └── dataset.py          # Captura de crops de casillas, estadísticas y disparadores de entrenamiento
+│   ├── vision.py           # Endpoints de diagnóstico OpenCV, clasificación TF, detección YOLO26, fusión, evaluación y detección de jugadas
+│   ├── retransmision.py    # Gestión de salas activas y WebSockets de emisores y espectadores (estado + relay de vídeo)
+│   ├── dataset.py          # Captura de crops de casillas, estadísticas y disparadores de entrenamiento (MobileNetV2)
+│   └── yolo_dataset.py     # Dataset YOLO: guardado de imágenes + etiquetas .txt, estadísticas y entrenamiento del detector
 │
 ├── services/               # Capa SERVICES
 │   ├── vision.py           # Servicio para la rectificación de la homografía con OpenCV para la detección y rectificación del tablero de ajedrez.
 │   ├── classifier.py       # Servicio de clasificación de piezas de ajedrez mediante un modelo TensorFlow (MobileNetV2).
+│   ├── yolo_detector.py    # Servicio de detección de piezas/manos con YOLO26 sobre el tablero rectificado + mapeo bbox → casilla.
+│   ├── fusion.py           # Servicio de fusión por arbitraje de confianza casilla a casilla entre MobileNetV2 y YOLO26.
+│   ├── engine_stats.py     # Evaluación comparativa de los motores (TF vs YOLO vs fusión) sobre el dataset de validación.
 │   ├── move_detector.py    # Servicio de detección de movimientos de ajedrez mediante comparación visual.
 │   ├── engine.py           # Servicio de integración con el motor de ajedrez Stockfish v17.1.
 │   ├── training.py         # Servicio de entrenamiento del modelo MobileNetV2.
+│   ├── yolo_training.py    # Servicio de entrenamiento del detector YOLO26 (split train/val determinista por hash).
 │   └── email.py            # Servicio de envío de emails transaccionales mediante la API de Resend (https://resend.com).
 │
 └── static/
     ├── favicon.ico         # Icono de la API
     ├── dataset.html        # Pagina HTML de captura de crops, clasificación y entrenamiento del modelo CNN (MobileNetV2 de TensorFlow)
     ├── opencv.html         # Pagina HTML de pruebas OpenCV (Rectificación, homografía del tablero y valores de Desviación Estándar STD)
-    └── reconocimiento.html # Pagina HTML de reconocimiento del tablero y las piezas de ajedrez
+    ├── reconocimiento.html # Pagina HTML de reconocimiento del tablero y las piezas de ajedrez
+    ├── yolo_dataset.html   # Pagina HTML de anotación semi-automática del dataset YOLO (bounding boxes) y entrenamiento del detector
+    └── yolo.html           # Pagina HTML de prueba del detector YOLO26 en directo (cajas de piezas y manos)
 ```
 
 ---
@@ -98,9 +110,11 @@ Esta capa es dirigida por el archivo main.py e incluye:
 | `/opencv` | **GET** | Pagina HTML de pruebas OpenCV | Sirve static/opencv.html |
 | `/dataset` | **GET** | Pagina HTML de captura de crops, clasificación y entrenamiento del modelo CNN (MobileNetV2 de TensorFlow) | Sirve static/dataset.html |
 | `/reconocimiento` | **GET** | Pagina HTML de reconocimiento del tablero y las piezas de ajedrez | Sirve static/reconocimiento.html |
+| `/yolo-dataset` | **GET** | Pagina HTML de anotación semi-automática del dataset YOLO y entrenamiento del detector YOLO26 | Sirve static/yolo_dataset.html |
+| `/yolo` | **GET** | Pagina HTML de prueba del detector YOLO26 en directo | Sirve static/yolo.html |
 | `/docs` | **GET** | Swagger UI personalizado | Usa get_swagger_ui_html() |
 | `CORSMiddleware` | — | Permite peticiones cross-origin desde cualquier origen | `allow_origins=['*']`, methods: GET/POST/PUT/DELETE/OPTIONS/PATCH, credentials=True |
-| `include_router(x7)` | — | auth, usuarios, partidas, engine, vision, dataset, retransmision | app.include_router() para cada modulo del directorio routers/ |
+| `include_router(x8)` | — | auth, usuarios, partidas, engine, vision, dataset, yolo_dataset, retransmision | app.include_router() para cada modulo del directorio routers/ |
 
 #### Capa Routers
 
@@ -144,10 +158,13 @@ Los diferentes routers con los que cuenta la API y sus correspondientes endpoint
 | Endpoint / Componente | Método | Detalle |
 | :--- | :---: | :--- |
 | `/vision/status` | **GET** | Devuelve el estado operativo del módulo y la versión de OpenCV. |
-| `/vision/recognize-board`| **POST** | Detecta y rectifica el tablero aplicando la homografía. Devuelve vista cenital 400x400. |
+| `/vision/recognize-board`| **POST** | Detecta y rectifica el tablero aplicando la homografía. Devuelve vista cenital 400x400 (incluye `rectified_clean` sin overlays). |
 | `/vision/classify` | **POST** | Clasifica las 64 casillas del tablero con MobileNetV2 y genera el FEN completo. |
 | `/vision/classify/reload` | **POST** | Recarga el modelo ML desde disco sin reiniciar el servidor. |
-| `/vision/detect-move` | **POST** | Compara el estado actual del tablero con un FEN previo y detecta el movimiento realizado. |
+| `/vision/detect-move` | **POST** | Compara el estado actual del tablero con un FEN previo y detecta el movimiento realizado (motor TensorFlow). |
+| `/vision/detect-yolo` | **POST** | Detecta piezas y manos con YOLO26 sobre el tablero rectificado y, opcionalmente, el movimiento realizado. |
+| `/vision/classify-fusion` | **POST** | Ejecuta AMBOS motores y arbitra casilla a casilla según confianza. Con mano sobre el tablero no busca jugada (`hand_over_board`). |
+| `/vision/engine-stats` | **POST** | Evalúa TF vs YOLO vs fusión sobre la partición de validación (precisión por casilla, FEN exactos, precisión/recall de piezas y tiempo medio). Criterio medible de promoción de motor. |
 
 ##### retransmision.py
 
@@ -156,8 +173,8 @@ Los diferentes routers con los que cuenta la API y sus correspondientes endpoint
 | `/retransmision/host` | **POST** | Crea una nueva retransmisión con token único y la marca como activa. |
 | `/retransmision/status/{token}`| **GET** | Devuelve si la retransmisión está activa y cuántos viewers hay conectados. |
 | `/retransmision/{id_retransmision}`| **PATCH**| Actualiza los metadatos de una retransmisión del usuario autenticado. |
-| `/retransmision/ws/host/{token}`| **WS** | WebSocket del emisor (host): recibe el estado del tablero y hace broadcast a los viewers. |
-| `/retransmision/ws/viewer/{token}`| **WS** | WebSocket del espectador (viewer): recibe actualizaciones en tiempo real del tablero. |
+| `/retransmision/ws/host/{token}`| **WS** | WebSocket del emisor (host): recibe el estado del tablero y hace broadcast a los viewers. También acepta mensajes `{"type": "video_frame", ...}` que se reenvían SIN cachear (relay de vídeo opcional, máx. 200 KB/frame). |
+| `/retransmision/ws/viewer/{token}`| **WS** | WebSocket del espectador (viewer): recibe actualizaciones en tiempo real del tablero y, si el host lo comparte, los frames de vídeo en directo. Los late-joiners reciben el último estado FEN/PGN cacheado. |
 
 ##### dataset.py
 
@@ -169,6 +186,17 @@ Los diferentes routers con los que cuenta la API y sus correspondientes endpoint
 | `/dataset/train` | **POST** | Lanza el entrenamiento de MobileNetV2 en un hilo secundario que generar el archivo del modelo. |
 | `/dataset/train/status` | **GET** | Devuelve el estado actual del entrenamiento (polling). |
 | `/dataset/train/ws` | **WS** | WebSocket de progreso del entrenamiento en tiempo real para consola. El token JWT se pasa como query param: ?token=<access_token> |
+
+##### yolo_dataset.py
+
+Dataset del detector YOLO26: imágenes del tablero rectificado 400x400 con etiquetas en formato YOLO normalizado 0-1. Las clases son `w_P, w_N, w_B, w_R, w_Q, w_K, b_P, b_N, b_B, b_R, b_Q, b_K` + `hand` (detección de objetos: sin clase "empty", una zona sin pieza simplemente no tiene caja).
+
+| Endpoint / Componente | Método | Detalle |
+| :--- | :---: | :--- |
+| `/yolo-dataset/save` | **POST** | Guarda una imagen rectificada y su fichero .txt de bounding boxes (autenticado). |
+| `/yolo-dataset/stats` | **GET** | Número de imágenes y cajas por clase, con desglose pre-rellenas/corregidas/manuales (autenticado). |
+| `/yolo-dataset/train` | **POST** | Lanza el entrenamiento de YOLO26 en hilo daemon; split train/val determinista por hash (la validación nunca entrena). |
+| `/yolo-dataset/train/status` | **GET** | Estado actual del entrenamiento YOLO (polling). |
 
 #### Capa Services
 
@@ -197,6 +225,9 @@ La capa core representa el núcleo de la infraestructura del sistema, gestionand
 | `RESEND_FROM` | Email remitente | `onboarding@resend.dev` |
 | `DATASET_DIR` | Directorio del dataset | `./data/dataset` |
 | `MODELS_DIR` | Directorio de modelos | `./data/models` |
+| `YOLO_DATASET_DIR` | Directorio del dataset YOLO (imágenes + etiquetas .txt) | `./data/yolo_dataset` |
+
+Constantes relevantes del segundo motor (en `core/config.py`): `YOLO_CONF_THRESHOLD`, `YOLO_IOU_THRESHOLD`, `YOLO_IMG_SIZE`, umbrales de fusión `FUSION_MIN_TF_CONFIDENCE`, `FUSION_MIN_YOLO_CONFIDENCE`, `HAND_MIN_CONFIDENCE` y `YOLO_CLASSES`.
 
 ---
 
@@ -236,3 +267,5 @@ web: uvicorn main:app --host 0.0.0.0 --port $PORT
 ```
 
 Las variables de entorno se configuran desde el panel de Railway. El binario de Stockfish (Linux, ~79 MB) se incluye en el repositorio para su uso en producción.
+
+> **Nota sobre `ultralytics` (YOLO26):** el paquete arrastra PyTorch (~2 GB instalado). Aumenta el build y los arranques en frío del despliegue. La API está preparada para arrancar aunque falte: el motor YOLO queda "no listo" y los endpoints lo indican con un mensaje claro, sin romper el resto del sistema.
