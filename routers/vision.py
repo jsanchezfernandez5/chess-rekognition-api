@@ -8,6 +8,8 @@ Endpoints:
     POST /vision/classify/reload | Recarga el modelo ML desde disco sin reiniciar el servidor.
     POST /vision/detect-move     | Compara el estado actual del tablero con un FEN previo y detecta el movimiento realizado.
     POST /vision/detect-yolo     | Detecta piezas y manos con YOLO26 sobre el tablero rectificado y, opcionalmente, el movimiento realizado.
+    POST /vision/classify-fusion | Ejecuta AMBOS motores (MobileNetV2 + YOLO26) y arbitra casilla a casilla según confianza.
+    POST /vision/engine-stats    | Evalúa TF vs YOLO vs fusión sobre la validación: criterio medible de promoción de motor.
 """
 from typing import Optional
 import cv2
@@ -21,6 +23,8 @@ from services.classifier import classifier
 from services.move_detector import detect_move as _detect_move
 from services.move_detector import detect_move_desde_estado as _detect_move_desde_estado
 from services.yolo_detector import yolo_detector, boxes_a_board_state
+from services.fusion import fusionar_board_states
+from services.engine_stats import evaluar_motores
 
 # Creación del router.
 router = APIRouter(prefix="/vision", tags=["Visión"], responses={404: {"description": "No encontrado"}})
@@ -485,5 +489,36 @@ async def classify_fusion_endpoint(
 
         return response
 
+    except Exception as e:
+        return {"success": False, "error": str(e), "detail": traceback.format_exc()}
+
+# -------------------------------------------------------------------------------
+# [ENDPOINT] - POST /vision/engine-stats
+# Criterio MEDIBLE de promoción de motor (nada de preferencias): evalúa TensorFlow,
+# YOLO y su fusión sobre la partición de VALIDACIÓN del dataset YOLO (que nunca
+# participa en el entrenamiento) y compara precisión casilla a casilla, tableros
+# exactos, precisión/recall de piezas y tiempo medio por imagen.
+# SOLO INFORMA: la promoción a motor por defecto sigue siendo una decisión manual.
+# -------------------------------------------------------------------------------
+@router.post(
+    "/engine-stats",
+    summary="Compara MobileNetV2 vs YOLO26 vs fusión sobre el dataset de validación (criterio de promoción)."
+)
+def engine_stats_endpoint(max_images: int = Form(100)):
+    """
+    Evalúa los tres modos de reconocimiento sobre las imágenes de validación etiquetadas.
+
+    Args:
+        max_images: Número máximo de imágenes a evaluar (por defecto 100; corre sobre CPU).
+
+    Returns:
+        Dict con métricas por motor (square_accuracy, fen_exact, piece_precision,
+        piece_recall, avg_ms), el mejor motor según fen_exact y una nota metodológica
+        sobre el sesgo de la anotación semi-automática.
+    """
+    try:
+        # Acotamos el parámetro para que nadie pueda pedir una evaluación eterna en producción.
+        max_images = max(1, min(int(max_images), 500))
+        return evaluar_motores(max_images)
     except Exception as e:
         return {"success": False, "error": str(e), "detail": traceback.format_exc()}
