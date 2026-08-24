@@ -1,0 +1,17 @@
+# Nunca hornear secretos ni historial git dentro de la imagen
+.git
+.gitignore
+.env
+
+# Basura local
+__pycache__
+*.pyc
+*.pyo
+
+# Config de builds anteriores / no usados en runtime
+nixpacks.toml
+Procfile
+
+# Documentación y SQL sin uso en runtime
+docs/
+sql/
