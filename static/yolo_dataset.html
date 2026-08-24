@@ -252,6 +252,13 @@
             color: #64748b;
         }
 
+        /* Desplegable de clase dentro de cada fila (más compacto que el select global) */
+        .box-row select {
+            padding: 1px 3px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
         /* SELECTOR DE CLASES */
         .piece-grid {
             display: grid;
@@ -392,6 +399,8 @@
                         Arrastra dentro de una caja para moverla; usa los tiradores de las esquinas para redimensionarla
                         (el superior-izquierdo permite extenderla hacia la fila anterior, donde la pieza sobresale por
                         la perspectiva).
+                        Elige la clase de las cajas nuevas en el panel derecho ("Clase para cajas nuevas") y cambia la
+                        clase de una caja ya dibujada con su desplegable en la lista lateral.
                         Toda caja pre-rellena que se mueva/redimensione/recalifique pasa a contarse como "corregida".
                         Tecla Supr para borrar la seleccionada.
                     </p>
@@ -486,10 +495,11 @@
         // AUTENTICACIÓN (idéntico patrón que dataset.html)
         // =====================================================================
         async function apiFetch(url, options = {}) {
-            const res = await fetch(url, {
+            let res = await fetch(url, {
                 ...options,
                 headers: { ...options.headers, "Authorization": `Bearer ${token}` }
             });
+            // 401 con refresh disponible: intenta renovar el access token y reintenta una vez.
             if (res.status === 401 && refreshToken) {
                 const refRes = await fetch("/auth/refresh", {
                     method: "POST",
@@ -500,13 +510,37 @@
                     const data = await refRes.json();
                     token = data.access_token;
                     localStorage.setItem("token", token);
-                    return fetch(url, {
+                    res = await fetch(url, {
                         ...options,
                         headers: { ...options.headers, "Authorization": `Bearer ${token}` }
                     });
+                } else {
+                    // Refresh también inválido/caducado: sesión agotada, volver al login con motivo claro.
+                    cerrarSesion();
+                    throw new Error("Sesión expirada: vuelve a iniciar sesión");
                 }
+            } else if (res.status === 401) {
+                // Sin refresh_token guardado: nada que renovar.
+                cerrarSesion();
+                throw new Error("Sesión expirada: vuelve a iniciar sesión");
             }
             return res;
+        }
+
+        function cerrarSesion() {
+            localStorage.removeItem("token");
+            localStorage.removeItem("refresh_token");
+            $("mainUI").style.display = "none";
+            $("loginCard").style.display = "";
+        }
+
+        // Extrae el motivo real de un error HTTP de FastAPI ({detail: "texto"} o {detail: [{msg}, ...]}).
+        // Evita el genérico "Error del servidor" cuando la respuesta no trae success/error propios del router.
+        function detalleError(data, status) {
+            const d = data && data.detail;
+            if (typeof d === "string" && d) return d;
+            if (Array.isArray(d) && d.length) return d.map(x => x.msg || JSON.stringify(x)).join("; ");
+            return "HTTP " + status;
         }
 
         $('btnLogin').onclick = doLogin;
@@ -873,7 +907,7 @@
         }
 
         $('btnAddPiece').onclick = () => {
-            newClassId = YOLO_CLASSES.indexOf('w_P');   // Clase por defecto editable en el panel derecho
+            // Respeta la clase elegida en el panel derecho ("Clase para cajas nuevas"); w_P solo es el valor inicial
             addMode = !addMode;
             construirSelectorClases();
             canvas.classList.toggle('adding', addMode);
@@ -900,29 +934,39 @@
             for (const b of boxes) {
                 const fila = document.createElement('div');
                 fila.className = 'box-row' + (b.id === selectedId ? ' active' : '');
-                const dotColor = colorDe(YOLO_CLASSES[b.class_id]);
+
+                // Punto de color por familia + desplegable de clase (visible siempre, sin dobles clics)
+                const dot = document.createElement('span');
+                dot.className = 'box-dot';
+                dot.style.background = colorDe(YOLO_CLASSES[b.class_id]);
+
+                const selClase = document.createElement('select');
+                YOLO_CLASSES.forEach((cls, idx) => {
+                    const opt = document.createElement('option');
+                    opt.value = String(idx);
+                    opt.textContent = cls === 'hand' ? '✋ hand' : cls.replace('_', ' ');
+                    selClase.appendChild(opt);
+                });
+                selClase.value = String(b.class_id);
+                // El clic en el desplegable no debe seleccionar/deseleccionar la caja
+                selClase.onclick = (ev) => ev.stopPropagation();
+                selClase.onchange = () => {
+                    b.class_id = parseInt(selClase.value, 10);
+                    marcarCorregida(b);
+                    render(); actualizarListaCajas();
+                };
+
                 const origenTxt = b.origin === 'prefilled' ? 'prefill' : (b.origin === 'corrected' ? 'corregida' : 'manual');
-                fila.innerHTML = `<span class="box-dot" style="background:${dotColor}"></span>
-                    <span>${YOLO_CLASSES[b.class_id]}</span>
-                    <span class="box-origin">${origenTxt}</span>`;
+                const origen = document.createElement('span');
+                origen.className = 'box-origin';
+                origen.textContent = origenTxt;
+
+                fila.append(dot, selClase, origen);
                 fila.onclick = () => { selectedId = b.id; $('btnDeleteSel').disabled = false; render(); actualizarListaCajas(); };
                 lista.appendChild(fila);
             }
             if (selectedId != null) $('btnDeleteSel').disabled = false;
         }
-
-        // Cambiar la clase de la caja seleccionada con doble clic en su fila (menú rápido)
-        $('boxList').addEventListener('dblclick', () => {
-            const b = boxes.find(x => x.id === selectedId);
-            if (!b) return;
-            const nuevo = prompt("Clase (una de: " + YOLO_CLASSES.join(", ") + "):", YOLO_CLASSES[b.class_id]);
-            if (!nuevo) return;
-            const idx = YOLO_CLASSES.indexOf(nuevo.trim());
-            if (idx < 0) { alert("Clase no válida."); return; }
-            b.class_id = idx;
-            marcarCorregida(b);
-            render(); actualizarListaCajas();
-        });
 
         // =====================================================================
         // GUARDAR ANOTACIÓN
@@ -960,7 +1004,7 @@
                     })
                 });
                 const data = await res.json();
-                if (!data.success) throw new Error(data.error || "Error del servidor");
+                if (!res.ok || !data.success) throw new Error(data.error || detalleError(data, res.status));
                 setMsg('saveMsg', `Guardado ✓ (${data.boxes} cajas). Puedes capturar la siguiente imagen.`);
                 boxes = []; selectedId = null; boardReady = false; warpedDataURI = null; render._img = null; render._imgEl = null;
                 ctx.clearRect(0, 0, BOARD_PX, BOARD_PX);
@@ -978,12 +1022,25 @@
         // (token JWT como query param) para recibir el progreso época a época.
         // =====================================================================
         $('btnTrain').onclick = async () => {
+            // Pre-chequeo en cliente: el split train/val necesita >= 2 imágenes anotadas
+            // (si falta, el backend falla en el hilo de fondo y aquí no se vería el motivo).
+            try {
+                const stRes = await apiFetch('/yolo-dataset/stats');
+                const st = await stRes.json();
+                const totalImgs = st.total_images || 0;
+                if (!stRes.ok || totalImgs < 2) {
+                    throw new Error("Dataset insuficiente (" + totalImgs + " imágenes): guarda al menos 2 anotaciones antes de entrenar.");
+                }
+            } catch (e) {
+                setMsg('trainMsg', "Error: " + e.message, true);
+                return;
+            }
             if (!confirm("¿Iniciar el entrenamiento de YOLO26? Sobre CPU puede tardar bastante según el tamaño del dataset.")) return;
             setMsg('trainMsg', "Iniciando...");
             try {
                 const res = await apiFetch('/yolo-dataset/train', { method: 'POST' });
                 const data = await res.json();
-                if (!data.success) throw new Error(data.error || "No se pudo iniciar");
+                if (!res.ok || !data.success) throw new Error(data.error || detalleError(data, res.status));
                 setMsg('trainMsg', "Entrenamiento iniciado. Progreso en la consola:");
                 abrirWSEntrenamiento();
             } catch (e) {
