@@ -176,7 +176,7 @@ def evaluar_motores(max_images=100):
         if yolo_listo:
             t0 = time.perf_counter()
             detecciones = yolo_detector.detect(warped)
-            board_yolo, _, _ = boxes_a_board_state(detecciones)
+            board_yolo, hand_boxes_yolo, _ = boxes_a_board_state(detecciones)
             tiempos["yolo"] += (time.perf_counter() - t0) * 1000
             m = _metricas(board_yolo, gt)
             for k in ("aciertos", "total", "tp", "fp", "fn"):
@@ -187,7 +187,12 @@ def evaluar_motores(max_images=100):
         # --- Fusión (solo tiene sentido con ambos motores operativos) ---
         if tf_listo and yolo_listo:
             t0 = time.perf_counter()
-            board_fusion, _ = fusionar_board_states(board_tf, board_yolo, [])
+            # PARIDAD CON PRODUCCIÓN: se pasan las manos REALES detectadas por YOLO en esta
+            # imagen, igual que hace /vision/classify-fusion en runtime. Pasar una lista vacía
+            # haría que la fusión evaluada ignorara la mano (casillas arbitráas como libres/
+            # ocupadas) cuando en producción esas mismas casillas quedarían marcadas como
+            # inciertas ({hand: true}) — las métricas dejarían de representar el comportamiento real.
+            board_fusion, _ = fusionar_board_states(board_tf, board_yolo, hand_boxes_yolo)
             tiempos["fusion"] += (time.perf_counter() - t0) * 1000
             m = _metricas(board_fusion, gt)
             for k in ("aciertos", "total", "tp", "fp", "fn"):
