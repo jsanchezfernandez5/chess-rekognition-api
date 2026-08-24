@@ -179,13 +179,18 @@ def _calcular_esquinas_exteriores(corners: np.ndarray) -> np.ndarray:
     Returns:
         Array numpy con las cuatro esquinas exteriores en orden: tl, tr, br, bl.
     """
+    # Normalizamos el formato de entrada: findChessboardCorners/findChessboardCornersSB
+    # devuelven las esquinas como (N,1,2) en OpenCV 4.x pero como (N,2) en OpenCV 5.x.
+    # Con reshape(-1,2) trabajamos siempre con N filas de puntos (x,y) float32.
+    pts = np.asarray(corners, dtype=np.float32).reshape(-1, 2)
+
     # Si ya se calcularon las 4 esquinas exteriores directamente, las devolvemos sin alterar
-    if len(corners) == 4:
-        return corners
+    if len(pts) == 4:
+        return pts
 
     # Extraemos las 4 esquinas internas de las 49 detectadas (7x7)
-    tl = corners[0][0];   tr = corners[6][0]
-    bl = corners[42][0];  br = corners[48][0]
+    tl = pts[0];   tr = pts[6]
+    bl = pts[42];  br = pts[48]
 
     # Vector unitario por lado: 7 esquinas = 6 intervalos
     step_h_top    = (tr - tl) / 6.0
@@ -470,15 +475,14 @@ def _generar_debug(frame: np.ndarray, corners: np.ndarray,
     pts = exterior.reshape((-1, 1, 2)).astype(np.int32)
     cv2.polylines(debug, [pts], True, (0, 220, 80), 3)
 
-    # 49 esquinas internas en rojo (si están disponibles)
+    # 49 esquinas internas en rojo (si están disponibles). El reshape(-1,2) unifica el
+    # formato (N,1,2) de OpenCV 4.x y (N,2) de OpenCV 5.x.
     if corners is not None and len(corners) == 49:
-        for pt in corners:
-            cx, cy = int(pt[0][0]), int(pt[0][1])
-            cv2.circle(debug, (cx, cy), 4, (0, 0, 220), -1)
+        for x, y in np.asarray(corners).reshape(-1, 2):
+            cv2.circle(debug, (int(x), int(y)), 4, (0, 0, 220), -1)
     elif corners is not None and len(corners) == 4:
-        for pt in corners:
-            cx, cy = int(pt[0]), int(pt[1])
-            cv2.circle(debug, (cx, cy), 6, (0, 0, 220), -1)
+        for x, y in np.asarray(corners).reshape(-1, 2):
+            cv2.circle(debug, (int(x), int(y)), 6, (0, 0, 220), -1)
 
     return debug
 
