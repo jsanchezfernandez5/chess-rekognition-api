@@ -3,25 +3,72 @@
 #
 # ¿Por qué existe este fichero?
 # ultralytics declara como dependencia "opencv-python" (variante COMPLETA,
-# con soporte GUI/X11 que necesita libxcb.so.1, ausente en Railway), mientras
-# el proyecto usa "opencv-python-headless". Ambos paquetes escriben en el mismo
+# con soporte GUI/X11 que necesita libxcb.so.1 y demás librerías de sistema,
+# ausentes en el contenedor de Railway), mientras el proyecto usa
+# "opencv-python-headless". Ambos paquetes escriben en el mismo
 # site-packages/cv2/, y en la resolución de requirements.txt la variante GUI
 # acababa sobrescribiendo a la headless → ImportError: libxcb.so.1 al hacer
 # import cv2 en producción.
 #
-# FIX: tras el pip install normal, se fuerza la reinstalación de la variante
-# headless para que sus ficheros sobrescriban cualquier cv2 completo que haya
-# dejado ultralytics. No usamos ninguna función GUI de OpenCV ni de Ultralytics,
-# así que forzar headless es seguro y no quita funcionalidad real.
+# INTENTO 1 (commit 0551da4) — estrategia "forzar qué OpenCV gana":
+# reordenar requirements.txt (headless al final) + force-reinstall de la
+# variante headless tras el pip install normal ([phases.install]).
+# NO resolvió el crash en producción real: el ImportError de libxcb.so.1
+# siguió apareciendo tras el redeploy, por lo que se deduce que el paso de
+# force-reinstall no se está aplicando como esperábamos en el build real
+# de Railway (no tenemos build logs para confirmar el mecanismo exacto).
 #
-# El token "..." conserva los comandos por defecto del provider Python de
-# Nixpacks (venv, pip install -r requirements.txt, ...) y añade el nuestro
-# AL FINAL, sin depender del orden interno del provider:
-# https://nixpacks.com/docs/guides/configuring-builds (Custom build command)
+# INTENTO 2 (este cambio) — CAMBIO DE ESTRATEGIA: dejar de pelear por cuál
+# variante gana y darle directamente al contenedor las librerías de sistema
+# (X11/GL) que la variante completa necesita. Así import cv2 funciona SEA
+# CUAL sea la variante de cv2 que acabe instalada:
+#   - [phases.setup]: librerías vía nixPkgs. Nombres VERIFICADOS contra
+#     nixpkgs (son case-sensitive): "xorg.libxcb" es el atributo namespaced
+#     correcto para libxcb (las librerías X11 viven bajo "xorg.*"; confirmado
+#     en la wiki oficial de NixOS); el resto coincide literalmente con el
+#     caso resuelto y confirmado en Railway Station para este mismo problema
+#     exacto (FastAPI + OpenCV + ultralytics en Railway).
+#   - [phases.build]: symlinks de las .so reales de /nix/store hacia /usr/lib,
+#     porque las rutas de Nix llevan hash y el linker dinámico no las busca
+#     ahí por defecto. El error solo muestra la PRIMERA .so que falta; estos
+#     cuatro symlinks cubren las que suelen pedirle a cv2 (libGL, glib,
+#     gthread y el propio libxcb). Si al desplegar apareciera OTRA .so
+#     distinta, añadir una línea más con el mismo patrón find+ln.
+#
+# El force-reinstall del intento 1 SE CONSERVA en [phases.install] a
+# propósito: es una defensa independiente que no estorba (si llegara a
+# funcionar, cv2 queda headless y ni necesita estas librerías; si no,
+# ahora las tiene disponibles). Defensas independientes, no se pisan.
+#
+# NOTAS:
+# - El token "..." en [phases.install] conserva los comandos por defecto del
+#   provider Python de Nixpacks (venv, pip install -r requirements.txt, ...)
+#   y añade el nuestro AL FINAL, sin depender del orden interno del provider:
+#   https://nixpacks.com/docs/guides/configuring-builds
+# - [phases.build] NO lleva "...": el provider Python no define fase build
+#   por defecto (verificado en el fuente de nixpacks, src/providers/python.rs),
+#   así que aquí no hay comandos previos que conservar ni pisar.
+# - Deliberadamente NO se fija nixpkgsArchive ni un snapshot antiguo de
+#   nixpkgs: el build actual ya funciona con Python 3.13 con el snapshot por
+#   defecto de Railway; fijar uno viejo (p. ej. 23.05) podría romper esa
+#   parte que sí funciona.
 # ═══════════════════════════════════════════════════════════════
+
+[phases.setup]
+nixPkgs = ["libGL", "glib", "glibc", "libGLU", "pkg-config", "xorg.libxcb"]
 
 [phases.install]
 cmds = [
     "...",
     "pip install --force-reinstall --no-deps 'opencv-python-headless>=4.8.0'"
+]
+
+[phases.build]
+cmds = [
+    "echo 'Linking OpenCV system libraries from /nix/store...'",
+    "GL=$(find /nix/store -name 'libGL.so.1' | head -n 1) && ln -sf \"$GL\" /usr/lib/libGL.so.1 || echo 'libGL link failed'",
+    "GLIB=$(find /nix/store -name 'libglib-2.0.so.0' | head -n 1) && ln -sf \"$GLIB\" /usr/lib/libglib-2.0.so.0 || echo 'glib link failed'",
+    "GTHREAD=$(find /nix/store -name 'libgthread-2.0.so.0' | head -n 1) && ln -sf \"$GTHREAD\" /usr/lib/libgthread-2.0.so.0 || echo 'gthread link failed'",
+    "XCB=$(find /nix/store -name 'libxcb.so.1' | head -n 1) && ln -sf \"$XCB\" /usr/lib/libxcb.so.1 || echo 'libxcb link failed'",
+    "ldd /opt/venv/lib/python3*/site-packages/cv2/*.so || true"
 ]
