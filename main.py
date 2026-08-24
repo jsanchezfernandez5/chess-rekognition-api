@@ -10,7 +10,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.middleware.cors import CORSMiddleware
 
 # Importamos los routers
-from routers import auth, usuarios, partidas, engine, vision, dataset, retransmision
+from routers import auth, usuarios, partidas, engine, vision, dataset, retransmision, yolo_dataset
 
 # Metadatos para organizar la documentación de la API en categorías.
 tags_metadata = [
@@ -39,6 +39,10 @@ tags_metadata = [
         "description": "Herramientas para captura de imágenes (crops) y entrenamiento del modelo ML.",
     },
     {
+        "name": "Dataset YOLO",
+        "description": "Dataset de detección de objetos (bounding boxes) y entrenamiento del detector YOLO26, con anotación semi-automática desde las predicciones de MobileNetV2.",
+    },
+    {
         "name": "Retransmisión",
         "description": "Servicio para retransmitir partidas en directo mediante WebSockets.",
     },
@@ -58,7 +62,8 @@ app = FastAPI(
         "**Herramientas web integradas:**\n"
         "* **Correción homográfica - De imagen 3D a vista cenital 2D con OpenCV:** [/opencv](/opencv)\n"
         "* **Módulo de Dataset - Captura recortes (crops) de la imagen y Etiquetado de clases para el Entrenamiento del Modelo MobileNetV2:** [/dataset](/dataset)\n"
-        "* **Reconocimiento del tablero y las piezas, a través del Modelo MobileNetV2, obteniéndose el código de ajedrez FEN:** [/reconocimiento](/reconocimiento)"
+        "* **Reconocimiento del tablero y las piezas, a través del Modelo MobileNetV2, obteniéndose el código de ajedrez FEN:** [/reconocimiento](/reconocimiento)\n"
+        "* **Módulo de Dataset YOLO26 - Anotación semi-automática de bounding boxes (arrancada desde las predicciones de MobileNetV2) y entrenamiento del detector YOLO26:** [/yolo-dataset](/yolo-dataset)"
     ),
     version="1.0.0",
     openapi_tags=tags_metadata,
@@ -96,6 +101,7 @@ app.include_router(partidas.router)
 app.include_router(engine.router)
 app.include_router(vision.router)
 app.include_router(dataset.router)
+app.include_router(yolo_dataset.router)
 app.include_router(retransmision.router)
 
 # -------------------------------------------------------------------------------------------
@@ -126,6 +132,12 @@ def reconocimiento():
     """Sirve la herramienta de reconocimiento visual en tiempo real."""
     return FileResponse("static/reconocimiento.html")
 
+# Endpoint para la anotación semi-automática del dataset YOLO (bounding boxes arrancadas desde las predicciones de MobileNetV2) y el entrenamiento del detector YOLO26.
+@app.get("/yolo-dataset", include_in_schema=False)
+def yolo_dataset_tool():
+    """Sirve la herramienta interactiva de anotación y entrenamiento del dataset YOLO26."""
+    return FileResponse("static/yolo_dataset.html")
+
 # Endpoint para servir la documentación de Swagger UI.
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui():
@@ -147,6 +159,7 @@ def root():
             "opencv": "/opencv",
             "dataset": "/dataset",
             "reconocimiento": "/reconocimiento",
+            "yolo_dataset": "/yolo-dataset",
             "docs": "/docs"
         }
     }

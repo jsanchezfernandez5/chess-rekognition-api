@@ -667,6 +667,9 @@ class VisionService:
                 "rectified_2d":   _encode_image(vista_2d),
                 "debug_image":    _encode_image(debug_image),
                 "export_image":   _encode_image(collage),
+                # Tablero rectificado LIMPIO (sin overlays de diagnóstico). Lo usa la herramienta
+                # /yolo-dataset para guardar imágenes de entrenamiento sin marcas rojas/verdes encima.
+                "rectified_clean": _encode_image(warped),
                 "squares":        squares,
                 "corners":        [[float(pt[0]) / frame.shape[1], float(pt[1]) / frame.shape[0]] for pt in exterior],
                 "occupied_count": occupied_count,

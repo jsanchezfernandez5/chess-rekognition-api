@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Rekognition | Dataset YOLO</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, sans-serif;
+            font-size: 14px;
+            background: #f1f5f9;
+            color: #1e293b;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        /* CABECERA */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        header p {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        /* TARJETAS */
+        .card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card+.card {
+            margin-top: 16px;
+        }
+
+        .card h2 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .hint {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+
+        /* LAYOUT */
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 16px;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* LOGIN */
+        #loginCard {
+            max-width: 340px;
+            margin: 80px auto;
+        }
+
+        #loginCard label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            margin-top: 12px;
+        }
+
+        #loginCard input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        /* BOTONES */
+        button,
+        select {
+            padding: 8px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: #fff;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background .15s;
+        }
+
+        button:hover,
+        select:hover {
+            background: #f8fafc;
+        }
+
+        button:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+            color: #fff;
+            border-color: #dc2626;
+            font-size: 12px;
+            padding: 6px 12px;
+        }
+
+        .btn-success {
+            background: #16a34a;
+            color: #fff;
+            border-color: #16a34a;
+            width: 100%;
+            padding: 10px;
+        }
+
+        .btn-success:hover {
+            background: #15803d;
+        }
+
+        /* CÁMARA */
+        .camera-wrap {
+            background: #000;
+            border-radius: 6px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            position: relative;
+            max-width: 480px;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        /* EDITOR DE CAJAS */
+        #editorWrap {
+            position: relative;
+            max-width: 480px;
+            user-select: none;
+        }
+
+        #board {
+            width: 100%;
+            display: block;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            touch-action: none;
+        }
+
+        #board.adding {
+            cursor: crosshair;
+        }
+
+        /* LISTA DE CAJAS */
+        #boxList {
+            max-height: 220px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .box-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 6px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .box-row.active {
+            outline: 2px solid #2563eb;
+        }
+
+        .box-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+
+        .box-origin {
+            margin-left: auto;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            padding: 1px 5px;
+            border-radius: 999px;
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        /* SELECTOR DE CLASES */
+        .piece-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+            gap: 4px;
+            margin-top: 10px;
+        }
+
+        .piece-btn {
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 4px 2px;
+            font-size: 11px;
+            text-align: center;
+            cursor: pointer;
+            background: #fff;
+            transition: background .1s;
+        }
+
+        .piece-btn:hover {
+            background: #f1f5f9;
+        }
+
+        .piece-btn.active {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+        }
+
+        .piece-btn.hand-btn.active {
+            background: #9333ea;
+            border-color: #9333ea;
+        }
+
+        /* ESTADÍSTICAS */
+        .stats-table {
+            width: 100%;
+            font-size: 12px;
+            border-collapse: collapse;
+        }
+
+        .stats-table td {
+            padding: 3px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .stats-table td:last-child {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+        }
+
+        .msg {
+            font-size: 12px;
+            margin-top: 10px;
+            min-height: 18px;
+        }
+
+        .msg.ok {
+            color: #16a34a;
+        }
+
+        .msg.err {
+            color: #dc2626;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- LOGIN: mismo patrón que dataset.html (JWT en localStorage con refresh automático) -->
+    <div id="loginCard" class="card">
+        <h2>Sesión</h2>
+        <p class="hint">Herramienta protegida: inicia sesión con tu usuario de Chess Rekognition.</p>
+        <label for="loginUser">Usuario</label>
+        <input id="loginUser" type="text" autocomplete="username">
+        <label for="loginPass">Contraseña</label>
+        <input id="loginPass" type="password" autocomplete="current-password">
+        <div class="btn-row">
+            <button id="btnLogin" class="btn-primary" style="width:100%;margin-top:14px;padding:10px;">Entrar</button>
+        </div>
+        <p id="loginMsg" class="msg"></p>
+    </div>
+
+    <!-- UI PRINCIPAL -->
+    <div id="mainUI" class="container" style="display:none;">
+        <header>
+            <div>
+                <h1>Dataset YOLO26 — Anotación semi-automática</h1>
+                <p>Pre-rellena cajas desde las predicciones de TensorFlow sobre el tablero rectificado 400x400.
+                    Revisa, corrige, borra o añade cajas y guarda.</p>
+            </div>
+            <button id="btnLogout">Salir</button>
+        </header>
+
+        <div class="layout">
+            <!-- COLUMNA IZQUIERDA -->
+            <div>
+                <!-- ORIGEN DE LA IMAGEN -->
+                <div class="card">
+                    <h2>1 · Capturar / subir imagen del tablero</h2>
+                    <div class="camera-wrap"><video id="video" autoplay playsinline muted></video></div>
+                    <div class="btn-row">
+                        <button id="btnCam">Iniciar cámara</button>
+                        <button id="btnShot" disabled>Capturar foto</button>
+                        <label for="fileInput" style="font-size:13px;">…o
+                            <button type="button"
+                                onclick="document.getElementById('fileInput').click()">subir imagen</button>
+                        </label>
+                        <input id="fileInput" type="file" accept="image/*" style="display:none;">
+                        <select id="rotation" title="Rotación aplicada tras la homografía">
+                            <option value="0">Blancas debajo (0º)</option>
+                            <option value="90">Blancas a la derecha (90º)</option>
+                            <option value="270">Blancas a la izquierda (270º)</option>
+                            <option value="180">Blancas arriba (180º)</option>
+                        </select>
+                    </div>
+                    <p class="hint">
+                        Flujo interno: <code>/vision/recognize-board</code> (homografía → tablero rectificado limpio
+                        400x400) y después <code>/vision/classify</code> con las mismas esquinas, para pre-rellenar las
+                        cajas.
+                        Para la clase "hand", haz fotos a propósito con la mano/dedo moviendo una pieza y añade la caja
+                        manualmente.
+                    </p>
+                </div>
+
+                <!-- EDITOR -->
+                <div class="card">
+                    <h2>2 · Revisar y corregir cajas</h2>
+                    <div id="editorWrap">
+                        <canvas id="board" width="400" height="400"></canvas>
+                    </div>
+                    <div class="btn-row">
+                        <button id="btnAddPiece">+ Caja pieza (arrastra en el tablero)</button>
+                        <button id="btnAddHand">+ Caja mano</button>
+                        <button id="btnDeleteSel" class="btn-danger" disabled>Borrar seleccionada</button>
+                    </div>
+                    <p class="hint">
+                        Arrastra dentro de una caja para moverla; usa los tiradores de las esquinas para redimensionarla
+                        (el superior-izquierdo permite extenderla hacia la fila anterior, donde la pieza sobresale por
+                        la perspectiva).
+                        Toda caja pre-rellena que se mueva/redimensione/recalifique pasa a contarse como "corregida".
+                        Tecla Supr para borrar la seleccionada.
+                    </p>
+                    <p id="editMsg" class="msg"></p>
+                </div>
+            </div>
+
+            <!-- COLUMNA DERECHA -->
+            <div>
+                <div class="card">
+                    <h2>Clase para cajas nuevas</h2>
+                    <div id="classGrid" class="piece-grid"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Cajas de esta imagen (<span id="boxCount">0</span>)</h2>
+                    <div id="boxList"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Guardar anotación</h2>
+                    <button id="btnSave" class="btn-success" disabled>Guardar anotación en el dataset</button>
+                    <p id="saveMsg" class="msg"></p>
+                </div>
+
+                <div class="card">
+                    <h2>Estadísticas del dataset</h2>
+                    <table class="stats-table" id="statsTable"></table>
+                    <p class="hint">Desglose por origen: cuántas cajas se aceptaron tal cual de la pre-predicción
+                        ("prefill"), cuántas fueron corregidas a mano y cuántas se añadieron manualmente.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =====================================================================
+        // CONSTANTES
+        // =====================================================================
+        const BOARD_PX = 400;          // Tablero rectificado 400x400 (mismo grid de 50 px que todo el proyecto)
+        const CELL_SIZE = 50;          // settings.CELL_SIZE del backend
+        // Clases YOLO (deben coincidir con core/config.py → settings.YOLO_CLASSES; índice = class_id)
+        const YOLO_CLASSES = ["w_P", "w_N", "w_B", "w_R", "w_Q", "w_K", "b_P", "b_N", "b_B", "b_R", "b_Q", "b_K", "hand"];
+        // Colores por familia de clase para pintar las cajas
+        function colorDe(cls) {
+            if (cls === 'hand') return '#9333ea';
+            return cls.startsWith('w_') ? '#2563eb' : '#dc2626';
+        }
+
+        // Columnas del tablero en notación algebraica (índice = columna visual 0..7)
+        const BOARD_PX_COLS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+        // =====================================================================
+        // ESTADO GLOBAL DE LA HERRAMIENTA
+        // =====================================================================
+        let token = localStorage.getItem("token");
+        let refreshToken = localStorage.getItem("refresh_token");
+
+        let stream = null;               // Stream de la cámara
+        let srcBlob = null;              // Última foto capturada/subida (JPEG original)
+        let warpedDataURI = null;        // Tablero rectificado LIMPIO 400x400 devuelto por recognize-board
+        let corners = null;              // Esquinas normalizadas devueltas por recognize-board
+
+        // boxes: {id, x, y, w, h} en píxeles del canvas 400x400, más class_id, conf y origen
+        // origen: 'prefilled' (aceptada tal cual de TF) | 'corrected' (pre-rellena y ajustada) | 'manual'
+        let boxes = [];
+        let boxSeq = 1;
+
+        let selectedId = null;           // Caja seleccionada
+        let dragState = null;            // {modo:'move'|'tl'|'tr'|'bl'|'br', id, offX, offY}
+        let addMode = false;             // true = arrastrar sobre el canvas crea una caja nueva
+        let newClassId = 0;              // class_id asignado a las cajas nuevas
+        let boardReady = false;          // Hay imagen rectificada lista para anotar
+
+        const $ = (id) => document.getElementById(id);
+        const canvas = $('board');
+        const ctx = canvas.getContext('2d');
+
+        // =====================================================================
+        // AUTENTICACIÓN (idéntico patrón que dataset.html)
+        // =====================================================================
+        async function apiFetch(url, options = {}) {
+            const res = await fetch(url, {
+                ...options,
+                headers: { ...options.headers, "Authorization": `Bearer ${token}` }
+            });
+            if (res.status === 401 && refreshToken) {
+                const refRes = await fetch("/auth/refresh", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ refresh_token: refreshToken })
+                });
+                if (refRes.ok) {
+                    const data = await refRes.json();
+                    token = data.access_token;
+                    localStorage.setItem("token", token);
+                    return fetch(url, {
+                        ...options,
+                        headers: { ...options.headers, "Authorization": `Bearer ${token}` }
+                    });
+                }
+            }
+            return res;
+        }
+
+        $('btnLogin').onclick = doLogin;
+        async function doLogin() {
+            const msg = $('loginMsg');
+            msg.className = "msg"; msg.textContent = "";
+            try {
+                const res = await fetch("/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        username: $("loginUser").value.trim(),
+                        password: $("loginPass").value
+                    })
+                });
+                if (!res.ok) throw new Error((await res.json()).detail || "Credenciales incorrectas");
+                const data = await res.json();
+                token = data.access_token;
+                refreshToken = data.refresh_token;
+                localStorage.setItem("token", token);
+                localStorage.setItem("refresh_token", refreshToken);
+                mostrarUI();
+            } catch (e) {
+                msg.className = "msg err";
+                msg.textContent = "Error: " + e.message;
+            }
+        }
+
+        $('btnLogout').onclick = () => {
+            localStorage.removeItem("token");
+            localStorage.removeItem("refresh_token");
+            location.reload();
+        };
+
+        function mostrarUI() {
+            $('loginCard').style.display = "none";
+            $('mainUI').style.display = "";
+            construirSelectorClases();
+            refrescarStats();
+        }
+
+        // Al cargar la página comprobamos si ya hay sesión activa
+        if (token) mostrarUI();
+
+        // =====================================================================
+        // SELECTOR DE CLASES PARA CAJAS NUEVAS
+        // =====================================================================
+        function construirSelectorClases() {
+            const grid = $('classGrid');
+            grid.innerHTML = "";
+            YOLO_CLASSES.forEach((cls, idx) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'piece-btn' + (cls === 'hand' ? ' hand-btn' : '') + (idx === newClassId ? ' active' : '');
+                btn.textContent = cls === 'hand' ? '✋ hand' : cls.replace('_', ' ');
+                btn.onclick = () => { newClassId = idx; construirSelectorClases(); };
+                grid.appendChild(btn);
+            });
+        }
+
+        // =====================================================================
+        // CÁMARA Y CAPTURA
+        // =====================================================================
+        $('btnCam').onclick = async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+                $('video').srcObject = stream;
+                $('btnShot').disabled = false;
+                $('btnCam').textContent = "Reiniciar cámara";
+            } catch (e) {
+                setMsg('editMsg', "No se pudo acceder a la cámara: " + e.message, true);
+            }
+        };
+
+        $('btnShot').onclick = () => {
+            const v = $('video');
+            if (!v.videoWidth) return;
+            const c = document.createElement('canvas');
+            c.width = v.videoWidth; c.height = v.videoHeight;
+            c.getContext('2d').drawImage(v, 0, 0);
+            c.toBlob(b => usarImagen(b), 'image/jpeg', 0.85);
+        };
+
+        $('fileInput').onchange = (e) => {
+            const f = e.target.files[0];
+            if (f) usarImagen(f);
+            e.target.value = "";
+        };
+
+        function usarImagen(blob) {
+            srcBlob = blob;
+            analizar();
+        }
+
+        // =====================================================================
+        // PIPELINE SEMI-AUTOMÁTICO:
+        //   recognize-board → homografía + tablero rectificado LIMPIO 400x400 + esquinas
+        //   classify (con esas mismas esquinas) → board_state de TensorFlow para pre-rellenar cajas
+        // =====================================================================
+        async function analizar() {
+            setMsg('editMsg', "Detectando tablero y clasificando...");
+            const fd = new FormData();
+            fd.append('file', srcBlob);
+            fd.append('rotation', $('rotation').value);
+            try {
+                const res = await apiFetch('/vision/recognize-board', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || "Tablero no detectado");
+
+                warpedDataURI = data.rectified_clean;
+                corners = data.corners || null;
+                boxes = []; selectedId = null; boxSeq = 1; boardReady = true;
+
+                await prefillDesdeTensorFlow();
+                render();
+                $('btnSave').disabled = false;
+                actualizarListaCajas();
+                setMsg('editMsg', "Cajas pre-rellenadas desde TensorFlow. Revísalas y corrige lo necesario.");
+            } catch (e) {
+                setMsg('editMsg', "Error al analizar: " + e.message, true);
+            }
+        }
+
+        async function prefillDesdeTensorFlow() {
+            try {
+                const fd = new FormData();
+                fd.append('file', srcBlob);
+                fd.append('rotation', $('rotation').value);
+                // Reutilizamos las esquinas exactas de recognize-board para que la homografía sea idéntica
+                if (corners && corners.length === 4) {
+                    fd.append('coords', corners.map(p => `${p[0]},${p[1]}`).join(","));
+                }
+                const res = await apiFetch('/vision/classify', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (!data.success || !data.board_state) {
+                    setMsg('editMsg', "Aviso: no se pudo pre-rellenar con TensorFlow (" + (data.error || '?') + "). Añade las cajas a mano.", true);
+                    return;
+                }
+                // Una caja por cada casilla que TensorFlow marcó como ocupada.
+                // Límites iniciales = los de su casilla (col*CELL_SIZE, row*CELL_SIZE, CELL_SIZE, CELL_SIZE).
+                for (const [sqId, val] of Object.entries(data.board_state)) {
+                    if (!val.label || val.label === 'empty') continue;
+                    const col = BOARD_PX_COLS.indexOf(sqId.charCodeAt(0));
+                    const fila = parseInt(sqId.slice(1), 10);
+                    if (col < 0 || isNaN(fila) || fila < 1 || fila > 8) continue;
+                    const rowIdx = 8 - fila;                       // fila visual 0..7 (arriba=8ª fila del ajedrez)
+                    const x = col * CELL_SIZE, y = rowIdx * CELL_SIZE;
+                    const class_id = YOLO_CLASSES.indexOf(val.label);
+                    if (class_id < 0) continue;
+                    boxes.push({ id: boxSeq++, x, y, w: CELL_SIZE, h: CELL_SIZE, class_id, conf: val.confidence, origin: 'prefilled' });
+                }
+            } catch (e) {
+                setMsg('editMsg', "Aviso: fallo al pre-rellenar (" + e.message + "). Puedes anotar a mano.", true);
+            }
+        }
+
+        // =====================================================================
+        // RENDER DEL CANVAS
+        // =====================================================================
+        function render() {
+            ctx.clearRect(0, 0, BOARD_PX, BOARD_PX);
+
+            // Carga (o recarga) de la imagen rectificada como fondo del canvas
+            if (warpedDataURI && render._img !== warpedDataURI) {
+                const img = new Image();
+                img.onload = () => { render._imgEl = img; render(); };
+                img.src = warpedDataURI;
+                render._img = warpedDataURI;
+            }
+            if (render._imgEl) ctx.drawImage(render._imgEl, 0, 0, BOARD_PX, BOARD_PX);
+
+            // Cuadrícula ligera de referencia (8x8 casillas de 50 px)
+            ctx.strokeStyle = 'rgba(148,163,184,.35)';
+            ctx.lineWidth = 1;
+            for (let i = 1; i < 8; i++) {
+                ctx.beginPath(); ctx.moveTo(i * CELL_SIZE, 0); ctx.lineTo(i * CELL_SIZE, BOARD_PX); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i * CELL_SIZE); ctx.lineTo(BOARD_PX, i * CELL_SIZE); ctx.stroke();
+            }
+
+            // Cajas
+            for (const b of boxes) {
+                const cls = YOLO_CLASSES[b.class_id];
+                const col = colorDe(cls);
+                const sel = b.id === selectedId;
+
+                ctx.strokeStyle = col;
+                ctx.lineWidth = sel ? 3 : 2;
+                ctx.strokeRect(b.x, b.y, b.w, b.h);
+                ctx.fillStyle = col + '22';
+                ctx.fillRect(b.x, b.y, b.w, b.h);
+
+                // Etiqueta: clase + confianza si viene de la pre-predicción
+                const etiqueta = cls + (b.conf != null && b.origin !== 'manual' ? ` ${(b.conf * 100).toFixed(0)}%` : '');
+                ctx.font = '10px sans-serif';
+                const tw = ctx.measureText(etiqueta).width;
+                ctx.fillStyle = col;
+                ctx.fillRect(b.x, Math.max(0, b.y - 12), tw + 6, 12);
+                ctx.fillStyle = '#fff';
+                ctx.fillText(etiqueta, b.x + 3, Math.max(9, b.y - 3));
+
+                // Tiradores de redimensionado (4 esquinas) solo en la seleccionada.
+                // El tirador TL permite extender la caja hacia arriba (fila anterior): ahí suele sobresalir la pieza.
+                if (sel) {
+                    ctx.fillStyle = '#fff';
+                    ctx.strokeStyle = col;
+                    ctx.lineWidth = 2;
+                    for (const [hx, hy] of handlesDe(b)) {
+                        ctx.beginPath();
+                        ctx.rect(hx - 4, hy - 4, 8, 8);
+                        ctx.fill(); ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function handlesDe(b) {
+            return [
+                [b.x, b.y], [b.x + b.w, b.y],
+                [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]
+            ];
+        }
+
+        // Convierte coordenadas de ratón/táctil a coordenadas del canvas 400x400
+        function posCanvas(e) {
+            const r = canvas.getBoundingClientRect();
+            return {
+                x: (e.clientX - r.left) * BOARD_PX / r.width,
+                y: (e.clientY - r.top) * BOARD_PX / r.height
+            };
+        }
+
+        function cajaEn(punto) {
+            for (let i = boxes.length - 1; i >= 0; i--) {
+                const b = boxes[i];
+                if (punto.x >= b.x - 4 && punto.x <= b.x + b.w + 4 && punto.y >= b.y - 4 && punto.y <= b.y + b.h + 4) return b;
+            }
+            return null;
+        }
+
+        function handleEn(punto, b) {
+            const nombres = ['tl', 'tr', 'bl', 'br'];
+            const hs = handlesDe(b);
+            for (let i = 0; i < hs.length; i++) {
+                if (Math.abs(punto.x - hs[i][0]) <= 7 && Math.abs(punto.y - hs[i][1]) <= 7) return nombres[i];
+            }
+            return null;
+        }
+
+        function marcarCorregida(b) {
+            if (b.origin === 'prefilled') b.origin = 'corrected';
+            delete b.conf; // La confianza de TF ya no representa la caja editada
+        }
+
+        // =====================================================================
+        // INTERACCIÓN CON EL CANVAS (ratón y táctil)
+        // =====================================================================
+        canvas.addEventListener('pointerdown', (e) => {
+            if (!boardReady) return;
+            const p = posCanvas(e);
+
+            if (addMode) {
+                dragState = { modo: 'nueva', x0: p.x, y0: p.y };
+                canvas.setPointerCapture(e.pointerId);
+                return;
+            }
+
+            // Prioridad: tirador de la caja seleccionada > cuerpo de cualquier caja
+            const sel = boxes.find(b => b.id === selectedId);
+            if (sel) {
+                const h = handleEn(p, sel);
+                if (h) { dragState = { modo: h, id: sel.id }; canvas.setPointerCapture(e.pointerId); return; }
+            }
+            const b = cajaEn(p);
+            if (b) {
+                selectedId = b.id;
+                dragState = { modo: 'move', id: b.id, offX: p.x - b.x, offY: p.y - b.y };
+                canvas.setPointerCapture(e.pointerId);
+                actualizarListaCajas(); render();
+            } else {
+                selectedId = null;
+                $('btnDeleteSel').disabled = true;
+                actualizarListaCajas(); render();
+            }
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            if (!dragState) return;
+            const p = posCanvas(e);
+
+            if (dragState.modo === 'nueva') {
+                render();
+                ctx.strokeStyle = '#16a34a';
+                ctx.setLineDash([5, 3]);
+                ctx.lineWidth = 2;
+                ctx.strokeRect(Math.min(dragState.x0, p.x), Math.min(dragState.y0, p.y), Math.abs(p.x - dragState.x0), Math.abs(p.y - dragState.y0));
+                ctx.setLineDash([]);
+                return;
+            }
+
+            const b = boxes.find(x => x.id === dragState.id);
+            if (!b) return;
+
+            if (dragState.modo === 'move') {
+                b.x = Math.min(Math.max(p.x - dragState.offX, 0), BOARD_PX - b.w);
+                b.y = Math.min(Math.max(p.y - dragState.offY, 0), BOARD_PX - b.h);
+                marcarCorregida(b);
+            } else {
+                // Redimensionado por esquina. El par (nx, ny) indica qué esquina se arrastra:
+                // tl=(izq,arriba) permite extender hacia la fila anterior.
+                const limites = { tl: [-1, -1], tr: [1, -1], bl: [-1, 1], br: [1, 1] };
+                const [sx, sy] = limites[dragState.modo];
+                let x1 = b.x, y1 = b.y, x2 = b.x + b.w, y2 = b.y + b.h;
+                if (sx < 0) x1 = Math.max(0, Math.min(p.x, x2 - 6)); else x2 = Math.min(BOARD_PX, Math.max(p.x, x1 + 6));
+                if (sy < 0) y1 = Math.max(0, Math.min(p.y, y2 - 6)); else y2 = Math.min(BOARD_PX, Math.max(p.y, y1 + 6));
+                b.x = x1; b.y = y1; b.w = x2 - x1; b.h = y2 - y1;
+                marcarCorregida(b);
+            }
+            render(); actualizarListaCajas();
+        });
+
+        canvas.addEventListener('pointerup', (e) => {
+            if (!dragState) return;
+            if (dragState.modo === 'nueva') {
+                const p = posCanvas(e);
+                const w = Math.abs(p.x - dragState.x0), h = Math.abs(p.y - dragState.y0);
+                if (w > 8 && h > 8) {
+                    boxes.push({
+                        id: boxSeq++,
+                        x: Math.min(dragState.x0, p.x), y: Math.min(dragState.y0, p.y),
+                        w, h,
+                        class_id: newClassId,
+                        origin: 'manual'
+                    });
+                    selectedId = boxes[boxes.length - 1].id;
+                }
+                addMode = false;
+                canvas.classList.remove('adding');
+                actualizarBotonesAniadir();
+            }
+            dragState = null;
+            actualizarListaCajas(); render();
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId != null && document.activeElement.tagName !== 'INPUT') {
+                borrarSeleccion();
+            }
+            if (e.key === 'Escape') { selectedId = null; render(); actualizarListaCajas(); }
+        });
+
+        function borrarSeleccion() {
+            boxes = boxes.filter(b => b.id !== selectedId);
+            selectedId = null;
+            $('btnDeleteSel').disabled = true;
+            actualizarListaCajas(); render();
+        }
+
+        $('btnDeleteSel').onclick = borrarSeleccion;
+
+        function actualizarBotonesAniadir() {
+            $('btnAddPiece').textContent = addMode ? "Arrastra en el tablero… (cancelar)" : "+ Caja pieza (arrastra en el tablero)";
+            $('btnAddHand').classList.toggle('btn-primary', addMode && newClassId === YOLO_CLASSES.indexOf('hand'));
+        }
+
+        $('btnAddPiece').onclick = () => {
+            newClassId = YOLO_CLASSES.indexOf('w_P');   // Clase por defecto editable en el panel derecho
+            addMode = !addMode;
+            construirSelectorClases();
+            canvas.classList.toggle('adding', addMode);
+            actualizarBotonesAniadir();
+        };
+
+        // Atajo directo para la clase especial "hand" (manos/dedos sobre el tablero)
+        $('btnAddHand').onclick = () => {
+            newClassId = YOLO_CLASSES.indexOf('hand');
+            addMode = true;
+            construirSelectorClases();
+            canvas.classList.add('adding');
+            actualizarBotonesAniadir();
+            setMsg('editMsg', "Arrastra un rectángulo sobre la zona donde aparece la mano/dedo.");
+        };
+
+        // =====================================================================
+        // LISTA LATERAL DE CAJAS
+        // =====================================================================
+        function actualizarListaCajas() {
+            $('boxCount').textContent = boxes.length;
+            const lista = $('boxList');
+            lista.innerHTML = "";
+            for (const b of boxes) {
+                const fila = document.createElement('div');
+                fila.className = 'box-row' + (b.id === selectedId ? ' active' : '');
+                const dotColor = colorDe(YOLO_CLASSES[b.class_id]);
+                const origenTxt = b.origin === 'prefilled' ? 'prefill' : (b.origin === 'corrected' ? 'corregida' : 'manual');
+                fila.innerHTML = `<span class="box-dot" style="background:${dotColor}"></span>
+                    <span>${YOLO_CLASSES[b.class_id]}</span>
+                    <span class="box-origin">${origenTxt}</span>`;
+                fila.onclick = () => { selectedId = b.id; $('btnDeleteSel').disabled = false; render(); actualizarListaCajas(); };
+                lista.appendChild(fila);
+            }
+            if (selectedId != null) $('btnDeleteSel').disabled = false;
+        }
+
+        // Cambiar la clase de la caja seleccionada con doble clic en su fila (menú rápido)
+        $('boxList').addEventListener('dblclick', () => {
+            const b = boxes.find(x => x.id === selectedId);
+            if (!b) return;
+            const nuevo = prompt("Clase (una de: " + YOLO_CLASSES.join(", ") + "):", YOLO_CLASSES[b.class_id]);
+            if (!nuevo) return;
+            const idx = YOLO_CLASSES.indexOf(nuevo.trim());
+            if (idx < 0) { alert("Clase no válida."); return; }
+            b.class_id = idx;
+            marcarCorregida(b);
+            render(); actualizarListaCajas();
+        });
+
+        // =====================================================================
+        // GUARDAR ANOTACIÓN
+        // =====================================================================
+        $('btnSave').onclick = guardar;
+
+        async function guardar() {
+            if (!warpedDataURI || boxes.length === 0) {
+                setMsg('saveMsg', "No hay imagen analizada o faltan cajas.", true);
+                return;
+            }
+            setMsg('saveMsg', "Guardando...");
+
+            // Normalización a formato YOLO: class_id x_center y_center width height (0-1)
+            const payloadBoxes = boxes.map(b => ({
+                class_id: b.class_id,
+                x_center: (b.x + b.w / 2) / BOARD_PX,
+                y_center: (b.y + b.h / 2) / BOARD_PX,
+                width: b.w / BOARD_PX,
+                height: b.h / BOARD_PX
+            }));
+
+            // Desglose por origen de esta imagen (para las estadísticas acumuladas del backend)
+            const origin_counts = { prefilled: 0, corrected: 0, manual: 0 };
+            for (const b of boxes) origin_counts[b.origin]++;
+
+            try {
+                const res = await apiFetch('/yolo-dataset/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image: warpedDataURI,
+                        boxes: payloadBoxes,
+                        origin_counts
+                    })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || "Error del servidor");
+                setMsg('saveMsg', `Guardado ✓ (${data.boxes} cajas). Puedes capturar la siguiente imagen.`);
+                boxes = []; selectedId = null; boardReady = false; warpedDataURI = null; render._img = null; render._imgEl = null;
+                ctx.clearRect(0, 0, BOARD_PX, BOARD_PX);
+                actualizarListaCajas();
+                $('btnSave').disabled = true;
+                refrescarStats();
+            } catch (e) {
+                setMsg('saveMsg', "Error: " + e.message, true);
+            }
+        }
+
+        // =====================================================================
+        // ESTADÍSTICAS
+        // =====================================================================
+        async function refrescarStats() {
+            try {
+                const res = await apiFetch('/yolo-dataset/stats');
+                const data = await res.json();
+                if (data.success === false) throw new Error(data.error || "?");
+                let html = `<tr><td><strong>Imágenes anotadas</strong></td><td><strong>${data.total_images}</strong></td></tr>`;
+                html += `<tr><td><strong>Total de cajas</strong></td><td><strong>${data.total_boxes}</strong></td></tr>`;
+                for (const [cls, n] of Object.entries(data.classes || {})) {
+                    html += `<tr><td>${cls}</td><td>${n}</td></tr>`;
+                }
+                const o = data.origins || {};
+                html += `<tr><td>↳ aceptadas de prefill</td><td>${o.prefilled ?? 0}</td></tr>`;
+                html += `<tr><td>↳ corregidas a mano</td><td>${o.corrected ?? 0}</td></tr>`;
+                html += `<tr><td>↳ añadidas manualmente</td><td>${o.manual ?? 0}</td></tr>`;
+                $('statsTable').innerHTML = html;
+            } catch (e) {
+                $('statsTable').innerHTML = `<tr><td colspan="2" style="color:#dc2626;">Sin estadísticas (${e.message})</td></tr>`;
+            }
+        }
+
+        function setMsg(id, texto, esError = false) {
+            const el = $(id);
+            el.textContent = texto;
+            el.className = 'msg ' + (esError ? 'err' : 'ok');
+        }
+    </script>
+</body>
+
+</html>

@@ -40,6 +40,24 @@ class Settings(BaseSettings):
         "b_P", "b_N", "b_B", "b_R", "b_Q", "b_K"
     ]
 
+    # DATASET Y MODELO YOLO26 (detección de objetos)
+    # Directorio donde se guardan las imágenes anotadas y sus etiquetas en formato YOLO:
+    #   yolo_dataset/images/  → imágenes del tablero rectificado 400x400 (.jpg)
+    #   yolo_dataset/labels/  → un .txt por imagen con cajas "class_id x_center y_center width height" normalizadas 0-1
+    YOLO_DATASET_DIR: str = "./data/yolo_dataset"
+
+    # Clases del detector YOLO. NO son las mismas que CLASSES (las de MobileNetV2) a propósito:
+    #   - CLASSES es CLASIFICACIÓN por casilla fija: incluye "empty" porque cada casilla SIEMPRE recibe una etiqueta,
+    #     aunque esté vacía (13 clases = 12 piezas + empty).
+    #   - YOLO_CLASSES es DETECCIÓN de objetos: solo se anotan objetos reales con su bounding box, así que "empty"
+    #     no aplica (una zona sin pieza simplemente no tiene caja), y se añade la clase "hand" para detectar manos
+    #     o dedos sobre el tablero, algo que el clasificador por casillas no puede representar.
+    YOLO_CLASSES: list = [
+        "w_P", "w_N", "w_B", "w_R", "w_Q", "w_K",
+        "b_P", "b_N", "b_B", "b_R", "b_Q", "b_K",
+        "hand"
+    ]
+
     # VARIABLES PARA LA VISIÓN POR COMPUTADORA
     BOARD_SIZE: int = 400       # Tamaño en píxeles del tablero rectificado.
     CELL_SIZE: int = 50         # Tamaño en píxeles de cada casilla (400 / 8 columnas = 50 px).
