@@ -99,7 +99,7 @@ class UsuarioCreate(BaseModel):
     nombre:    str      = Field(..., max_length=255,               examples=["José Joaquín"])
     apellidos: str      = Field(..., max_length=255,               examples=["Sánchez Fernández"])
     password:  str      = Field(..., min_length=8,                 examples=["chess_test01"])
-    mail:      EmailStr = Field(...,                               examples=["jsanchezfernandez5@uoc.edu"])
+    mail:      EmailStr = Field(...,                               examples=["web@ajedrezcoimbra.com"])
 
 # Clase tipo Pydantic para la respuesta de los usuarios.
 class UsuarioResponse(BaseModel):

@@ -69,7 +69,7 @@ app = FastAPI(
     openapi_tags=tags_metadata,
     contact={
         "name": "José Joaquín Sánchez Fernández",
-        "email": "jsanchezfernandez5@uoc.edu",
+        "email": "web@ajedrezcoimbra.com",
     },
     license_info={
         "name": "CC BY-SA 4.0",
