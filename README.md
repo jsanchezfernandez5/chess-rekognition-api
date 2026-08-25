@@ -35,6 +35,7 @@ Colabora para hacer un mejor DATASET clasificando tus fotos de tableros con piez
 
 - [Captura y clasificación de crops, y entrenamiento del modelo CNN (MobileNetV2)](https://chess-rekognition-api-production.up.railway.app/dataset)
 - [Anotación semi-automática de bounding boxes y entrenamiento del detector YOLO26](https://chess-rekognition-api-production.up.railway.app/yolo-dataset) — las cajas se pre-rellenan desde las predicciones de MobileNetV2 y solo hay que corregirlas; incluye la clase `hand` (manos sobre el tablero) para la fusión de motores.
+- [Gestión de clases, bounding boxes y modelo YOLO26](https://chess-rekognition-api-production.up.railway.app/yolo-manage) — consultar y borrar cajas, clases y el modelo entrenado.
 - [Prueba del detector YOLO26 en directo](https://chess-rekognition-api-production.up.railway.app/yolo)
 
 ## Estructura de archivos
@@ -43,6 +44,7 @@ Colabora para hacer un mejor DATASET clasificando tus fotos de tableros con piez
 api/
 ├── main.py                 # Punto de entrada de FastAPI
 ├── Procfile                # Comando de inicio para el despliegue automático en Railway
+├── iniciar.bat             # Script para arrancar el API en local (Windows)
 ├── requirements.txt        # Dependencias de Python necesarias para la API
 │
 ├── core/                   # Capa CORE
@@ -60,7 +62,8 @@ api/
 │   ├── vision.py           # Endpoints de diagnóstico OpenCV, clasificación TF, detección YOLO26, fusión, evaluación y detección de jugadas
 │   ├── retransmision.py    # Gestión de salas activas y WebSockets de emisores y espectadores (estado + relay de vídeo)
 │   ├── dataset.py          # Captura de crops de casillas, estadísticas y disparadores de entrenamiento (MobileNetV2)
-│   └── yolo_dataset.py     # Dataset YOLO: guardado de imágenes + etiquetas .txt, estadísticas y entrenamiento del detector
+│   ├── yolo_dataset.py     # Dataset YOLO: guardado de imágenes + etiquetas .txt, estadísticas y entrenamiento del detector
+│   └── yolo_model.py       # Gestión del modelo YOLO26: clases, bounding boxes del dataset y borrado del modelo
 │
 ├── services/               # Capa SERVICES
 │   ├── vision.py           # Servicio para la rectificación de la homografía con OpenCV para la detección y rectificación del tablero de ajedrez.
@@ -74,12 +77,21 @@ api/
 │   ├── yolo_training.py    # Servicio de entrenamiento del detector YOLO26 (split train/val determinista por hash).
 │   └── email.py            # Servicio de envío de emails transaccionales mediante la API de Resend (https://resend.com).
 │
+├── data/
+│   ├── dataset/            # Imágenes del dataset CNN (MobileNetV2) organizadas por clase
+│   ├── models/             # Modelos entrenados (chess_model.keras, yolo_chess.pt)
+│   └── yolo_dataset/       # Dataset YOLO26
+│       ├── images/         # Imágenes del tablero rectificado 400x400 (.jpg)
+│       ├── labels/         # Ficheros .txt con bounding boxes en formato YOLO
+│       └── fuentes/        # Copia de las imágenes fuente originales para referencia
+│
 └── static/
     ├── favicon.ico         # Icono de la API
     ├── dataset.html        # Pagina HTML de captura de crops, clasificación y entrenamiento del modelo CNN (MobileNetV2 de TensorFlow)
     ├── opencv.html         # Pagina HTML de pruebas OpenCV (Rectificación, homografía del tablero y valores de Desviación Estándar STD)
     ├── reconocimiento.html # Pagina HTML de reconocimiento del tablero y las piezas de ajedrez
     ├── yolo_dataset.html   # Pagina HTML de anotación semi-automática del dataset YOLO (bounding boxes) y entrenamiento del detector
+    ├── yolo_manage.html    # Pagina HTML de gestión del dataset YOLO26 (clases, bounding boxes, imágenes y modelo)
     └── yolo.html           # Pagina HTML de prueba del detector YOLO26 en directo (cajas de piezas y manos)
 ```
 
@@ -111,6 +123,7 @@ Esta capa es dirigida por el archivo main.py e incluye:
 | `/dataset` | **GET** | Pagina HTML de captura de crops, clasificación y entrenamiento del modelo CNN (MobileNetV2 de TensorFlow) | Sirve static/dataset.html |
 | `/reconocimiento` | **GET** | Pagina HTML de reconocimiento del tablero y las piezas de ajedrez | Sirve static/reconocimiento.html |
 | `/yolo-dataset` | **GET** | Pagina HTML de anotación semi-automática del dataset YOLO y entrenamiento del detector YOLO26 | Sirve static/yolo_dataset.html |
+| `/yolo-manage` | **GET** | Pagina HTML de gestión del dataset YOLO26 (clases, bounding boxes, imágenes y modelo) | Sirve static/yolo_manage.html |
 | `/yolo` | **GET** | Pagina HTML de prueba del detector YOLO26 en directo | Sirve static/yolo.html |
 | `/docs` | **GET** | Swagger UI personalizado | Usa get_swagger_ui_html() |
 | `CORSMiddleware` | — | Permite peticiones cross-origin desde cualquier origen | `allow_origins=['*']`, methods: GET/POST/PUT/DELETE/OPTIONS/PATCH, credentials=True |
@@ -198,6 +211,19 @@ Dataset del detector YOLO26: imágenes del tablero rectificado 400x400 con etiqu
 | `/yolo-dataset/train` | **POST** | Lanza el entrenamiento de YOLO26 en hilo daemon; split train/val determinista por hash (la validación nunca entrena). |
 | `/yolo-dataset/train/status` | **GET** | Estado actual del entrenamiento YOLO (polling). |
 
+##### yolo_model.py
+
+Gestión del modelo YOLO26 entrenado: clases, bounding boxes del dataset y borrado del modelo.
+
+| Endpoint / Componente | Método | Detalle |
+| :--- | :---: | :--- |
+| `/yolo-model/classes` | **GET** | Lista las 13 clases del detector YOLO (12 piezas + hand) con el número de cajas de cada una. (Autenticado). |
+| `/yolo-model/boxes` | **GET** | Lista todas las imágenes del dataset con sus bounding boxes. Soporta paginación (`page`, `per_page`) y filtro por clase (`class_filter`). (Autenticado). |
+| `/yolo-model/boxes/{image_id}` | **GET** | Detalle de las bounding boxes de una imagen concreta del dataset. (Autenticado). |
+| `/yolo-model/boxes/{image_id}/{box_index}` | **DELETE** | Elimina una bounding box concreta (posición 0-indexed) de una imagen. Si queda sin cajas, elimina también la imagen y la fuente. (Autenticado). |
+| `/yolo-model/images/{image_id}` | **DELETE** | Elimina una imagen completa del dataset (imagen, anotación .txt y imagen fuente). (Autenticado). |
+| `/yolo-model/model` | **DELETE** | Elimina el modelo YOLO entrenado (`yolo_chess.pt`) y recarga el detector (queda "no listo"). (Autenticado). |
+
 #### Capa Services
 
 Esta capa contiene los diferentes servicios asíncronos y síncronos con los que cuenta la API para procesar lógica de negocio compleja.
@@ -233,14 +259,33 @@ Constantes relevantes del segundo motor (en `core/config.py`): `YOLO_CONF_THRESH
 
 ## Instalación y Ejecución Local
 
+### Opción rápida (Windows): usar `iniciar.bat`
+
+Doble clic en `iniciar.bat` (o ejecutar desde terminal). El script:
+1. Verifica que exista el archivo `.env`.
+2. Crea el entorno virtual si no existe.
+3. Instala las dependencias automáticamente.
+4. Arranca el servidor en `http://localhost:8000`.
+
+### Opción manual
+
 ```bash
-# 1. Instalar dependencias
+# 1. Crear entorno virtual
+python -m venv venv
+
+# 2. Activar entorno virtual
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+
+# 3. Instalar dependencias
 pip install -r requirements.txt
 
-# 2. Configurar variables de entorno (.env)
+# 4. Configurar variables de entorno (.env)
 # Ver tabla de configuración arriba
 
-# 3. Ejecutar servidor de desarrollo
+# 5. Ejecutar servidor de desarrollo
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 

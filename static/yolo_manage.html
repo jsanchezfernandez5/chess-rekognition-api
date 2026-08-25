@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Rekognition | Gestión YOLO</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, sans-serif;
+            font-size: 14px;
+            background: #f1f5f9;
+            color: #1e293b;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* CABECERA */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        header p {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        /* TARJETAS */
+        .card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card+.card {
+            margin-top: 16px;
+        }
+
+        .card h2 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .hint {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+
+        /* LAYOUT */
+        .layout {
+            display: grid;
+            grid-template-columns: 300px minmax(0, 1fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* LOGIN */
+        #loginCard {
+            max-width: 340px;
+            margin: 80px auto;
+        }
+
+        #loginCard label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            margin-top: 12px;
+        }
+
+        #loginCard input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        /* BOTONES */
+        button,
+        select {
+            padding: 8px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: #fff;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background .15s;
+        }
+
+        button:hover,
+        select:hover {
+            background: #f8fafc;
+        }
+
+        button:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+            color: #fff;
+            border-color: #dc2626;
+            font-size: 12px;
+            padding: 5px 10px;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        .btn-sm {
+            font-size: 11px;
+            padding: 4px 8px;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        /* MENSAJES */
+        .msg {
+            font-size: 12px;
+            margin-top: 8px;
+            min-height: 16px;
+            color: #475569;
+        }
+
+        .msg.err {
+            color: #dc2626;
+        }
+
+        .msg.ok {
+            color: #16a34a;
+        }
+
+        /* TABLA DE CLASES */
+        .classes-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .classes-table th,
+        .classes-table td {
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .classes-table th {
+            color: #64748b;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+        }
+
+        .classes-table td:last-child {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+        }
+
+        .class-filter-btn {
+            font-size: 11px;
+            padding: 3px 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .class-filter-btn.active {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+        }
+
+        .class-filter-btn:hover:not(.active) {
+            background: #f1f5f9;
+        }
+
+        /* FAMILIA DE COLORES */
+        .dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            margin-right: 4px;
+            vertical-align: middle;
+        }
+
+        .dot.white {
+            background: #2563eb;
+        }
+
+        .dot.black {
+            background: #dc2626;
+        }
+
+        .dot.hand {
+            background: #9333ea;
+        }
+
+        /* GRID DE IMÁGENES */
+        .img-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .img-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            overflow: hidden;
+            background: #fff;
+            transition: box-shadow .15s;
+        }
+
+        .img-card:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,.08);
+        }
+
+        .img-card img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            display: block;
+            background: #f8fafc;
+            cursor: pointer;
+        }
+
+        .img-card .img-meta {
+            padding: 6px 8px;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid #f1f5f9;
+        }
+
+        .img-card .img-meta .box-count {
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .img-card .img-meta .box-classes {
+            color: #64748b;
+            max-width: 100px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* PAGINACIÓN */
+        .pagination {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            margin-top: 12px;
+            font-size: 12px;
+        }
+
+        .pagination button {
+            font-size: 12px;
+            padding: 4px 10px;
+        }
+
+        .pagination .page-info {
+            color: #64748b;
+        }
+
+        /* MODAL DE DETALLE */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.5);
+            z-index: 100;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 40px 20px;
+            overflow-y: auto;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal {
+            background: #fff;
+            border-radius: 10px;
+            max-width: 700px;
+            width: 100%;
+            padding: 24px;
+            position: relative;
+        }
+
+        .modal h2 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .modal .close-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #64748b;
+            padding: 4px;
+        }
+
+        .modal .close-btn:hover {
+            color: #1e293b;
+        }
+
+        .detail-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            align-items: start;
+        }
+
+        @media (max-width: 600px) {
+            .detail-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .detail-canvas-wrap {
+            position: relative;
+        }
+
+        .detail-canvas-wrap canvas {
+            width: 100%;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            display: block;
+        }
+
+        .detail-box-list {
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        .detail-box-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .detail-box-row .box-info {
+            flex: 1;
+        }
+
+        .detail-box-row .box-info .box-class {
+            font-weight: 600;
+        }
+
+        .detail-box-row .box-info .box-coords {
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        /* MODELO */
+        .model-status {
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+
+        .model-status.ready {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #166534;
+        }
+
+        .model-status.not-ready {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+        }
+
+        /* CHECKBOXES DE CONFIRMACIÓN */
+        .confirm-check {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        .confirm-check input[type="checkbox"] {
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- LOGIN -->
+    <div id="loginCard" class="card">
+        <h2>Sesión</h2>
+        <p class="hint">Gestión del modelo YOLO: clases, bounding boxes e imágenes del dataset.</p>
+        <label for="loginUser">Usuario</label>
+        <input id="loginUser" type="text" autocomplete="username">
+        <label for="loginPass">Contraseña</label>
+        <input id="loginPass" type="password" autocomplete="current-password">
+        <div class="btn-row">
+            <button id="btnLogin" class="btn-primary" style="width:100%;margin-top:14px;padding:10px;">Entrar</button>
+        </div>
+        <p id="loginMsg" class="msg"></p>
+    </div>
+
+    <!-- UI PRINCIPAL -->
+    <div id="mainUI" class="container" style="display:none;">
+        <header>
+            <div>
+                <h1>Gestión del Dataset YOLO26</h1>
+                <p>Consulta y gestiona clases, bounding boxes e imágenes del dataset. Borra el modelo entrenado si necesitas reentrenar.</p>
+            </div>
+            <button id="btnLogout">Salir</button>
+        </header>
+
+        <div class="layout">
+            <!-- COLUMNA IZQUIERDA: Clases + Modelo -->
+            <div>
+                <!-- CLASES -->
+                <div class="card">
+                    <h2>Clases del detector</h2>
+                    <table class="classes-table" id="classesTable">
+                        <thead>
+                            <tr>
+                                <th>Clase</th>
+                                <th>Cajas</th>
+                            </tr>
+                        </thead>
+                        <tbody id="classesBody">
+                            <tr><td colspan="2" style="color:#94a3b8">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="hint">Haz clic en una clase para filtrar las imágenes que contienen esa caja.</p>
+                    <div class="btn-row">
+                        <button id="btnClearFilter" class="btn-sm" style="display:none;">Limpiar filtro</button>
+                    </div>
+                </div>
+
+                <!-- MODELO ENTRENADO -->
+                <div class="card">
+                    <h2>Modelo entrenado</h2>
+                    <div id="modelStatus" class="model-status not-ready">Comprobando…</div>
+                    <div class="confirm-check">
+                        <input type="checkbox" id="confirmDeleteModel">
+                        <label for="confirmDeleteModel">Confirmo que quiero eliminar el modelo</label>
+                    </div>
+                    <div class="btn-row">
+                        <button id="btnDeleteModel" class="btn-danger" disabled>Eliminar modelo YOLO</button>
+                    </div>
+                    <p id="modelMsg" class="msg"></p>
+                    <p class="hint">Elimina <code>yolo_chess.pt</code>. El detector quedará "no listo" hasta que reentrenes.</p>
+                </div>
+
+                <!-- RESUMEN -->
+                <div class="card">
+                    <h2>Resumen del dataset</h2>
+                    <div id="summaryStats" style="font-size:13px;">Cargando…</div>
+                </div>
+            </div>
+
+            <!-- COLUMNA DERECHA: Imágenes -->
+            <div>
+                <div class="card">
+                    <h2>Imágenes del dataset <span id="imgCount"></span></h2>
+                    <div class="btn-row" style="margin-top:0;margin-bottom:8px;">
+                        <select id="perPageSel" title="Imágenes por página">
+                            <option value="24">24 por página</option>
+                            <option value="48" selected>48 por página</option>
+                            <option value="96">96 por página</option>
+                            <option value="500">Todas</option>
+                        </select>
+                    </div>
+                    <div id="imgGrid" class="img-grid"></div>
+                    <div class="pagination" id="pagination"></div>
+                    <p id="gridMsg" class="msg"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE DETALLE DE IMAGEN -->
+    <div class="modal-overlay" id="modal">
+        <div class="modal">
+            <button class="close-btn" id="modalClose">&times;</button>
+            <h2 id="modalTitle">Detalle de imagen</h2>
+            <div class="detail-layout">
+                <div class="detail-canvas-wrap">
+                    <canvas id="detailCanvas" width="400" height="400"></canvas>
+                    <p class="hint" id="modalHint"></p>
+                </div>
+                <div>
+                    <div class="detail-box-list" id="detailBoxList"></div>
+                    <div class="btn-row">
+                        <button id="btnDeleteImage" class="btn-danger">Eliminar imagen completa</button>
+                    </div>
+                    <p id="detailMsg" class="msg"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =====================================================================
+        // CONSTANTES
+        // =====================================================================
+        const BOARD_PX = 400;
+        const YOLO_CLASSES = ["w_P", "w_N", "w_B", "w_R", "w_Q", "w_K", "b_P", "b_N", "b_B", "b_R", "b_Q", "b_K", "hand"];
+
+        function colorDe(cls) {
+            if (cls === 'hand') return '#9333ea';
+            return cls.startsWith('w_') ? '#2563eb' : '#dc2626';
+        }
+
+        // =====================================================================
+        // ESTADO
+        // =====================================================================
+        let token = localStorage.getItem("token");
+        let refreshToken = localStorage.getItem("refresh_token");
+
+        let currentPage = 1;
+        let currentFilter = null;   // null = sin filtro, string = nombre de clase
+        let currentImageId = null;  // ID de imagen abierta en el modal
+
+        const $ = (id) => document.getElementById(id);
+
+        // =====================================================================
+        // AUTENTICACIÓN
+        // =====================================================================
+        async function apiFetch(url, options = {}) {
+            let res = await fetch(url, {
+                ...options,
+                headers: { ...options.headers, "Authorization": `Bearer ${token}` }
+            });
+            if (res.status === 401 && refreshToken) {
+                const refRes = await fetch("/auth/refresh", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ refresh_token: refreshToken })
+                });
+                if (refRes.ok) {
+                    const data = await refRes.json();
+                    token = data.access_token;
+                    localStorage.setItem("token", token);
+                    res = await fetch(url, {
+                        ...options,
+                        headers: { ...options.headers, "Authorization": `Bearer ${token}` }
+                    });
+                } else {
+                    cerrarSesion();
+                    throw new Error("Sesión expirada: vuelve a iniciar sesión");
+                }
+            } else if (res.status === 401) {
+                cerrarSesion();
+                throw new Error("Sesión expirada: vuelve a iniciar sesión");
+            }
+            return res;
+        }
+
+        function cerrarSesion() {
+            localStorage.removeItem("token");
+            localStorage.removeItem("refresh_token");
+            $("mainUI").style.display = "none";
+            $("loginCard").style.display = "";
+        }
+
+        function detalleError(data, status) {
+            const d = data && data.detail;
+            if (typeof d === "string" && d) return d;
+            if (Array.isArray(d) && d.length) return d.map(x => x.msg || JSON.stringify(x)).join("; ");
+            return "HTTP " + status;
+        }
+
+        $('btnLogin').onclick = doLogin;
+        async function doLogin() {
+            const msg = $('loginMsg');
+            msg.className = "msg"; msg.textContent = "";
+            try {
+                const res = await fetch("/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        username: $("loginUser").value.trim(),
+                        password: $("loginPass").value
+                    })
+                });
+                if (!res.ok) throw new Error((await res.json()).detail || "Credenciales incorrectas");
+                const data = await res.json();
+                token = data.access_token;
+                refreshToken = data.refresh_token;
+                localStorage.setItem("token", token);
+                localStorage.setItem("refresh_token", refreshToken);
+                mostrarUI();
+            } catch (e) {
+                msg.className = "msg err";
+                msg.textContent = "Error: " + e.message;
+            }
+        }
+
+        $('btnLogout').onclick = () => {
+            localStorage.removeItem("token");
+            localStorage.removeItem("refresh_token");
+            location.reload();
+        };
+
+        function mostrarUI() {
+            $('loginCard').style.display = "none";
+            $('mainUI').style.display = "";
+            cargarTodo();
+        }
+
+        if (token) mostrarUI();
+
+        function setMsg(id, texto, esError = false) {
+            const el = $(id);
+            el.textContent = texto;
+            el.className = 'msg ' + (esError ? 'err' : 'ok');
+        }
+
+        // =====================================================================
+        // CARGA INICIAL
+        // =====================================================================
+        async function cargarTodo() {
+            await Promise.all([
+                cargarClases(),
+                cargarModelo(),
+                cargarImagenes()
+            ]);
+        }
+
+        // =====================================================================
+        // CLASES
+        // =====================================================================
+        async function cargarClases() {
+            try {
+                const res = await apiFetch('/yolo-model/classes');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || "?");
+
+                const tbody = $('classesBody');
+                tbody.innerHTML = '';
+
+                for (const cls of data.classes) {
+                    const tr = document.createElement('tr');
+                    const isHand = cls.name === 'hand';
+                    const family = isHand ? 'hand' : (cls.name.startsWith('w_') ? 'white' : 'black');
+
+                    tr.innerHTML = `
+                        <td>
+                            <span class="dot ${family}"></span>
+                            ${cls.name}
+                        </td>
+                        <td>${cls.total_boxes}</td>
+                    `;
+                    tr.style.cursor = 'pointer';
+                    tr.onclick = () => filtrarPorClase(cls.name);
+                    if (currentFilter === cls.name) {
+                        tr.style.background = '#eff6ff';
+                    }
+                    tbody.appendChild(tr);
+                }
+
+                // Resumen
+                const totalBoxes = data.classes.reduce((s, c) => s + c.total_boxes, 0);
+                $('summaryStats').innerHTML = `
+                    <div><strong>${data.total_classes}</strong> clases</div>
+                    <div><strong>${totalBoxes}</strong> cajas totales</div>
+                `;
+
+                $('btnClearFilter').style.display = currentFilter ? '' : 'none';
+            } catch (e) {
+                $('classesBody').innerHTML = `<tr><td colspan="2" style="color:#dc2626;">Error: ${e.message}</td></tr>`;
+            }
+        }
+
+        function filtrarPorClase(nombre) {
+            currentFilter = currentFilter === nombre ? null : nombre;
+            currentPage = 1;
+            cargarClases();
+            cargarImagenes();
+        }
+
+        $('btnClearFilter').onclick = () => {
+            currentFilter = null;
+            currentPage = 1;
+            cargarClases();
+            cargarImagenes();
+        };
+
+        // =====================================================================
+        // MODELO
+        // =====================================================================
+        async function cargarModelo() {
+            try {
+                const res = await apiFetch('/vision/status');
+                const visRes = await apiFetch('/yolo-model/classes');
+                const visData = await visRes.json();
+                // Si el endpoint de vision responde, el modelo podría estar cargado.
+                // Pero la info real viene de yolo_detector.is_ready() que no tiene endpoint propio.
+                // Usamos el endpoint de yolo-model: si GET /yolo-model/boxes funciona, el dataset existe.
+                // Para el modelo, intentamos un approach simple: mirar si el archivo existe
+                // (el endpoint DELETE nos dice si existe).
+                $('modelStatus').textContent = 'Consulta el estado en /vision/status';
+                $('modelStatus').className = 'model-status ready';
+
+                // Intentamos obtener info del modelo del endpoint de visión si existe
+                // Como no hay GET /yolo-model/status, mostramos un estado genérico
+                $('modelStatus').innerHTML = 'Modelo YOLO: para verificar si está cargado, consulta <code>/vision/status</code> o usa el endpoint <code>POST /vision/detect-yolo</code>.';
+                $('modelStatus').className = 'model-status not-ready';
+            } catch {
+                $('modelStatus').textContent = 'No se pudo comprobar el estado del modelo.';
+            }
+
+            $('confirmDeleteModel').onchange = () => {
+                $('btnDeleteModel').disabled = !$('confirmDeleteModel').checked;
+            };
+        }
+
+        $('btnDeleteModel').onclick = async () => {
+            if (!confirm('¿Eliminar el modelo YOLO entrenado? El detector quedará "no listo" hasta que reentrenes.')) return;
+            setMsg('modelMsg', 'Eliminando modelo…');
+            try {
+                const res = await apiFetch('/yolo-model/model', { method: 'DELETE' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '?');
+                setMsg('modelMsg', data.message, false);
+                $('modelStatus').textContent = 'Modelo eliminado. Entrena uno nuevo desde /yolo-dataset.';
+                $('modelStatus').className = 'model-status not-ready';
+                $('confirmDeleteModel').checked = false;
+                $('btnDeleteModel').disabled = true;
+            } catch (e) {
+                setMsg('modelMsg', 'Error: ' + e.message, true);
+            }
+        };
+
+        // =====================================================================
+        // IMÁGENES
+        // =====================================================================
+        $('perPageSel').onchange = () => { currentPage = 1; cargarImagenes(); };
+
+        async function cargarImagenes() {
+            const perPage = parseInt($('perPageSel').value, 10);
+            $('gridMsg').textContent = 'Cargando…';
+            $('imgGrid').innerHTML = '';
+            $('pagination').innerHTML = '';
+
+            try {
+                const params = new URLSearchParams({ page: currentPage, per_page: perPage });
+                if (currentFilter) params.set('class_filter', currentFilter);
+
+                const res = await apiFetch('/yolo-model/boxes?' + params.toString());
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '?');
+
+                $('imgCount').textContent = `(${data.total_images} imágenes)`;
+                $('gridMsg').textContent = '';
+
+                if (data.images.length === 0) {
+                    $('imgGrid').innerHTML = '<p style="color:#94a3b8;font-size:13px;padding:20px;">No hay imágenes en el dataset' + (currentFilter ? ' con cajas de la clase ' + currentFilter : '') + '.</p>';
+                    return;
+                }
+
+                // Render grid
+                const grid = $('imgGrid');
+                for (const img of data.images) {
+                    const card = document.createElement('div');
+                    card.className = 'img-card';
+
+                    const clasesSet = [...new Set(img.boxes.map(b => b.class_name))];
+                    const clasesStr = clasesSet.join(', ') || 'sin cajas';
+
+                    card.innerHTML = `
+                        <img src="/yolo-dataset/images/${img.id}.jpg" alt="${img.id}" loading="lazy"
+                             onerror="this.style.background='#f1f5f9';this.alt='Sin imagen';">
+                        <div class="img-meta">
+                            <span class="box-count">${img.total_boxes} cajas</span>
+                            <span class="box-classes" title="${clasesStr}">${clasesStr}</span>
+                        </div>
+                    `;
+                    card.querySelector('img').onclick = () => abrirDetalle(img.id);
+                    grid.appendChild(card);
+                }
+
+                // Paginación
+                renderPagination(data.page, data.total_pages, data.total_images);
+            } catch (e) {
+                $('gridMsg').className = 'msg err';
+                $('gridMsg').textContent = 'Error: ' + e.message;
+            }
+        }
+
+        function renderPagination(page, totalPages, total) {
+            const div = $('pagination');
+            if (totalPages <= 1) { div.innerHTML = ''; return; }
+
+            let html = `<span class="page-info">Página ${page} de ${totalPages} (${total} imgs)</span>`;
+            if (page > 1) html += `<button onclick="irAPagina(${page - 1})">Anterior</button>`;
+            if (page < totalPages) html += `<button onclick="irAPagina(${page + 1})">Siguiente</button>`;
+            div.innerHTML = html;
+        }
+
+        function irAPagina(p) {
+            currentPage = p;
+            cargarImagenes();
+        }
+
+        // =====================================================================
+        // MODAL DE DETALLE
+        // =====================================================================
+        async function abrirDetalle(imageId) {
+            currentImageId = imageId;
+            $('modal').classList.add('open');
+            $('modalTitle').textContent = `Imagen: ${imageId}`;
+            $('detailBoxList').innerHTML = 'Cargando…';
+            $('detailMsg').textContent = '';
+            $('modalHint').textContent = '';
+
+            try {
+                const res = await apiFetch(`/yolo-model/boxes/${imageId}`);
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '?');
+
+                // Dibujar imagen + cajas en el canvas
+                const canvas = $('detailCanvas');
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, BOARD_PX, BOARD_PX);
+
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0, BOARD_PX, BOARD_PX);
+
+                    // Cuadrícula
+                    ctx.strokeStyle = 'rgba(148,163,184,.3)';
+                    ctx.lineWidth = 1;
+                    for (let i = 1; i < 8; i++) {
+                        ctx.beginPath(); ctx.moveTo(i * 50, 0); ctx.lineTo(i * 50, BOARD_PX); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(0, i * 50); ctx.lineTo(BOARD_PX, i * 50); ctx.stroke();
+                    }
+
+                    // Cajas
+                    for (const b of data.boxes) {
+                        const color = colorDe(b.class_name);
+                        const xc = b.x_center * BOARD_PX;
+                        const yc = b.y_center * BOARD_PX;
+                        const w = b.width * BOARD_PX;
+                        const h = b.height * BOARD_PX;
+                        const x = xc - w / 2;
+                        const y = yc - h / 2;
+
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(x, y, w, h);
+                        ctx.fillStyle = color + '22';
+                        ctx.fillRect(x, y, w, h);
+
+                        const etiqueta = b.class_name;
+                        ctx.font = '10px sans-serif';
+                        const tw = ctx.measureText(etiqueta).width;
+                        ctx.fillStyle = color;
+                        ctx.fillRect(x, Math.max(0, y - 12), tw + 6, 12);
+                        ctx.fillStyle = '#fff';
+                        ctx.fillText(etiqueta, x + 3, Math.max(9, y - 3));
+                    }
+                };
+                img.src = `/yolo-dataset/images/${imageId}.jpg`;
+
+                $('modalHint').textContent = `${data.boxes.length} cajas · ${data.image.has_source ? 'Tiene imagen fuente' : 'Sin imagen fuente'}`;
+
+                // Lista de cajas
+                const list = $('detailBoxList');
+                list.innerHTML = '';
+                if (data.boxes.length === 0) {
+                    list.innerHTML = '<p style="color:#94a3b8;font-size:12px;">Sin cajas en esta imagen.</p>';
+                }
+                for (let i = 0; i < data.boxes.length; i++) {
+                    const b = data.boxes[i];
+                    const row = document.createElement('div');
+                    row.className = 'detail-box-row';
+                    const color = colorDe(b.class_name);
+                    row.innerHTML = `
+                        <span class="dot" style="background:${color}"></span>
+                        <div class="box-info">
+                            <span class="box-class">${b.class_name}</span>
+                            <span class="box-coords">(${b.x_center.toFixed(3)}, ${b.y_center.toFixed(3)}) ${b.width.toFixed(3)}×${b.height.toFixed(3)}</span>
+                        </div>
+                        <button class="btn-danger btn-sm" data-idx="${i}">Borrar</button>
+                    `;
+                    row.querySelector('button').onclick = (e) => {
+                        e.stopPropagation();
+                        borrarCaja(imageId, i);
+                    };
+                    list.appendChild(row);
+                }
+            } catch (e) {
+                $('detailBoxList').innerHTML = `<p style="color:#dc2626;">Error: ${e.message}</p>`;
+            }
+        }
+
+        $('modalClose').onclick = cerrarModal;
+        $('modal').onclick = (e) => { if (e.target === $('modal')) cerrarModal(); };
+
+        function cerrarModal() {
+            $('modal').classList.remove('open');
+            currentImageId = null;
+        }
+
+        // =====================================================================
+        // BORRAR CAJA
+        // =====================================================================
+        async function borrarCaja(imageId, boxIndex) {
+            if (!confirm('¿Eliminar esta bounding box? Si es la última, se eliminará la imagen completa.')) return;
+            setMsg('detailMsg', 'Eliminando caja…');
+            try {
+                const res = await apiFetch(`/yolo-model/boxes/${imageId}/${boxIndex}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '?');
+
+                if (data.deleted_image) {
+                    setMsg('detailMsg', 'Última caja eliminada. Imagen eliminada del dataset.', false);
+                    cerrarModal();
+                    cargarImagenes();
+                    cargarClases();
+                } else {
+                    setMsg('detailMsg', `Caja eliminada. Quedan ${data.remaining_boxes} cajas.`, false);
+                    abrirDetalle(imageId);  // Refrescar modal
+                    cargarClases();         // Refrescar contadores
+                }
+            } catch (e) {
+                setMsg('detailMsg', 'Error: ' + e.message, true);
+            }
+        }
+
+        // =====================================================================
+        // BORRAR IMAGEN COMPLETA
+        // =====================================================================
+        $('btnDeleteImage').onclick = async () => {
+            if (!currentImageId) return;
+            if (!confirm(`¿Eliminar la imagen "${currentImageId}" y todas sus anotaciones?`)) return;
+            setMsg('detailMsg', 'Eliminando imagen…');
+            try {
+                const res = await apiFetch(`/yolo-model/images/${currentImageId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '?');
+
+                setMsg('detailMsg', `Imagen eliminada. Archivos borrados: ${data.removed_files.join(', ')}.`, false);
+                setTimeout(() => {
+                    cerrarModal();
+                    cargarImagenes();
+                    cargarClases();
+                }, 800);
+            } catch (e) {
+                setMsg('detailMsg', 'Error: ' + e.message, true);
+            }
+        };
+    </script>
+</body>
+
+</html>

@@ -42,6 +42,7 @@ def _ensure_dirs():
     """Crea la estructura de directorios del dataset YOLO si no existe."""
     os.makedirs(os.path.join(settings.YOLO_DATASET_DIR, "images"), exist_ok=True)
     os.makedirs(os.path.join(settings.YOLO_DATASET_DIR, "labels"), exist_ok=True)
+    os.makedirs(os.path.join(settings.YOLO_DATASET_DIR, "fuentes"), exist_ok=True)
     os.makedirs(settings.MODELS_DIR, exist_ok=True)
 
 
@@ -124,10 +125,14 @@ async def save_annotation(payload: dict, user=Depends(get_current_user)):
         nombre = uuid.uuid4().hex
         img_path = os.path.join(settings.YOLO_DATASET_DIR, "images", f"{nombre}.jpg")
         lbl_path = os.path.join(settings.YOLO_DATASET_DIR, "labels", f"{nombre}.txt")
+        src_path = os.path.join(settings.YOLO_DATASET_DIR, "fuentes", f"{nombre}.jpg")
         with open(img_path, "wb") as f:
             f.write(img_bytes)
         with open(lbl_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lineas) + "\n")
+        # Guarda copia de la imagen fuente original para referencia futura.
+        with open(src_path, "wb") as f:
+            f.write(img_bytes)
 
         # Acumula los contadores de origen si el frontend los envía.
         meta = _leer_stats_meta()

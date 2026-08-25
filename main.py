@@ -10,7 +10,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.middleware.cors import CORSMiddleware
 
 # Importamos los routers
-from routers import auth, usuarios, partidas, engine, vision, dataset, retransmision, yolo_dataset
+from routers import auth, usuarios, partidas, engine, vision, dataset, retransmision, yolo_dataset, yolo_model
 
 # Metadatos para organizar la documentación de la API en categorías.
 tags_metadata = [
@@ -43,6 +43,10 @@ tags_metadata = [
         "description": "Dataset de detección de objetos (bounding boxes) y entrenamiento del detector YOLO26, con anotación semi-automática desde las predicciones de MobileNetV2.",
     },
     {
+        "name": "Modelo YOLO",
+        "description": "Gestión del modelo YOLO26 entrenado: clases, bounding boxes del dataset y borrado del modelo.",
+    },
+    {
         "name": "Retransmisión",
         "description": "Servicio para retransmitir partidas en directo mediante WebSockets.",
     },
@@ -64,6 +68,7 @@ app = FastAPI(
         "* **Módulo de Dataset - Captura recortes (crops) de la imagen y Etiquetado de clases para el Entrenamiento del Modelo MobileNetV2:** [/dataset](/dataset)\n"
         "* **Reconocimiento del tablero y las piezas, a través del Modelo MobileNetV2, obteniéndose el código de ajedrez FEN:** [/reconocimiento](/reconocimiento)\n"
         "* **Módulo de Dataset YOLO26 - Anotación semi-automática de bounding boxes (arrancada desde las predicciones de MobileNetV2) y entrenamiento del detector YOLO26:** [/yolo-dataset](/yolo-dataset)\n"
+        "* **Gestión del Dataset YOLO26 - Consulta y borrado de clases, bounding boxes e imágenes:** [/yolo-manage](/yolo-manage)\n"
         "* **Detección en directo con YOLO26 (bounding boxes de piezas y manos) sobre el tablero rectificado:** [/yolo](/yolo)"
     ),
     version="1.0.0",
@@ -103,6 +108,7 @@ app.include_router(engine.router)
 app.include_router(vision.router)
 app.include_router(dataset.router)
 app.include_router(yolo_dataset.router)
+app.include_router(yolo_model.router)
 app.include_router(retransmision.router)
 
 # -------------------------------------------------------------------------------------------
@@ -145,6 +151,12 @@ def yolo_tool():
     """Sirve la herramienta de prueba del detector YOLO26 en tiempo real."""
     return FileResponse("static/yolo.html")
 
+# Endpoint para gestionar el dataset YOLO: clases, bounding boxes e imágenes.
+@app.get("/yolo-manage", include_in_schema=False)
+def yolo_manage_tool():
+    """Sirve la herramienta de gestión del dataset YOLO26 (clases, cajas, imágenes y modelo)."""
+    return FileResponse("static/yolo_manage.html")
+
 # Endpoint para servir la documentación de Swagger UI.
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui():
@@ -167,6 +179,7 @@ def root():
             "dataset": "/dataset",
             "reconocimiento": "/reconocimiento",
             "yolo_dataset": "/yolo-dataset",
+            "yolo_manage": "/yolo-manage",
             "yolo": "/yolo",
             "docs": "/docs"
         }
