@@ -10,7 +10,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.middleware.cors import CORSMiddleware
 
 # Importamos los routers
-from routers import auth, usuarios, partidas, engine, vision, dataset, retransmision, yolo_dataset, yolo_model
+from routers import auth, usuarios, partidas, engine, vision, retransmision, yolo_dataset, yolo_model
 
 # Metadatos para organizar la documentación de la API en categorías.
 tags_metadata = [
@@ -32,15 +32,11 @@ tags_metadata = [
     },
     {
         "name": "Visión",
-        "description": "Reconocimiento mediante rectificación de la homografía del tablero mediante OpenCV.",
-    },
-    {
-        "name": "Dataset",
-        "description": "Herramientas para captura de imágenes (crops) y entrenamiento del modelo ML.",
+        "description": "Reconocimiento visual mediante YOLO26: rectificación de la homografía del tablero con OpenCV y detección de piezas/manos.",
     },
     {
         "name": "Dataset YOLO",
-        "description": "Dataset de detección de objetos (bounding boxes) y entrenamiento del detector YOLO26, con anotación semi-automática desde las predicciones de MobileNetV2.",
+        "description": "Dataset de detección de objetos (bounding boxes) y entrenamiento del detector YOLO26, con anotación semi-automática desde las predicciones del propio YOLO.",
     },
     {
         "name": "Modelo YOLO",
@@ -65,9 +61,7 @@ app = FastAPI(
         "### Reconocimiento visual de jugadas en partidas de ajedrez presencial.\n\n"
         "**Herramientas web integradas:**\n"
         "* **Correción homográfica - De imagen 3D a vista cenital 2D con OpenCV:** [/opencv](/opencv)\n"
-        "* **Módulo de Dataset - Captura recortes (crops) de la imagen y Etiquetado de clases para el Entrenamiento del Modelo MobileNetV2:** [/dataset](/dataset)\n"
-        "* **Reconocimiento del tablero y las piezas, a través del Modelo MobileNetV2, obteniéndose el código de ajedrez FEN:** [/reconocimiento](/reconocimiento)\n"
-        "* **Módulo de Dataset YOLO26 - Anotación semi-automática de bounding boxes (arrancada desde las predicciones de MobileNetV2) y entrenamiento del detector YOLO26:** [/yolo-dataset](/yolo-dataset)\n"
+        "* **Módulo de Dataset YOLO26 - Anotación semi-automática de bounding boxes y entrenamiento del detector YOLO26:** [/yolo-dataset](/yolo-dataset)\n"
         "* **Gestión del Dataset YOLO26 - Consulta y borrado de clases, bounding boxes e imágenes:** [/yolo-manage](/yolo-manage)\n"
         "* **Detección en directo con YOLO26 (bounding boxes de piezas y manos) sobre el tablero rectificado:** [/yolo](/yolo)"
     ),
@@ -106,7 +100,6 @@ app.include_router(usuarios.router)
 app.include_router(partidas.router)
 app.include_router(engine.router)
 app.include_router(vision.router)
-app.include_router(dataset.router)
 app.include_router(yolo_dataset.router)
 app.include_router(yolo_model.router)
 app.include_router(retransmision.router)
@@ -127,19 +120,7 @@ def opencv():
     """Sirve la página de pruebas del módulo de visión por computadora."""
     return FileResponse("static/opencv.html")
 
-# Endpoint para capturar imágenes para el dataset haciendo recortes (crops) y entrenar el modelo de reconocimiento neuronal MobileNetV2 de TensorFlow.
-@app.get("/dataset", include_in_schema=False)
-def dataset_tool():
-    """Sirve la herramienta interactiva de captura de imágenes (crops) para el dataset."""
-    return FileResponse("static/dataset.html")
-
-# Endpoint herramienta de reconocimiento del tablero y las piezas de ajedrez a través del modelo de reconocimiento neuronal MobileNetV2 de TensorFlow.
-@app.get("/reconocimiento", include_in_schema=False)
-def reconocimiento():
-    """Sirve la herramienta de reconocimiento visual en tiempo real."""
-    return FileResponse("static/reconocimiento.html")
-
-# Endpoint para la anotación semi-automática del dataset YOLO (bounding boxes arrancadas desde las predicciones de MobileNetV2) y el entrenamiento del detector YOLO26.
+# Endpoint para la anotación semi-automática del dataset YOLO y el entrenamiento del detector YOLO26.
 @app.get("/yolo-dataset", include_in_schema=False)
 def yolo_dataset_tool():
     """Sirve la herramienta interactiva de anotación y entrenamiento del dataset YOLO26."""
@@ -176,8 +157,6 @@ def root():
         "message": "Servidor Chess Rekognition operando correctamente.",
         "urls": {
             "opencv": "/opencv",
-            "dataset": "/dataset",
-            "reconocimiento": "/reconocimiento",
             "yolo_dataset": "/yolo-dataset",
             "yolo_manage": "/yolo-manage",
             "yolo": "/yolo",

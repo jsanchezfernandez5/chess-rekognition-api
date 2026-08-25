@@ -347,8 +347,8 @@
         <header>
             <div>
                 <h1>Dataset YOLO26 — Anotación semi-automática</h1>
-                <p>Pre-rellena cajas desde las predicciones de TensorFlow sobre el tablero rectificado 400x400.
-                    Revisa, corrige, borra o añade cajas y guarda.</p>
+                <p>Pre-rellena cajas desde las predicciones de YOLO26 sobre el tablero rectificado 400x400
+                    (cuando hay un modelo entrenado). Revisa, corrige, borra o añade cajas y guarda.</p>
             </div>
             <button id="btnLogout">Salir</button>
         </header>
@@ -377,8 +377,8 @@
                     </div>
                     <p class="hint">
                         Flujo interno: <code>/vision/recognize-board</code> (homografía → tablero rectificado limpio
-                        400x400) y después <code>/vision/classify</code> con las mismas esquinas, para pre-rellenar las
-                        cajas.
+                        400x400) y después <code>/vision/detect-yolo</code> con las mismas esquinas, para pre-rellenar
+                        las cajas (si hay modelo YOLO entrenado). Sin modelo entrenado, las cajas se anotan a mano.
                         Para la clase "hand", haz fotos a propósito con la mano/dedo moviendo una pieza y añade la caja
                         manualmente.
                     </p>
@@ -477,7 +477,7 @@
         let corners = null;              // Esquinas normalizadas devueltas por recognize-board
 
         // boxes: {id, x, y, w, h} en píxeles del canvas 400x400, más class_id, conf y origen
-        // origen: 'prefilled' (aceptada tal cual de TF) | 'corrected' (pre-rellena y ajustada) | 'manual'
+        // origen: 'prefilled' (aceptada tal cual de YOLO) | 'corrected' (pre-rellena y ajustada) | 'manual'
         let boxes = [];
         let boxSeq = 1;
 
@@ -639,10 +639,10 @@
         // =====================================================================
         // PIPELINE SEMI-AUTOMÁTICO:
         //   recognize-board → homografía + tablero rectificado LIMPIO 400x400 + esquinas
-        //   classify (con esas mismas esquinas) → board_state de TensorFlow para pre-rellenar cajas
+        //   detect-yolo (con esas mismas esquinas) → board_state de YOLO para pre-rellenar cajas
         // =====================================================================
         async function analizar() {
-            setMsg('editMsg', "Detectando tablero y clasificando...");
+            setMsg('editMsg', "Detectando tablero...");
             const fd = new FormData();
             fd.append('file', srcBlob);
             fd.append('rotation', $('rotation').value);
@@ -655,17 +655,21 @@
                 corners = data.corners || null;
                 boxes = []; selectedId = null; boxSeq = 1; boardReady = true;
 
-                await prefillDesdeTensorFlow();
+                await prefillDesdeYOLO();
                 render();
                 $('btnSave').disabled = false;
                 actualizarListaCajas();
-                setMsg('editMsg', "Cajas pre-rellenadas desde TensorFlow. Revísalas y corrige lo necesario.");
+                if (boxes.length > 0) {
+                    setMsg('editMsg', "Cajas pre-rellenadas desde YOLO26. Revísalas y corrige lo necesario.");
+                } else {
+                    setMsg('editMsg', "Tablero detectado. Añade las cajas a mano (sin modelo YOLO entrenado no hay pre-predicción).");
+                }
             } catch (e) {
                 setMsg('editMsg', "Error al analizar: " + e.message, true);
             }
         }
 
-        async function prefillDesdeTensorFlow() {
+        async function prefillDesdeYOLO() {
             try {
                 const fd = new FormData();
                 fd.append('file', srcBlob);
@@ -674,13 +678,13 @@
                 if (corners && corners.length === 4) {
                     fd.append('coords', corners.map(p => `${p[0]},${p[1]}`).join(","));
                 }
-                const res = await apiFetch('/vision/classify', { method: 'POST', body: fd });
+                const res = await apiFetch('/vision/detect-yolo', { method: 'POST', body: fd });
                 const data = await res.json();
                 if (!data.success || !data.board_state) {
-                    setMsg('editMsg', "Aviso: no se pudo pre-rellenar con TensorFlow (" + (data.error || '?') + "). Añade las cajas a mano.", true);
+                    // Sin modelo entrenado u otro error: se anota a mano, no es un fallo bloqueante
                     return;
                 }
-                // Una caja por cada casilla que TensorFlow marcó como ocupada.
+                // Una caja por cada casilla que YOLO marcó como ocupada.
                 // Límites iniciales = los de su casilla (col*CELL_SIZE, row*CELL_SIZE, CELL_SIZE, CELL_SIZE).
                 for (const [sqId, val] of Object.entries(data.board_state)) {
                     if (!val.label || val.label === 'empty') continue;
@@ -694,7 +698,8 @@
                     boxes.push({ id: boxSeq++, x, y, w: CELL_SIZE, h: CELL_SIZE, class_id, conf: val.confidence, origin: 'prefilled' });
                 }
             } catch (e) {
-                setMsg('editMsg', "Aviso: fallo al pre-rellenar (" + e.message + "). Puedes anotar a mano.", true);
+                // Silencioso: sin modelo YOLO entrenado la pre-predicción no está disponible,
+                // el usuario anota a mano. No es un error bloqueante.
             }
         }
 
@@ -792,7 +797,7 @@
 
         function marcarCorregida(b) {
             if (b.origin === 'prefilled') b.origin = 'corrected';
-            delete b.conf; // La confianza de TF ya no representa la caja editada
+            delete b.conf; // La confianza de la pre-predicción ya no representa la caja editada
         }
 
         // =====================================================================

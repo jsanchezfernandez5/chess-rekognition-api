@@ -1,57 +1,31 @@
 """
 Servicio de detección de movimientos de ajedrez mediante comparación visual.
 
-Compara el estado del tablero clasificado por el modelo ML con la posición anterior representada en FEN.
+Compara el estado del tablero clasificado por el modelo YOLO con la posición anterior representada en FEN.
 
 Funciones principales:
-    - detect_move()                  | Clasifica el tablero actual y lo compara con el FEN previo para detectar el movimiento legal realizado.
-    - detect_move_desde_estado()     | Igual que detect_move() pero recibiendo un board_state ya clasificado (por TF, YOLO o fusión), sin volver a clasificar.
+    - detect_move_desde_estado()     | Busca el movimiento legal que explica la transición desde prev_fen hacia un board_state ya clasificado por YOLO.
     - _positions_match()             | Función interna para comparar cada casilla del chess.Board con la clasificación ML.
     - _classify_move_type()          | Función interna que clasifica el tipo de movimiento.
-    - _avg_confidence()              | Función interna que calcula la confianza media del clasificador ML en las 64 casillas.
+    - _avg_confidence()              | Función interna que calcula la confianza media del detector YOLO en las 64 casillas.
 """
 import chess
 import numpy as np
 
 from services.vision import label_to_piece
 
-# Función para detectar movimientos
-def detect_move(warped: np.ndarray, prev_fen: str, classifier) -> dict:
-    """
-    Detecta el movimiento realizado comparando el estado visual actual con el FEN anterior.
-
-    Args:
-        warped: Imagen del tablero rectificado en vista cenital.
-        prev_fen: Notación FEN de la posición anterior al movimiento.
-        classifier: Instancia de ChessClassifier para clasificar el tablero.
-
-    Returns:
-        Diccionario con los resultados.
-    """
-    try:
-        # Clasificamos el tablero actual mediante el clasificador ML
-        board_state = classifier.classify_board(warped)
-
-        # La búsqueda del movimiento legal se delega en la función reutilizable
-        return detect_move_desde_estado(board_state, prev_fen)
-    except Exception as e:
-        return {"found": False, "error": str(e)}
-
-# Función reutilizable para buscar el movimiento desde un estado ya clasificado (TF, YOLO o fusión)
 def detect_move_desde_estado(board_state: dict, prev_fen: str) -> dict:
     """
     Busca el movimiento legal que explica la transición desde prev_fen hacia un board_state ya clasificado.
 
-    Es la MISMA lógica de fuerza bruta de detect_move(), extraída para poder reutilizarla desde
-    otros motores (YOLO, fusión) sin duplicar código: el resultado depende solo del estado final
-    clasificado, no de qué motor lo produjo.
+    El resultado depende solo del estado final clasificado, no de qué motor lo produjo.
 
     Args:
         board_state: Diccionario {"e4": {"label": "w_P", "confidence": 0.91}, ...} ya clasificado.
         prev_fen: Notación FEN de la posición anterior al movimiento.
 
     Returns:
-        Diccionario con los resultados (mismas claves que detect_move).
+        Diccionario con found/move/new_fen/error/board_state/confidence_avg.
     """
     try:
         # Convertimos el estado del tablero a un formato simple
@@ -95,7 +69,6 @@ def detect_move_desde_estado(board_state: dict, prev_fen: str) -> dict:
     except Exception as e:
         return {"found": False, "error": str(e)}
 
-# Función para comparar cada casilla del Board con la clasificación ML
 def _positions_match(board: chess.Board, simple_state: dict) -> bool:
     """
     Compara cada casilla del Board con la clasificación ML.
@@ -158,16 +131,15 @@ def _classify_move_type(board: chess.Board, move: chess.Move) -> str:
     # Movimiento normal    
     return "normal"
 
-# Función para calcular la confianza media
 def _avg_confidence(board_state: dict) -> float:
     """
-    Calcula la confianza media del clasificador ML en todas las casillas.
+    Calcula la confianza media del detector YOLO en todas las casillas.
     
     Args:
-        board_state: Diccionario con la clasificación ML de cada casilla.
+        board_state: Diccionario con la clasificación de cada casilla.
 
     Returns:
-        Confianza media del clasificador ML en todas las casillas.
+        Confianza media del detector en todas las casillas.
     """
     # Confianzas None (casillas vacías de YOLO, sin valor numérico) se excluyen de la media
     confidences = [v["confidence"] for v in board_state.values() if v.get("confidence") is not None]

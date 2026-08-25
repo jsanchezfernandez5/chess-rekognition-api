@@ -1,8 +1,7 @@
 """
 Servicio de detección de piezas y manos mediante un modelo YOLO26 entrenado (Ultralytics).
 
-Segundo motor de reconocimiento EN PARALELO con MobileNetV2: mientras el clasificador TensorFlow
-lee casilla por casilla, este detector localiza objetos reales (piezas blancas/negras y manos)
+Motor principal de reconocimiento: localiza objetos reales (piezas blancas/negras y manos)
 con sus bounding boxes sobre el tablero ya rectificado a 400x400.
 
 Principio de coordenadas: TODO el trabajo ocurre sobre la vista cenital 400x400 producida por
@@ -21,8 +20,8 @@ from core.config import settings
 class YoloDetector:
     """Wrapper thread-safe alrededor del modelo YOLO entrenado.
 
-    Sigue el mismo patrón de singleton + RLock que ChessClassifier para que pueda llamarse
-    desde varios requests simultáneos sin condiciones de carrera.
+    Patrón singleton + RLock para que pueda llamarse desde varios requests
+    simultáneos sin condiciones de carrera.
     """
 
     def __init__(self):
@@ -71,7 +70,7 @@ class YoloDetector:
             return None
 
     def reload(self):
-        """Recarga el modelo en caliente (tras un nuevo entrenamiento), igual que ChessClassifier.reload()."""
+        """Recarga el modelo en caliente (tras un nuevo entrenamiento)."""
         self._load()
 
     def is_ready(self) -> bool:
@@ -135,17 +134,17 @@ class YoloDetector:
 
 
 def boxes_a_board_state(detecciones: list):
-    """Convierte detecciones YOLO en un board_state COMPLETO de 64 casillas estilo MobileNetV2.
+    """Convierte detecciones YOLO en un board_state COMPLETO de 64 casillas.
 
     Cada caja se asigna a su casilla por el centro del bbox (fila = y // CELL_SIZE,
     columna = x // CELL_SIZE). Las casillas sin ninguna caja encima quedan como
     {"label": "empty", "confidence": None}: en detección de objetos la ausencia de caja ES la
     evidencia de casilla vacía, pero no existe una confianza numérica comparable con la de una
-    pieza detectada, así que se marca como None para que la fusión la trate como caso especial.
+    pieza detectada, así que se marca como None.
     El formato de 64 casillas es obligatorio para poder reutilizar detect_move_desde_estado().
 
     Las detecciones de clase "hand" NO entran en el board_state (no son piezas); se devuelven
-    aparte para que la fusión pueda usarlas como señal de interferencia humana.
+    aparte como señal de interferencia humana (mano/dedo sobre el tablero).
 
     Si varias cajas caen en la misma casilla gana la de mayor confianza; el resto se devuelve
     en una lista de conflictos para poder loguearlos como aviso (nunca como error).

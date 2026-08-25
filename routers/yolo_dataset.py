@@ -1,12 +1,11 @@
 """
 Router del módulo de Dataset y Entrenamiento del detector YOLO26.
 
-A diferencia del dataset de MobileNetV2 (crops 50x50 de clasificación, una imagen = una clase),
-este dataset es de DETECCIÓN de objetos: cada imagen del tablero rectificado 400x400 va acompañada
-de un fichero .txt con las bounding boxes en formato YOLO ("class_id x_center y_center width height",
-normalizado 0-1). Las anotaciones se crean de forma SEMI-AUTOMÁTICA en la herramienta /yolo-dataset,
-que pre-rellena una caja por casilla marcada como ocupada por TensorFlow para que el humano solo tenga
-que revisarlas/corregirlas.
+Dataset de DETECCIÓN de objetos: cada imagen del tablero rectificado 400x400 va acompañada
+de un fichero .txt con las bounding boxes en formato YOLO ("class_id x_center y_center width
+height", normalizado 0-1). Las anotaciones se crean de forma semi-automática en la herramienta
+/yolo-dataset: cuando el modelo YOLO está entrenado, pre-rellena cajas con sus predicciones;
+si el modelo no está disponible, el usuario anota manualmente desde cero.
 
 Endpoints:
     POST /yolo-dataset/save         | Guarda la imagen anotada y su .txt de etiquetas YOLO con nombre UUID único.
@@ -33,8 +32,8 @@ from services import yolo_training
 router = APIRouter(prefix="/yolo-dataset", tags=["Dataset YOLO"])
 
 # Fichero donde se acumulan los contadores de origen de las cajas (prefill/corregida/manual).
-# Es la parte "fácil de trackear desde el frontend": cada guardado envía cuántas cajas aceptó tal cual
-# de la pre-predicción de TensorFlow, cuántas corrigió a mano y cuántas añadió manualmente.
+# Cada guardado envía cuántas cajas aceptó tal cual de la predicción YOLO (cuando el modelo
+# está disponible), cuántas corrigió a mano y cuántas añadió de forma manual.
 _STATS_META_FILE = "stats_meta.json"
 
 
@@ -46,7 +45,7 @@ def _ensure_dirs():
     os.makedirs(settings.MODELS_DIR, exist_ok=True)
 
 
-# Asegura que los directorios existen al importar el módulo (mismo patrón que routers/dataset.py).
+# Asegura que los directorios existen al importar el módulo.
 _ensure_dirs()
 
 
@@ -198,7 +197,7 @@ def get_yolo_stats(user=Depends(get_current_user)):
 
 # -------------------------------------------------------------------------------
 # [ENDPOINT] - POST /yolo-dataset/train
-# Lanza el entrenamiento de YOLO26 en un hilo secundario (igual que /dataset/train para MobileNetV2).
+# Lanza el entrenamiento de YOLO26 en un hilo secundario.
 # -------------------------------------------------------------------------------
 @router.post(
     "/train",
@@ -234,8 +233,8 @@ def get_yolo_train_status(user=Depends(get_current_user)):
 # -------------------------------------------------------------------------------
 # [ENDPOINT] - WS /yolo-dataset/train/ws
 # WebSocket de progreso del entrenamiento YOLO26 en tiempo real para la consola de la
-# herramienta /yolo-dataset. Mismo patrón que /dataset/train/ws (MobileNetV2): el token
-# JWT se pasa como query param porque un WebSocket no pasa por Depends()/get_current_user.
+# herramienta /yolo-dataset. El token JWT se pasa como query param porque un WebSocket
+# no pasa por Depends()/get_current_user.
 # Conecta aquí la infraestructura add_ws_client/_broadcast de services/yolo_training.py.
 # -------------------------------------------------------------------------------
 @router.websocket("/train/ws")
@@ -245,7 +244,7 @@ async def train_websocket(websocket: WebSocket, token: str = Query(...)):
     try:
         decode_token(token, expected_type="access")
     except ValueError:
-        # Token inválido o expirado: cierre 1008 (Policy Violation), igual que en dataset.py.
+        # Token inválido o expirado: cierre 1008 (Policy Violation).
         await websocket.close(code=1008)
         return
 

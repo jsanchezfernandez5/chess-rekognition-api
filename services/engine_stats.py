@@ -1,9 +1,8 @@
 """
-Evaluación comparativa de los motores de reconocimiento sobre el dataset de validación YOLO.
+Evaluación del motor de reconocimiento YOLO26 sobre el dataset de validación.
 
-Criterio MEDIBLE de promoción de motor: en lugar de preferencias, este módulo evalúa
-TensorFlow, YOLO y su fusión sobre las imágenes de VALIDACIÓN del dataset YOLO
-(yolo_dataset/images/val + labels/val, que NUNCA participan en el entrenamiento) y compara:
+Evalúa el detector YOLO26 sobre las imágenes de VALIDACIÓN del dataset YOLO
+(yolo_dataset/images/val + labels/val, que NUNCA participan en el entrenamiento):
 
     - square_accuracy: % de casillas bien leídas (las 64 por imagen).
     - fen_exact:       % de tableros completos sin ni un solo error (lo que de verdad importa:
@@ -11,14 +10,13 @@ TensorFlow, YOLO y su fusión sobre las imágenes de VALIDACIÓN del dataset YOL
     - piece_precision / piece_recall: calidad centrada SOLO en casillas ocupadas.
     - avg_ms:          tiempo medio de inferencia por imagen.
 
-La decisión de promover un motor a "por defecto" es MANUAL y se basa en estos números;
-este módulo solo informa (nunca cambia configuración).
+Este módulo solo informa (nunca cambia configuración).
 
 ⚠️ NOTA METODOLÓGICA IMPORTANTE: las etiquetas de validación proceden de anotación
-semi-automática ARRANCADA desde las predicciones de TensorFlow, así que la puntuación de TF
-está sesgada AL ALZA en este conjunto (parte de sus aciertos están "cocinados" en la verdad
-terrena). Conforme se corrijan cajas a mano, el sesgo disminuye. Para una comparativa
-imparcial a largo plazo conviene ir curando a mano un subconjunto de validación.
+semi-automática, así que la puntuación puede estar sesgada al alza en la medida en que
+las predicciones originales se aceptaron sin corrección. Conforme se corrijan cajas a mano,
+el sesgo disminuye. Para una evaluación imparcial a largo plazo conviene ir curando a mano
+un subconjunto de validación.
 """
 import os
 import time
@@ -36,7 +34,7 @@ def _cargar_ground_truth(dataset_dir):
     Returns:
         Lista de dicts {"file": str, "board_state": dict_64_casillas}.
     """
-    # Import diferido para no cargar ultralytics/TensorFlow solo por importar este módulo.
+    # Import diferido para no cargar ultralytics solo por importar este módulo.
     from services.yolo_detector import boxes_a_board_state
 
     img_dir = os.path.join(dataset_dir, "images", "val")
@@ -106,12 +104,12 @@ def _metricas(board_pred, board_gt):
     return {"aciertos": aciertos, "total": len(board_gt), "tp": tp, "fp": fp, "fn": fn}
 
 
-def _resumen(nombre, acumulado, n_imgs, ms_total):
-    """Agrega los contadores crudos en las métricas finales de un motor."""
+def _resumen(acumulado, n_imgs, ms_total):
+    """Agrega los contadores crudos en las métricas finales de YOLO."""
     total_casillas = max(acumulado["total"], 1)
     piezas_gt = acumulado["tp"] + acumulado["fn"]
     return {
-        "motor": nombre,
+        "motor": "yolo",
         "square_accuracy": round(acumulado["aciertos"] / total_casillas, 4),
         "fen_exact": round(acumulado["boards_ok"] / max(n_imgs, 1), 4),
         "piece_precision": round(acumulado["tp"] / max(acumulado["tp"] + acumulado["fp"], 1), 4),
@@ -120,43 +118,37 @@ def _resumen(nombre, acumulado, n_imgs, ms_total):
     }
 
 
-def evaluar_motores(max_images=100):
-    """Ejecuta la evaluación completa de los tres modos sobre la validación.
+def evaluar_motor(max_images=100):
+    """Ejecuta la evaluación del motor YOLO26 sobre la partición de validación.
 
     ⚠️ RENDIMIENTO EN PRODUCCIÓN: esta evaluación corre DE FORMA SÍNCRONA dentro de la
-    petición HTTP, con inferencias de TensorFlow + YOLO sobre CPU (Railway no tiene GPU).
-    Con max_images alto puede tardar varios MINUTOS y el proxy/gateway puede cortar la
-    conexión por timeout antes de recibir la respuesta. Se recomienda mantener valores
-    moderados (50-100 imágenes) hasta que, si hace falta, se migre a un patrón de
-    ejecución en segundo plano con polling de progreso.
+    petición HTTP, con inferencia YOLO sobre CPU (Railway no tiene GPU). Con max_images
+    alto puede tardar varios MINUTOS y el proxy/gateway puede cortar la conexión por
+    timeout antes de recibir la respuesta. Se recomienda mantener valores moderados
+    (50-100 imágenes) hasta que, si hace falta, se migre a un patrón de ejecución en
+    segundo plano con polling de progreso.
 
     Args:
         max_images: límite de imágenes a evaluar (la validación puede crecer mucho y esto
                     corre sobre CPU en producción).
 
     Returns:
-        Dict con las métricas por motor, el mejor por fen_exact, la nota metodológica
-        sobre el sesgo semi-automático y una nota de rendimiento para producción.
-        Si un motor no está disponible, su entrada explica el motivo en vez de fallar todo.
+        Dict con las métricas de YOLO, la nota metodológica sobre el sesgo semi-automático
+        y una nota de rendimiento para producción.
     """
-    from services.classifier import classifier
     from services.yolo_detector import yolo_detector, boxes_a_board_state
-    from services.fusion import fusionar_board_states
 
     muestras = _cargar_ground_truth(settings.YOLO_DATASET_DIR)[:max_images]
     if not muestras:
         return {"success": False,
                 "error": "No hay imágenes de validación etiquetadas en yolo_dataset/images/val."}
 
-    tf_listo = classifier.is_ready()
     yolo_listo = yolo_detector.is_ready()
+    if not yolo_listo:
+        return {"success": False, "error": "Modelo YOLO no disponible."}
 
-    acumulados = {
-        "tf": {"aciertos": 0, "total": 0, "tp": 0, "fp": 0, "fn": 0, "boards_ok": 0},
-        "yolo": {"aciertos": 0, "total": 0, "tp": 0, "fp": 0, "fn": 0, "boards_ok": 0},
-        "fusion": {"aciertos": 0, "total": 0, "tp": 0, "fp": 0, "fn": 0, "boards_ok": 0},
-    }
-    tiempos = {"tf": 0.0, "yolo": 0.0, "fusion": 0.0}
+    acumulado = {"aciertos": 0, "total": 0, "tp": 0, "fp": 0, "fn": 0, "boards_ok": 0}
+    tiempo_total = 0.0
     n_evaluadas = 0
 
     for muestra in muestras:
@@ -167,78 +159,32 @@ def evaluar_motores(max_images=100):
         n_evaluadas += 1
         gt = muestra["board_state"]
 
-        board_tf = board_yolo = None
+        # Inferencia YOLO
+        t0 = time.perf_counter()
+        detecciones = yolo_detector.detect(warped)
+        board_yolo, _, _ = boxes_a_board_state(detecciones)
+        tiempo_total += (time.perf_counter() - t0) * 1000
 
-        # --- Motor TensorFlow ---
-        if tf_listo:
-            t0 = time.perf_counter()
-            board_tf = classifier.classify_board(warped)
-            tiempos["tf"] += (time.perf_counter() - t0) * 1000
-            m = _metricas(board_tf, gt)
-            for k in ("aciertos", "total", "tp", "fp", "fn"):
-                acumulados["tf"][k] += m[k]
-            if m["aciertos"] == m["total"]:
-                acumulados["tf"]["boards_ok"] += 1
-
-        # --- Motor YOLO ---
-        if yolo_listo:
-            t0 = time.perf_counter()
-            detecciones = yolo_detector.detect(warped)
-            board_yolo, hand_boxes_yolo, _ = boxes_a_board_state(detecciones)
-            tiempos["yolo"] += (time.perf_counter() - t0) * 1000
-            m = _metricas(board_yolo, gt)
-            for k in ("aciertos", "total", "tp", "fp", "fn"):
-                acumulados["yolo"][k] += m[k]
-            if m["aciertos"] == m["total"]:
-                acumulados["yolo"]["boards_ok"] += 1
-
-        # --- Fusión (solo tiene sentido con ambos motores operativos) ---
-        if tf_listo and yolo_listo:
-            t0 = time.perf_counter()
-            # PARIDAD CON PRODUCCIÓN: se pasan las manos REALES detectadas por YOLO en esta
-            # imagen, igual que hace /vision/classify-fusion en runtime. Pasar una lista vacía
-            # haría que la fusión evaluada ignorara la mano (casillas arbitráas como libres/
-            # ocupadas) cuando en producción esas mismas casillas quedarían marcadas como
-            # inciertas ({hand: true}) — las métricas dejarían de representar el comportamiento real.
-            board_fusion, _ = fusionar_board_states(board_tf, board_yolo, hand_boxes_yolo)
-            tiempos["fusion"] += (time.perf_counter() - t0) * 1000
-            m = _metricas(board_fusion, gt)
-            for k in ("aciertos", "total", "tp", "fp", "fn"):
-                acumulados["fusion"][k] += m[k]
-            if m["aciertos"] == m["total"]:
-                acumulados["fusion"]["boards_ok"] += 1
-
-    resultados = {}
-    if tf_listo:
-        resultados["tf"] = _resumen("tensorflow", acumulados["tf"], n_evaluadas, tiempos["tf"])
-    else:
-        resultados["tf"] = {"error": "Modelo TensorFlow no cargado"}
-    if yolo_listo:
-        resultados["yolo"] = _resumen("yolo", acumulados["yolo"], n_evaluadas, tiempos["yolo"])
-    else:
-        resultados["yolo"] = {"error": "Modelo YOLO no disponible"}
-    if tf_listo and yolo_listo:
-        resultados["fusion"] = _resumen("fusion", acumulados["fusion"], n_evaluadas, tiempos["fusion"])
-    else:
-        resultados["fusion"] = {"error": "Requiere ambos motores operativos"}
-
-    # Mejor motor POR MÉTRICAS (fen_exact primero): solo informativo, no cambia nada solo.
-    candidatos = [(v.get("fen_exact", -1), k) for k, v in resultados.items() if "fen_exact" in v]
-    mejor = max(candidatos)[1] if candidatos else None
+        m = _metricas(board_yolo, gt)
+        for k in ("aciertos", "total", "tp", "fp", "fn"):
+            acumulado[k] += m[k]
+        if m["aciertos"] == m["total"]:
+            acumulado["boards_ok"] += 1
 
     return {
         "success": True,
         "n_images": n_evaluadas,
-        "engines": resultados,
-        "mejor_motor_por_metricas": mejor,
+        "engines": {
+            "yolo": _resumen(acumulado, n_evaluadas, tiempo_total),
+        },
         "nota_metodologica": (
             "Métricas sobre la partición de VALIDACIÓN (nunca entrenamiento). OJO: las etiquetas "
-            "proceden de anotación semi-automática arrancada desde TensorFlow, por lo que la "
-            "puntuación de TF está sesgada al alza aquí; corrige cajas a mano en /yolo-dataset "
-            "para reducir el sesgo. La promoción de motor por defecto es una decisión manual."
+            "proceden de anotación semi-automática, por lo que la puntuación puede estar sesgada "
+            "al alza en la medida en que las predicciones originales se aceptaron sin corrección. "
+            "Corrige cajas a mano en /yolo-dataset para reducir el sesgo."
         ),
         "nota_rendimiento": (
-            "Evaluación SÍNCRONA sobre CPU (inferencia TensorFlow + YOLO por imagen). Con "
+            "Evaluación SÍNCRONA sobre CPU (inferencia YOLO por imagen). Con "
             "max_images alto la petición puede tardar minutos y el gateway de producción "
             "(Railway) puede cortarla por timeout: usa valores moderados (50-100)."
         ),

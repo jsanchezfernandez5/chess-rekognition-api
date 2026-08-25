@@ -51,12 +51,9 @@ python-chess==1.999
 # Wrapper Python para el binario de Stockfish (gestiona el protocolo UCI)
 stockfish>=3.28.0
 
-# Modelo ML (MobileNetV2). Se usa tensorflow-cpu para ahorrar espacio en Railway
-tensorflow-cpu>=2.13.0
-
-# Motor de detección de objetos YOLO26 (segundo motor de reconocimiento en paralelo con MobileNetV2).
+# Motor de detección de objetos YOLO26 (motor principal y único de reconocimiento).
 # La versión 8.4.x introduce la arquitectura YOLO26 (yolo26n.pt, yolo26s.pt...).
-# ⚠️ AVISO DE PESO: arrastra PyTorch (~200 MB de descarga y ~2 GB instalado). Aumenta el build
+# AVISO DE PESO: arrastra PyTorch (~200 MB de descarga y ~2 GB instalado). Aumenta el build
 # y los arranques en frío del despliegue en Railway. Si el build se queda sin espacio o el
 # despliegue se degrada, valorar instalarlo solo donde se entrene/detecte o una imagen base
 # con PyTorch preinstalado. La API arranca igualmente si este paquete falta: el motor YOLO

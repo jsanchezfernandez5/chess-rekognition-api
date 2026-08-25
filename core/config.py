@@ -33,14 +33,8 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str
     RESEND_FROM: str = "onboarding@resend.dev"
 
-    # DATASET Y MODELOS
-    DATASET_DIR: str = "./data/dataset"
+    # MODELOS
     MODELS_DIR: str = "./data/models"
-    CLASSES: list = [
-        "empty",
-        "w_P", "w_N", "w_B", "w_R", "w_Q", "w_K",
-        "b_P", "b_N", "b_B", "b_R", "b_Q", "b_K"
-    ]
 
     # DATASET Y MODELO YOLO26 (detección de objetos)
     # Directorio donde se guardan las imágenes anotadas y sus etiquetas en formato YOLO:
@@ -48,12 +42,10 @@ class Settings(BaseSettings):
     #   yolo_dataset/labels/  → un .txt por imagen con cajas "class_id x_center y_center width height" normalizadas 0-1
     YOLO_DATASET_DIR: str = "./data/yolo_dataset"
 
-    # Clases del detector YOLO. NO son las mismas que CLASSES (las de MobileNetV2) a propósito:
-    #   - CLASSES es CLASIFICACIÓN por casilla fija: incluye "empty" porque cada casilla SIEMPRE recibe una etiqueta,
-    #     aunque esté vacía (13 clases = 12 piezas + empty).
-    #   - YOLO_CLASSES es DETECCIÓN de objetos: solo se anotan objetos reales con su bounding box, así que "empty"
-    #     no aplica (una zona sin pieza simplemente no tiene caja), y se añade la clase "hand" para detectar manos
-    #     o dedos sobre el tablero, algo que el clasificador por casillas no puede representar.
+    # Clases del detector YOLO: detección de objetos con bounding boxes.
+    # Solo se anotan objetos reales con su bounding box, así que "empty"
+    # no aplica (una zona sin pieza simplemente no tiene caja), y se añade la clase "hand"
+    # para detectar manos o dedos sobre el tablero.
     YOLO_CLASSES: list = [
         "w_P", "w_N", "w_B", "w_R", "w_Q", "w_K",
         "b_P", "b_N", "b_B", "b_R", "b_Q", "b_K",
@@ -69,18 +61,12 @@ class Settings(BaseSettings):
     YOLO_IOU_THRESHOLD: float = 0.45
     YOLO_IMG_SIZE: int = 416
 
-    # Parámetros de la FUSIÓN (arbitraje casilla a casilla entre MobileNetV2 y YOLO):
-    #   - Confianza mínima que debe tener una predicción de MobileNetV2 para considerarse fiable.
-    #   - Confianza mínima que debe tener una detección de YOLO para poder sobrescribir a MobileNetV2.
-    #   - Confianza mínima para que una detección de mano invalide la lectura de las casillas que ocupa.
-    FUSION_MIN_TF_CONFIDENCE: float = 0.50
-    FUSION_MIN_YOLO_CONFIDENCE: float = 0.50
+    # Confianza mínima para que una detección de mano invalide la lectura de las casillas que ocupa.
     HAND_MIN_CONFIDENCE: float = 0.45
 
     # VARIABLES PARA LA VISIÓN POR COMPUTADORA
     BOARD_SIZE: int = 400       # Tamaño en píxeles del tablero rectificado.
     CELL_SIZE: int = 50         # Tamaño en píxeles de cada casilla (400 / 8 columnas = 50 px).
-    IMG_SIZE: tuple = (96, 96)  # Tamaño al que se redimensiona cada crop antes de pasarlo al modelo.
     COLS: str = "abcdefgh"      # Letras de las columnas del tablero en notación algebraica de ajedrez.
 
     # Propiedad autocalculada para construir la URL de conexión a la base de datos a partir de las variables individuales.

@@ -1,8 +1,7 @@
 """
 Servicio de entrenamiento del detector YOLO26 (Ultralytics).
 
-Entrena el modelo de detección de objetos yolo_chess.pt sobre el dataset anotado en YOLO_DATASET_DIR,
-siguiendo el mismo patrón que services/training.py (entrenamiento de MobileNetV2):
+Entrena el modelo de detección de objetos yolo_chess.pt sobre el dataset anotado en YOLO_DATASET_DIR:
     - Estado global protegido con RLock consultable por polling.
     - Ejecución en un hilo daemon lanzado desde el router.
     - Broadcasting del progreso a los clientes WebSocket conectados.
@@ -44,7 +43,7 @@ VAL_RATIO = 0.2
 # Número de épocas de entrenamiento. Ultralytics aplica early stopping interno (patience) si no hay mejora.
 EPOCHS = 50
 
-# Estado global del entrenamiento (un único entrenamiento a la vez), mismo patrón que services/training.py
+# Estado global del entrenamiento (un único entrenamiento a la vez)
 training_state: dict = {
     "running":       False,
     "epoch":         0,
@@ -125,7 +124,7 @@ def _hash_val(name: str, total_buckets: int = 100) -> int:
     Se usa para repartir train/val de forma ESTABLE entre ejecuciones: aunque luego se añadan
     más imágenes al dataset y se reentrene, cada imagen sigue asignada al mismo conjunto.
     Así el conjunto de validación queda reservado y NUNCA participa en el entrenamiento,
-    lo que permite comparar métricas de TensorFlow/YOLO/fusión de forma limpia (criterio 1.D).
+    lo que permite evaluar métricas de YOLO de forma limpia.
     """
     return int(hashlib.md5(name.encode("utf-8")).hexdigest(), 16) % total_buckets
 
